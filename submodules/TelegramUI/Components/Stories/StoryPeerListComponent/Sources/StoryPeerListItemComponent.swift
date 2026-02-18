@@ -318,6 +318,64 @@ private final class StoryProgressLayer: HierarchyTrackingLayer {
 
 private var sharedAvatarBackgroundImage: UIImage?
 
+public struct StoryPeerListItemVoiceOver {
+    public struct Resolved: Equatable {
+        public let label: String
+        public let value: String?
+        public let hint: String?
+        
+        public init(label: String, value: String?, hint: String?) {
+            self.label = label
+            self.value = value
+            self.hint = hint
+        }
+    }
+    
+    public static func resolve(
+        strings: PresentationStrings,
+        peerTitle: String,
+        isSelf: Bool,
+        hasItems: Bool,
+        unseenCount: Int,
+        uploadProgress: Float?
+    ) -> Resolved {
+        let unseenCount = max(0, unseenCount)
+        let uploadProgress = uploadProgress.flatMap { max(0.0, min(1.0, $0)) }
+        
+        let label: String
+        if isSelf && !hasItems && uploadProgress == nil {
+            label = strings.StoryFeed_AddStory
+        } else if isSelf {
+            if uploadProgress != nil {
+                label = strings.StoryFeed_MyUploading
+            } else {
+                label = strings.StoryFeed_MyStory
+            }
+        } else {
+            label = peerTitle
+        }
+        
+        let hint: String?
+        if isSelf && !hasItems && uploadProgress == nil {
+            hint = strings.VoiceOver_Stories_AddHint
+        } else {
+            hint = strings.VoiceOver_Stories_OpenHint
+        }
+        
+        let value: String?
+        if let uploadProgress {
+            let percent = Int((uploadProgress * 100.0).rounded())
+            value = strings.VoiceOver_Stories_UploadingProgress("\(percent)%").string
+        } else if unseenCount > 0 {
+            value = strings.VoiceOver_Stories_NewStories(Int32(unseenCount))
+        } else {
+            value = nil
+        }
+        
+        return Resolved(label: label, value: value, hint: hint)
+    }
+}
+
 public final class StoryPeerListItemComponent: Component {
     public final class TransitionView: UIView {
         private weak var itemView: StoryPeerListItemComponent.View?
@@ -515,6 +573,8 @@ public final class StoryPeerListItemComponent: Component {
         private var verifiedIconView: ComponentHostView<Empty>?
         private let composeTitle = ComponentView<Empty>()
         
+        private var accessibilityAction: (() -> Void)?
+        
         private var component: StoryPeerListItemComponent?
         private weak var componentState: EmptyComponentState?
         
@@ -561,6 +621,11 @@ public final class StoryPeerListItemComponent: Component {
             super.init(frame: frame)
             
             self.layer.allowsGroupOpacity = true
+            
+            self.isAccessibilityElement = true
+            self.accessibilityTraits = [.button]
+            self.button.isAccessibilityElement = false
+            self.button.accessibilityElementsHidden = true
             
             self.extractedContainerNode.contentNode.view.addSubview(self.extractedBackgroundView)
             
@@ -651,6 +716,22 @@ public final class StoryPeerListItemComponent: Component {
         
         required public init?(coder: NSCoder) {
             preconditionFailure()
+        }
+        
+        private func configureAccessibility(resolved: StoryPeerListItemVoiceOver.Resolved, action: @escaping () -> Void) {
+            self.accessibilityLabel = resolved.label
+            self.accessibilityValue = resolved.value
+            self.accessibilityHint = resolved.hint
+            self.accessibilityTraits = [.button]
+            self.accessibilityAction = action
+        }
+        
+        override public func accessibilityActivate() -> Bool {
+            guard let accessibilityAction = self.accessibilityAction else {
+                return false
+            }
+            accessibilityAction()
+            return true
         }
         
         @objc private func pressed() {
@@ -1163,6 +1244,26 @@ public final class StoryPeerListItemComponent: Component {
                     composeLayer.removeFromSuperlayer()
                 })
             }
+            
+            let resolved = StoryPeerListItemVoiceOver.resolve(
+                strings: component.strings,
+                peerTitle: titleString,
+                isSelf: component.peer.id == component.context.account.peerId,
+                hasItems: component.hasItems,
+                unseenCount: component.unseenCount,
+                uploadProgress: component.ringAnimation.flatMap { ringAnimation -> Float? in
+                    if case let .progress(progress) = ringAnimation {
+                        return progress
+                    }
+                    return nil
+                }
+            )
+            self.configureAccessibility(resolved: resolved, action: { [weak self] in
+                guard let self, let component = self.component else {
+                    return
+                }
+                component.action(component.peer)
+            })
             
             return availableSize
         }

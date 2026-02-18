@@ -1476,6 +1476,10 @@ public final class StoryPeerListComponent: Component {
                     titleLockButton.addTarget(self, action: #selector(self.titleLockButtonPressed), for: .touchUpInside)
                 }
                 titleLockButton.frame = CGRect(origin: CGPoint(x: lockFrame.minX - 4.0, y: titleFrame.minY - 4.0), size: CGSize(width: titleFrame.maxX - lockFrame.minX + 4.0, height: titleFrame.height + 8.0))
+                titleLockButton.isAccessibilityElement = true
+                titleLockButton.accessibilityLabel = component.title
+                titleLockButton.accessibilityHint = component.strings.DialogList_PasscodeLockHelp
+                titleLockButton.accessibilityTraits = [.header, .button]
             } else if let titleLockView = self.titleLockView {
                 self.titleLockView = nil
                 titleLockView.removeFromSuperview()
@@ -1519,6 +1523,7 @@ public final class StoryPeerListComponent: Component {
             titleContentOffset += collapsedState.titleWidth
             
             self.scrollContainerView.isUserInteractionEnabled = collapsedState.maxFraction >= 1.0 - 0.001
+            self.scrollContainerView.accessibilityElementsHidden = !self.scrollContainerView.isUserInteractionEnabled
         }
         
         override public func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
@@ -1702,6 +1707,14 @@ public final class StoryPeerListComponent: Component {
                 self.titleView.image = image
             }
             
+            if component.titleHasLock {
+                self.titleView.isAccessibilityElement = false
+            } else {
+                self.titleView.isAccessibilityElement = true
+                self.titleView.accessibilityTraits = [.header]
+                self.titleView.accessibilityLabel = component.title
+            }
+            
             if let storySubscriptions = component.storySubscriptions, let hasMoreToken = storySubscriptions.hasMoreToken {
                 if self.requestedLoadMoreToken != hasMoreToken {
                     self.requestedLoadMoreToken = hasMoreToken
@@ -1719,6 +1732,16 @@ public final class StoryPeerListComponent: Component {
             }
             
             self.collapsedButton.isUserInteractionEnabled = !component.unlocked
+            if component.unlocked {
+                self.collapsedButton.isAccessibilityElement = false
+                self.collapsedButton.accessibilityLabel = nil
+                self.collapsedButton.accessibilityHint = nil
+            } else {
+                self.collapsedButton.isAccessibilityElement = true
+                self.collapsedButton.accessibilityTraits = [.button]
+                self.collapsedButton.accessibilityLabel = component.strings.VoiceOver_Stories_UnlockButton
+                self.collapsedButton.accessibilityHint = component.strings.VoiceOver_Stories_UnlockHint
+            }
             
             self.sortedItems.removeAll(keepingCapacity: true)
             if let storySubscriptions = component.storySubscriptions {
