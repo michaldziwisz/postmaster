@@ -32,21 +32,33 @@ public final class NavigationButtonComponent: Component {
     }
     
     public let content: Content
+    public let accessibilityLabel: String?
+    public let accessibilityHint: String?
     public let pressed: (UIView) -> Void
     public let contextAction: ((UIView, ContextGesture?) -> Void)?
     
     public init(
         content: Content,
+        accessibilityLabel: String? = nil,
+        accessibilityHint: String? = nil,
         pressed: @escaping (UIView) -> Void,
         contextAction: ((UIView, ContextGesture?) -> Void)? = nil
     ) {
         self.content = content
+        self.accessibilityLabel = accessibilityLabel
+        self.accessibilityHint = accessibilityHint
         self.pressed = pressed
         self.contextAction = contextAction
     }
     
     public static func ==(lhs: NavigationButtonComponent, rhs: NavigationButtonComponent) -> Bool {
         if lhs.content != rhs.content {
+            return false
+        }
+        if lhs.accessibilityLabel != rhs.accessibilityLabel {
+            return false
+        }
+        if lhs.accessibilityHint != rhs.accessibilityHint {
             return false
         }
         return true
@@ -95,6 +107,11 @@ public final class NavigationButtonComponent: Component {
             fatalError("init(coder:) has not been implemented")
         }
         
+        override public func accessibilityActivate() -> Bool {
+            self.sendActions(for: .touchUpInside)
+            return true
+        }
+        
         @objc private func pressed() {
             self.component?.pressed(self)
         }
@@ -123,6 +140,23 @@ public final class NavigationButtonComponent: Component {
                 imageName = imageNameValue
             case let .proxy(status):
                 proxyStatus = status
+            }
+
+            self.isAccessibilityElement = true
+            var accessibilityTraits: UIAccessibilityTraits = [.button]
+            if !self.isEnabled {
+                accessibilityTraits.insert(.notEnabled)
+            }
+            self.accessibilityTraits = accessibilityTraits
+            self.accessibilityHint = component.accessibilityHint
+            if let accessibilityLabel = component.accessibilityLabel {
+                self.accessibilityLabel = accessibilityLabel
+            } else if case let .text(title, _) = component.content {
+                self.accessibilityLabel = title
+            } else if case .more = component.content {
+                self.accessibilityLabel = "More"
+            } else {
+                self.accessibilityLabel = nil
             }
             
             var size = CGSize(width: 0.0, height: availableSize.height)

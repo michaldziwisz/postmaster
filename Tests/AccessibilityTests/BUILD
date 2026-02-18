@@ -11,6 +11,7 @@ swift_library(
     deps = [
         "//submodules/ComponentFlow",
         "//submodules/TelegramPresentationData",
+        "//submodules/TelegramUI/Components/ChatListHeaderComponent",
         "//submodules/TelegramUI/Components/TabBarComponent",
     ],
 )
@@ -24,4 +25,3 @@ ios_unit_test(
     ],
     visibility = ["//visibility:public"],
 )
-

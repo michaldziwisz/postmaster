@@ -340,6 +340,7 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
                     
                     self.primaryContext?.rightButton = AnyComponentWithIdentity(id: "compose", component: AnyComponent(NavigationButtonComponent(
                         content: .icon(imageName: "Chat List/ComposeIcon"),
+                        accessibilityLabel: self.presentationData.strings.Compose_NewMessage,
                         pressed: { [weak self] _ in
                             self?.composePressed()
                         }
@@ -7093,6 +7094,7 @@ private final class ChatListLocationContext {
                 } else {
                     self.rightButton = AnyComponentWithIdentity(id: "compose", component: AnyComponent(NavigationButtonComponent(
                         content: .icon(imageName: "Chat List/ComposeIcon"),
+                        accessibilityLabel: presentationData.strings.Compose_NewMessage,
                         pressed: { [weak self] _ in
                             self?.parentController?.composePressed()
                         }
@@ -7127,6 +7129,7 @@ private final class ChatListLocationContext {
                 if storyPostingAvailable {
                     self.storyButton = AnyComponentWithIdentity(id: "story", component: AnyComponent(NavigationButtonComponent(
                         content: .icon(imageName: "Chat List/AddStoryIcon"),
+                        accessibilityLabel: presentationData.strings.StoryFeed_AddStory,
                         pressed: { [weak self] _ in
                             guard let self, let parentController = self.parentController else {
                                 return
@@ -7146,6 +7149,7 @@ private final class ChatListLocationContext {
                 let parentController = self.parentController
                 self.rightButton = AnyComponentWithIdentity(id: "more", component: AnyComponent(NavigationButtonComponent(
                     content: .more,
+                    accessibilityLabel: presentationData.strings.Common_More,
                     pressed: { [weak parentController] sourceView in
                         if let primaryContext = parentController?.primaryContext {
                             primaryContext.performMoreAction(sourceView: sourceView)
@@ -7318,6 +7322,7 @@ private final class ChatListLocationContext {
             let parentController = self.parentController
             self.rightButton = AnyComponentWithIdentity(id: "more", component: AnyComponent(NavigationButtonComponent(
                 content: .more,
+                accessibilityLabel: presentationData.strings.Common_More,
                 pressed: { [weak parentController] sourceView in
                     if let secondaryContext = parentController?.secondaryContext {
                         secondaryContext.performMoreAction(sourceView: sourceView)
