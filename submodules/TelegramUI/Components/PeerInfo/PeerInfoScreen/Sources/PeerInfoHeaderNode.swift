@@ -1363,6 +1363,12 @@ final class PeerInfoHeaderNode: ASDisplayNode {
             TitleNodeStateExpanded: MultiScaleTextState(attributes: smallSubtitleAttributes, constrainedSize: titleConstrainedSize)
         ], mainState: TitleNodeStateRegular)
         self.subtitleNode.accessibilityLabel = subtitleStringText
+
+        if !subtitleIsButton {
+            self.subtitleNode.stateNode(forKey: TitleNodeStateRegular)?.isAccessibilityElement = true
+            self.subtitleNode.stateNode(forKey: TitleNodeStateExpanded)?.isAccessibilityElement = true
+            self.subtitleBackgroundButton?.isAccessibilityElement = false
+        }
         
         if subtitleIsButton {
             let subtitleBackgroundNode: ASDisplayNode
@@ -1396,6 +1402,14 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                     }
                 }
             }
+
+            let subtitleResolved = PeerInfoHeaderSubtitleVoiceOver.resolve(strings: presentationData.strings, subtitle: subtitleStringText, isButton: true)
+            subtitleBackgroundButton.isAccessibilityElement = true
+            subtitleBackgroundButton.accessibilityLabel = subtitleResolved.label
+            subtitleBackgroundButton.accessibilityHint = subtitleResolved.hint
+            subtitleBackgroundButton.accessibilityTraits = subtitleResolved.traits
+            self.subtitleNode.stateNode(forKey: TitleNodeStateRegular)?.isAccessibilityElement = false
+            self.subtitleNode.stateNode(forKey: TitleNodeStateExpanded)?.isAccessibilityElement = false
             
             let subtitleArrowNode: ASImageNode
             if let current = self.subtitleArrowNode {
