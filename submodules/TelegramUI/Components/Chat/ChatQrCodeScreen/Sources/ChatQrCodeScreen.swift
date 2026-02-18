@@ -1460,6 +1460,7 @@ private class ChatQrCodeScreenNode: ViewControllerTracingNode, ASScrollViewDeleg
         transition.updateFrame(view: self.contentBackgroundView, frame: CGRect(origin: CGPoint(), size: backgroundFrame.size))
         
         let barButtonSize = CGSize(width: 40.0, height: 40.0)
+        let cancelAccessibility = ChatQrCodeScreenNavigationButtonsVoiceOver.resolveClose(strings: self.presentationData.strings)
         let cancelButtonSize = self.cancelButton.update(
             transition: .immediate,
             component: AnyComponent(GlassBarButtonComponent(
@@ -1475,7 +1476,9 @@ private class ChatQrCodeScreenNode: ViewControllerTracingNode, ASScrollViewDeleg
                 )),
                 action: { [weak self] _ in
                     self?.cancelButtonPressed()
-                }
+                },
+                accessibilityLabel: cancelAccessibility.label,
+                accessibilityHint: cancelAccessibility.hint
             )),
             environment: {},
             containerSize: barButtonSize
@@ -1489,6 +1492,7 @@ private class ChatQrCodeScreenNode: ViewControllerTracingNode, ASScrollViewDeleg
             view.center = cancelButtonFrame.center
         }
         
+        let switchAppearanceAccessibility = ChatQrCodeScreenNavigationButtonsVoiceOver.resolveSwitchAppearance(strings: self.presentationData.strings, isDarkAppearance: self.isDarkAppearance)
         let switchThemeButtonSize = self.switchThemeButton.update(
             transition: .immediate,
             component: AnyComponent(GlassBarButtonComponent(
@@ -1501,7 +1505,9 @@ private class ChatQrCodeScreenNode: ViewControllerTracingNode, ASScrollViewDeleg
                 )),
                 action: { [weak self] _ in
                     self?.switchThemePressed()
-                }
+                },
+                accessibilityLabel: switchAppearanceAccessibility.label,
+                accessibilityHint: switchAppearanceAccessibility.hint
             )),
             environment: {},
             containerSize: barButtonSize
