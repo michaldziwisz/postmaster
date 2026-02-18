@@ -768,6 +768,7 @@ public final class MediaScrubberComponent: Component {
                 maxDuration: component.maxDuration,
                 transition: transition
             )
+            self.trimView.updateAccessibility(strings: component.context.sharedContext.currentPresentationData.with { $0 }.strings)
             
             let (ghostLeftHandleFrame, ghostRightHandleFrame) = self.ghostTrimView.update(
                 style: component.style,
@@ -1641,6 +1642,17 @@ public class TrimView: UIView {
     public var trimUpdated: (Double, Double, Bool, Bool) -> Void = { _, _, _, _ in }
     var updated: (ComponentTransition) -> Void = { _ in }
     
+    private var accessibilityStrings: PresentationStrings?
+    private var accessibilityStep: Double = 1.0
+    private var accessibilityIsEnabled: Bool = true
+    
+    public func updateAccessibility(strings: PresentationStrings, isEnabled: Bool = true, step: Double = 1.0) {
+        self.accessibilityStrings = strings
+        self.accessibilityStep = max(0.0, step)
+        self.accessibilityIsEnabled = isEnabled
+        self.applyAccessibility()
+    }
+    
     public override init(frame: CGRect) {
         super.init(frame: .zero)
         
@@ -1675,6 +1687,11 @@ public class TrimView: UIView {
         self.addSubview(self.rightHandleView)
         self.rightHandleView.addSubview(self.rightCapsuleView)
         self.addSubview(self.borderView)
+        
+        self.isAccessibilityElement = false
+        self.zoneView.isAccessibilityElement = false
+        self.leftHandleView.isAccessibilityElement = false
+        self.rightHandleView.isAccessibilityElement = false
         
         let zoneHandlePanGesture = UILongPressGestureRecognizer(target: self, action: #selector(self.handleZoneHandlePan(_:)))
         zoneHandlePanGesture.minimumPressDuration = 0.0
@@ -1994,7 +2011,115 @@ public class TrimView: UIView {
         let borderFrame = CGRect(origin: CGPoint(x: leftHandleFrame.maxX, y: 0.0), size: CGSize(width: rightHandleFrame.minX - leftHandleFrame.maxX, height: scrubberSize.height))
         transition.setFrame(view: self.borderView, frame: borderFrame)
         
+        self.applyAccessibility()
+        
         return (leftHandleFrame, rightHandleFrame)
+    }
+    
+    private func applyAccessibility() {
+        guard let strings = self.accessibilityStrings, let params = self.params, self.accessibilityIsEnabled else {
+            self.leftHandleView.isAccessibilityElement = false
+            self.rightHandleView.isAccessibilityElement = false
+            self.leftHandleView.accessibilityLabel = nil
+            self.rightHandleView.accessibilityLabel = nil
+            self.leftHandleView.accessibilityValue = nil
+            self.rightHandleView.accessibilityValue = nil
+            self.leftHandleView.accessibilityHint = nil
+            self.rightHandleView.accessibilityHint = nil
+            self.leftHandleView.accessibilityTraits = []
+            self.rightHandleView.accessibilityTraits = []
+            self.leftHandleView.accessibilityIncrementHandler = nil
+            self.leftHandleView.accessibilityDecrementHandler = nil
+            self.rightHandleView.accessibilityIncrementHandler = nil
+            self.rightHandleView.accessibilityDecrementHandler = nil
+            return
+        }
+        
+        let isVisible = !self.isHidden && !self.alpha.isZero
+        self.leftHandleView.isAccessibilityElement = isVisible
+        self.rightHandleView.isAccessibilityElement = isVisible
+        
+        let startAccessibility = TrimViewHandleVoiceOver.resolve(
+            strings: strings,
+            handle: .start,
+            position: params.startPosition,
+            isEnabled: true
+        )
+        self.leftHandleView.accessibilityLabel = startAccessibility.label
+        self.leftHandleView.accessibilityValue = startAccessibility.value
+        self.leftHandleView.accessibilityHint = startAccessibility.hint
+        self.leftHandleView.accessibilityTraits = startAccessibility.traits
+        
+        let endAccessibility = TrimViewHandleVoiceOver.resolve(
+            strings: strings,
+            handle: .end,
+            position: params.endPosition,
+            isEnabled: true
+        )
+        self.rightHandleView.accessibilityLabel = endAccessibility.label
+        self.rightHandleView.accessibilityValue = endAccessibility.value
+        self.rightHandleView.accessibilityHint = endAccessibility.hint
+        self.rightHandleView.accessibilityTraits = endAccessibility.traits
+        
+        self.leftHandleView.accessibilityIncrementHandler = { [weak self] in
+            self?.adjustTrim(handle: .start, direction: 1)
+        }
+        self.leftHandleView.accessibilityDecrementHandler = { [weak self] in
+            self?.adjustTrim(handle: .start, direction: -1)
+        }
+        self.rightHandleView.accessibilityIncrementHandler = { [weak self] in
+            self?.adjustTrim(handle: .end, direction: 1)
+        }
+        self.rightHandleView.accessibilityDecrementHandler = { [weak self] in
+            self?.adjustTrim(handle: .end, direction: -1)
+        }
+    }
+    
+    private func adjustTrim(handle: TrimViewHandleVoiceOver.Handle, direction: Int) {
+        guard let strings = self.accessibilityStrings, let params = self.params else {
+            return
+        }
+        
+        let updatedRange = TrimViewHandleVoiceOver.adjustRange(
+            handle: handle,
+            startPosition: params.startPosition,
+            endPosition: params.endPosition,
+            duration: params.duration,
+            minDuration: params.minDuration,
+            maxDuration: params.maxDuration,
+            step: self.accessibilityStep,
+            direction: direction
+        )
+        
+        self.params = (
+            params.scrubberSize,
+            params.duration,
+            updatedRange.startPosition,
+            updatedRange.endPosition,
+            params.position,
+            params.minDuration,
+            params.maxDuration,
+            params.isBorderless
+        )
+        
+        let startAccessibility = TrimViewHandleVoiceOver.resolve(
+            strings: strings,
+            handle: .start,
+            position: updatedRange.startPosition,
+            isEnabled: true
+        )
+        self.leftHandleView.accessibilityValue = startAccessibility.value
+        
+        let endAccessibility = TrimViewHandleVoiceOver.resolve(
+            strings: strings,
+            handle: .end,
+            position: updatedRange.endPosition,
+            isEnabled: true
+        )
+        self.rightHandleView.accessibilityValue = endAccessibility.value
+        
+        self.trimUpdated(updatedRange.startPosition, updatedRange.endPosition, handle == .end, true)
+        self.updated(.easeInOut(duration: 0.25))
     }
     
     public override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
@@ -2028,8 +2153,19 @@ private class VideoFrameLayer: SimpleShapeLayer {
 private final class HandleView: UIImageView {
     var hitTestSlop = UIEdgeInsets()
     
+    var accessibilityIncrementHandler: (() -> Void)?
+    var accessibilityDecrementHandler: (() -> Void)?
+    
     override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
         return self.bounds.inset(by: self.hitTestSlop).contains(point)
+    }
+    
+    override func accessibilityIncrement() {
+        self.accessibilityIncrementHandler?()
+    }
+    
+    override func accessibilityDecrement() {
+        self.accessibilityDecrementHandler?()
     }
 }
 

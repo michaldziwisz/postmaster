@@ -533,6 +533,7 @@ public final class ChatRecordingPreviewInputPanelNodeImpl: ChatInputPanelNode {
                     }
                     self.trimViewImpl.frame = waveformBackgroundFrame
                     self.trimViewImpl.isHidden = audio.duration < 2.0
+                    self.trimViewImpl.updateAccessibility(strings: interfaceState.strings)
                     
                     let playButtonSize = CGSize(width: max(0.0, rightHandleFrame.minX - leftHandleFrame.maxX), height: waveformBackgroundFrame.height)
                     self.playButtonNodeImpl.update(theme: interfaceState.theme, size: playButtonSize, transition: transition)
