@@ -11,6 +11,7 @@ swift_library(
     deps = [
         "//submodules/ComponentFlow",
         "//submodules/ChatListUI",
+        "//submodules/ContactsPeerItem",
         "//submodules/HorizontalPeerItem",
         "//submodules/TelegramPresentationData",
         "//submodules/TelegramUI/Components/ActionPanelComponent",

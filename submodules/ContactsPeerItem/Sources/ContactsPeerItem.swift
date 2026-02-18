@@ -503,6 +503,74 @@ public class ContactsPeerItemNode: ItemListRevealOptionsItemNode {
     public var item: ContactsPeerItem? {
         return self.layoutParams?.0
     }
+
+    private enum AccessibilityCustomActionId {
+        case buttonAction
+        case delete
+    }
+    
+    private final class AccessibilityCustomAction: UIAccessibilityCustomAction {
+        let id: AccessibilityCustomActionId
+        
+        init(name: String, target: Any?, selector: Selector, id: AccessibilityCustomActionId) {
+            self.id = id
+            super.init(name: name, target: target, selector: selector)
+        }
+    }
+    
+    override public func accessibilityActivate() -> Bool {
+        guard let item = self.item else {
+            return false
+        }
+        
+        var supernode: ASDisplayNode? = self
+        while let current = supernode {
+            if let listView = current as? ListView {
+                item.selected(listView: listView)
+                return true
+            }
+            supernode = current.supernode
+        }
+        
+        if item.enabled {
+            item.action?(item.peer)
+        } else {
+            item.disabledAction?(item.peer)
+        }
+        return true
+    }
+    
+    @objc private func performLocalAccessibilityCustomAction(_ action: UIAccessibilityCustomAction) -> Bool {
+        guard let action = action as? AccessibilityCustomAction, let item = self.item else {
+            return false
+        }
+        
+        switch action.id {
+        case .buttonAction:
+            guard let buttonAction = item.buttonAction else {
+                return false
+            }
+            buttonAction.action?(item.peer, self, nil)
+            return true
+        case .delete:
+            guard item.editing.editable else {
+                return false
+            }
+            switch item.peer {
+            case let .peer(peer, chatPeer):
+                guard let peer = chatPeer ?? peer else {
+                    return false
+                }
+                item.deletePeer?(peer.id)
+                return true
+            case let .thread(peer, _, _, _, _):
+                item.deletePeer?(peer.id)
+                return true
+            case .deviceContact:
+                return false
+            }
+        }
+    }
     
     override public var visibility: ListViewItemNodeVisibility {
         didSet {
@@ -1216,6 +1284,39 @@ public class ContactsPeerItemNode: ItemListRevealOptionsItemNode {
                             
                             strongSelf.accessibilityLabel = titleAttributedString?.string
                             strongSelf.accessibilityValue = statusAttributedString?.string
+                            strongSelf.view.isAccessibilityElement = true
+                            strongSelf.view.accessibilityLabel = strongSelf.accessibilityLabel
+                            strongSelf.view.accessibilityValue = strongSelf.accessibilityValue
+                            
+                            let isSelected: Bool
+                            switch item.selection {
+                            case .none:
+                                isSelected = false
+                            case let .selectable(selected):
+                                isSelected = selected
+                            }
+                            
+                            let voiceOver = ContactsPeerItemVoiceOver.resolve(
+                                strings: item.presentationData.strings,
+                                isEnabled: item.enabled,
+                                isSelected: isSelected,
+                                buttonActionTitle: item.buttonAction?.title,
+                                isDeletable: item.editing.editable
+                            )
+                            
+                            strongSelf.accessibilityTraits = voiceOver.traits
+                            strongSelf.view.accessibilityTraits = voiceOver.traits
+                            
+                            let accessibilityCustomActions = voiceOver.customActions.map { action -> UIAccessibilityCustomAction in
+                                switch action {
+                                case let .buttonAction(name):
+                                    return AccessibilityCustomAction(name: name, target: strongSelf, selector: #selector(strongSelf.performLocalAccessibilityCustomAction(_:)), id: .buttonAction)
+                                case let .delete(name):
+                                    return AccessibilityCustomAction(name: name, target: strongSelf, selector: #selector(strongSelf.performLocalAccessibilityCustomAction(_:)), id: .delete)
+                                }
+                            }
+                            strongSelf.accessibilityCustomActions = accessibilityCustomActions
+                            strongSelf.view.accessibilityCustomActions = accessibilityCustomActions
                             
                             strongSelf.containerNode.frame = CGRect(origin: CGPoint(), size: nodeLayout.contentSize)
                             strongSelf.contextSourceNode.frame = CGRect(origin: CGPoint(), size: nodeLayout.contentSize)
