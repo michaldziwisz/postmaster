@@ -34,6 +34,10 @@ public final class MoreHeaderButton: HighlightableButtonNode {
         self.iconNode.contentMode = .scaleToFill
 
         super.init()
+        
+        self.isAccessibilityElement = true
+        self.accessibilityLabel = "More"
+        self.accessibilityTraits = [.button]
 
         self.containerNode.addSubnode(self.referenceNode)
         self.referenceNode.addSubnode(self.iconNode)
@@ -63,6 +67,11 @@ public final class MoreHeaderButton: HighlightableButtonNode {
         self.hitTestSlop = UIEdgeInsets(top: 0.0, left: -4.0, bottom: 0.0, right: -4.0)
         
         self.addTarget(self, action: #selector(self.pressed), forControlEvents: .touchUpInside)
+    }
+    
+    override public func accessibilityActivate() -> Bool {
+        self.onPressed?()
+        return true
     }
     
     @objc private func pressed() {

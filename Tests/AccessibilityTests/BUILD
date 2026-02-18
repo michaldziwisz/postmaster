@@ -13,6 +13,7 @@ swift_library(
         "//submodules/TelegramPresentationData",
         "//submodules/TelegramUI/Components/ChatListHeaderComponent",
         "//submodules/TelegramUI/Components/HorizontalTabsComponent",
+        "//submodules/TelegramUI/Components/MoreHeaderButton",
         "//submodules/TelegramUI/Components/TabBarComponent",
     ],
 )
