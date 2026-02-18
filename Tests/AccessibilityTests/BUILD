@@ -37,6 +37,7 @@ swift_library(
         "//submodules/TelegramUI/Components/Stories/StorySetIndicatorComponent",
         "//submodules/TelegramUI/Components/TabBarComponent",
         "//submodules/TelegramUI/Components/TabSelectorComponent",
+        "//submodules/ItemListPeerActionItem",
         "//submodules/PeerInfoAvatarListNode",
     ],
 )

@@ -138,7 +138,7 @@ public final class ItemListPeerActionItemNode: ListViewItemNode {
     public var tag: ItemListItemTag? {
         return self.item?.tag as? ItemListItemTag
     }
-    
+
     public init() {
         self.backgroundNode = ASDisplayNode()
         self.backgroundNode.isLayerBacked = true
@@ -172,6 +172,17 @@ public final class ItemListPeerActionItemNode: ListViewItemNode {
         self.addSubnode(self.titleNode)
         
         self.addSubnode(self.activateArea)
+        
+        self.activateArea.activate = { [weak self] in
+            guard let self, let item = self.item, item.color != .disabled else {
+                return false
+            }
+            guard let action = item.action else {
+                return false
+            }
+            action()
+            return true
+        }
     }
     
     deinit {
@@ -256,7 +267,14 @@ public final class ItemListPeerActionItemNode: ListViewItemNode {
                     strongSelf.item = item
                     
                     strongSelf.activateArea.frame = CGRect(origin: CGPoint(x: params.leftInset, y: 0.0), size: CGSize(width: params.width - params.leftInset - params.rightInset, height: layout.contentSize.height))
-                    strongSelf.activateArea.accessibilityLabel = item.title
+                    let resolved = ItemListPeerActionItemVoiceOver.resolve(
+                        strings: item.presentationData.strings,
+                        title: item.title,
+                        isEnabled: item.action != nil && item.color != .disabled
+                    )
+                    strongSelf.activateArea.accessibilityLabel = resolved.label
+                    strongSelf.activateArea.accessibilityHint = resolved.hint
+                    strongSelf.activateArea.accessibilityTraits = resolved.traits
                     
                     if let _ = updatedTheme {
                         switch item.style {
