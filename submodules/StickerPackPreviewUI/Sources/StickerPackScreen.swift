@@ -1981,7 +1981,9 @@ private final class StickerPackContainer: ASDisplayNode {
                         return
                     }
                     self.cancelPressed()
-                }
+                },
+                accessibilityLabel: self.presentationData.strings.Common_Close,
+                accessibilityHint: nil
             )),
             environment: {},
             containerSize: CGSize(width: 44.0, height: 44.0),
@@ -2018,7 +2020,9 @@ private final class StickerPackContainer: ASDisplayNode {
                     }
                     self.morePressed(view: view, gesture: nil)
                     self.moreButtonPlayOnce.invoke(Void())
-                }
+                },
+                accessibilityLabel: self.presentationData.strings.Common_More,
+                accessibilityHint: nil
             )),
             environment: {},
             containerSize: CGSize(width: 44.0, height: 44.0),
