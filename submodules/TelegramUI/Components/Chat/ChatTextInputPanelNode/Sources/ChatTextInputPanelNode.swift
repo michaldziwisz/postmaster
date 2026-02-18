@@ -724,6 +724,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         
         self.slowModeButton = BoostSlowModeButton()
         self.slowModeButton.alpha = 0.0
+        self.slowModeButton.isAccessibilityElement = false
         
         self.viewOnceButton = ChatRecordingViewOnceButtonNode(icon: .viewOnce)
         self.recordMoreButton = ChatRecordingViewOnceButtonNode(icon: .recordMore)
@@ -2303,6 +2304,27 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         self.mediaActionButtons.micButton.updateMode(mode: interfaceState.interfaceState.mediaRecordingMode, animated: transition.isAnimated)
         
         self.updateActionButtons(hasText: inputHasText, transition: transition)
+        
+        let isSlowModeButtonVisibleForVoiceOver = rightSlowModeInset > 0.0 && !self.slowModeButton.alpha.isZero
+        if isSlowModeButtonVisibleForVoiceOver {
+            let resolved = ChatTextInputPanelBoostToUnrestrictButtonVoiceOver.resolve(
+                strings: interfaceState.strings,
+                slowmodeState: interfaceState.slowmodeState,
+                nowTimestamp: Int32(Date().timeIntervalSince1970),
+                isEnabled: true
+            )
+            self.slowModeButton.isAccessibilityElement = true
+            self.slowModeButton.accessibilityLabel = resolved.label
+            self.slowModeButton.accessibilityValue = resolved.value
+            self.slowModeButton.accessibilityHint = resolved.hint
+            self.slowModeButton.accessibilityTraits = resolved.traits
+        } else {
+            self.slowModeButton.isAccessibilityElement = false
+            self.slowModeButton.accessibilityLabel = nil
+            self.slowModeButton.accessibilityValue = nil
+            self.slowModeButton.accessibilityHint = nil
+            self.slowModeButton.accessibilityTraits = []
+        }
         
         var mediaActionButtonsSize = CGSize(width: 40.0, height: 40.0)
         var sendActionButtonsSize = CGSize(width: 40.0, height: 40.0)

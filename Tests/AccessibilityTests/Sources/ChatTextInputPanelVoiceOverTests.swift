@@ -1,3 +1,4 @@
+import ChatPresentationInterfaceState
 import ChatTextInputPanelNode
 import TelegramPresentationData
 import UIKit
@@ -35,5 +36,29 @@ final class ChatTextInputPanelVoiceOverTests: XCTestCase {
         XCTAssertTrue(resolved.traits.contains(.button))
         XCTAssertTrue(resolved.traits.contains(.notEnabled))
     }
+    
+    func testBoostToUnrestrictButtonResolvesLabelValueAndTraitsForTimestamp() {
+        let resolved = ChatTextInputPanelBoostToUnrestrictButtonVoiceOver.resolve(
+            strings: defaultPresentationStrings,
+            slowmodeState: ChatSlowmodeState(timeout: 0, variant: .timestamp(112)),
+            nowTimestamp: 100,
+            isEnabled: true
+        )
+        XCTAssertEqual(resolved.label, defaultPresentationStrings.Conversation_BoostToUnrestrictText)
+        XCTAssertEqual(resolved.value, defaultPresentationStrings.Chat_SlowmodeTooltip("0:12").string)
+        XCTAssertNil(resolved.hint)
+        XCTAssertTrue(resolved.traits.contains(.button))
+        XCTAssertTrue(resolved.traits.contains(.updatesFrequently))
+        XCTAssertFalse(resolved.traits.contains(.notEnabled))
+    }
+    
+    func testBoostToUnrestrictButtonResolvesPendingMessagesValue() {
+        let resolved = ChatTextInputPanelBoostToUnrestrictButtonVoiceOver.resolve(
+            strings: defaultPresentationStrings,
+            slowmodeState: ChatSlowmodeState(timeout: 0, variant: .pendingMessages),
+            nowTimestamp: 0,
+            isEnabled: true
+        )
+        XCTAssertEqual(resolved.value, defaultPresentationStrings.Chat_SlowmodeTooltipPending)
+    }
 }
-

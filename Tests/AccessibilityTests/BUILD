@@ -11,6 +11,7 @@ swift_library(
     deps = [
         "//submodules/ComponentFlow",
         "//submodules/CallListUI",
+        "//submodules/ChatPresentationInterfaceState",
         "//submodules/ChatListUI",
         "//submodules/TelegramUI",
         "//submodules/TelegramUI/Components/ChatTitleView",
