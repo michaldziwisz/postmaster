@@ -2602,6 +2602,7 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
             if cancelButton.view == nil {
                 buttonTransition = .immediate
             }
+            let cancelAccessibility = MediaPickerNavigationButtonsVoiceOver.resolveCancelOrBack(strings: self.presentationData.strings, isBack: isBack)
             let cancelButtonSize = cancelButton.update(
                 transition: buttonTransition,
                 component: AnyComponent(GlassBarButtonComponent(
@@ -2617,7 +2618,9 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
                     )),
                     action: { [weak self] _ in
                         self?.cancelPressed()
-                    }
+                    },
+                    accessibilityLabel: cancelAccessibility.label,
+                    accessibilityHint: cancelAccessibility.hint
                 )),
                 environment: {},
                 containerSize: barButtonSize
@@ -2640,6 +2643,7 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
                 moreButton = ComponentView<Empty>()
                 self.rightButton = moreButton
             }
+            let moreAccessibility = MediaPickerNavigationButtonsVoiceOver.resolveMore(strings: self.presentationData.strings)
             let moreButtonSize = moreButton.update(
                 transition: buttonTransition,
                 component: AnyComponent(GlassBarButtonComponent(
@@ -2660,7 +2664,10 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
                     action: { [weak self] view in
                         self?.searchOrMorePressed(view: view, gesture: nil)
                         self?.moreButtonPlayOnce.invoke(Void())
-                    })),
+                    },
+                    accessibilityLabel: moreAccessibility.label,
+                    accessibilityHint: moreAccessibility.hint
+                )),
                 environment: {},
                 containerSize: barButtonSize
             )
