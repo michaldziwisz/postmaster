@@ -7,6 +7,32 @@ import TelegramPresentationData
 import ComponentFlow
 import LottieComponent
 
+public struct ChatListSearchEmptyFooterItemVoiceOver {
+    public struct Resolved: Equatable {
+        public let label: String
+        public let searchAllMessagesButtonLabel: String?
+        
+        public init(label: String, searchAllMessagesButtonLabel: String?) {
+            self.label = label
+            self.searchAllMessagesButtonLabel = searchAllMessagesButtonLabel
+        }
+    }
+    
+    public static func resolve(strings: PresentationStrings, searchQuery: String?, showsSearchAllMessagesButton: Bool) -> Resolved {
+        let title = strings.ChatList_Search_NoResults
+        let description: String
+        if let searchQuery {
+            description = strings.ChatList_Search_NoResultsQueryDescription(searchQuery).string
+        } else {
+            description = strings.ChatList_Search_NoResults
+        }
+        
+        let label = "\(title)\n\(description)"
+        let buttonLabel = showsSearchAllMessagesButton ? strings.ChatList_EmptyResult_SearchInAll : nil
+        return Resolved(label: label, searchAllMessagesButtonLabel: buttonLabel)
+    }
+}
+
 class ChatListHoleItem: ListViewItem {
     let theme: PresentationTheme
     
@@ -139,6 +165,8 @@ class ChatListSearchEmptyFooterItemNode: ListViewItemNode {
     private let textNode: TextNode
     private let searchAllMessagesButton: HighlightableButtonNode
     private let searchAllMessagesTitle: TextNode
+    private let accessibilityArea: AccessibilityAreaNode
+    private let searchAllMessagesAccessibilityArea: AccessibilityAreaNode
     
     private let icon = ComponentView<Empty>()
     
@@ -153,7 +181,16 @@ class ChatListSearchEmptyFooterItemNode: ListViewItemNode {
         self.searchAllMessagesTitle = TextNode()
         self.searchAllMessagesTitle.isUserInteractionEnabled = false
         
+        self.accessibilityArea = AccessibilityAreaNode()
+        self.accessibilityArea.accessibilityTraits = .staticText
+        
+        self.searchAllMessagesAccessibilityArea = AccessibilityAreaNode()
+        self.searchAllMessagesAccessibilityArea.accessibilityTraits = .button
+        self.searchAllMessagesAccessibilityArea.isAccessibilityElement = false
+        
         super.init(layerBacked: false)
+        
+        self.isAccessibilityElement = false
         
         self.addSubnode(self.contentNode)
         self.contentNode.addSubnode(self.titleNode)
@@ -161,6 +198,15 @@ class ChatListSearchEmptyFooterItemNode: ListViewItemNode {
         
         self.contentNode.addSubnode(self.searchAllMessagesButton)
         self.searchAllMessagesButton.addSubnode(self.searchAllMessagesTitle)
+        
+        self.searchAllMessagesButton.isAccessibilityElement = false
+        
+        self.contentNode.addSubnode(self.accessibilityArea)
+        self.contentNode.addSubnode(self.searchAllMessagesAccessibilityArea)
+        self.searchAllMessagesAccessibilityArea.activate = { [weak self] in
+            self?.item?.searchAllMessages?()
+            return true
+        }
         
         self.searchAllMessagesButton.addTarget(self, action: #selector(self.searchAllMessagesButtonPressed), forControlEvents: .touchUpInside)
         
@@ -302,6 +348,7 @@ class ChatListSearchEmptyFooterItemNode: ListViewItemNode {
                     if iconView.superview == nil {
                         self.contentNode.view.addSubview(iconView)
                     }
+                    iconView.isAccessibilityElement = false
                     iconView.frame = iconFrame
                 }
                 
@@ -317,16 +364,32 @@ class ChatListSearchEmptyFooterItemNode: ListViewItemNode {
                 self.textNode.frame = textFrame
                 contentY += textLayout.0.size.height
                 
-                if item.searchAllMessages != nil {
+                let showsSearchAllMessagesButton = item.searchAllMessages != nil
+                self.searchAllMessagesButton.isHidden = !showsSearchAllMessagesButton
+                self.searchAllMessagesAccessibilityArea.isHidden = !showsSearchAllMessagesButton
+                self.searchAllMessagesAccessibilityArea.isAccessibilityElement = showsSearchAllMessagesButton
+                
+                let voiceOver = ChatListSearchEmptyFooterItemVoiceOver.resolve(strings: item.strings, searchQuery: item.searchQuery, showsSearchAllMessagesButton: showsSearchAllMessagesButton)
+                self.accessibilityArea.accessibilityLabel = voiceOver.label
+                self.accessibilityArea.frame = CGRect(origin: .zero, size: CGSize(width: params.width, height: textFrame.maxY))
+                
+                if showsSearchAllMessagesButton {
                     contentY += buttonSpacing
                     let searchAllMessagesButtonFrame = CGRect(origin: CGPoint(x: floor((params.width - searchAllMessagesTitleLayout.0.size.width) * 0.5), y: contentY), size: CGSize(width: searchAllMessagesTitleLayout.0.size.width, height: searchAllMessagesTitleLayout.0.size.height + buttonInset * 2.0))
                     contentY += searchAllMessagesTitleLayout.0.size.height + buttonInset * 2.0
                     
                     self.searchAllMessagesButton.frame = searchAllMessagesButtonFrame
                     self.searchAllMessagesTitle.frame = CGRect(origin: CGPoint(x: 0.0, y: buttonInset), size: searchAllMessagesTitleLayout.0.size)
+                    
+                    self.searchAllMessagesAccessibilityArea.frame = searchAllMessagesButtonFrame
+                    self.searchAllMessagesAccessibilityArea.accessibilityLabel = voiceOver.searchAllMessagesButtonLabel
                     contentY += buttonInset
                     contentY += searchAllMessagesTitleLayout.0.size.height
                     contentY += buttonInset
+                } else {
+                    self.searchAllMessagesButton.frame = CGRect()
+                    self.searchAllMessagesAccessibilityArea.frame = CGRect()
+                    self.searchAllMessagesAccessibilityArea.accessibilityLabel = nil
                 }
                 
                 contentY += bottomInset
