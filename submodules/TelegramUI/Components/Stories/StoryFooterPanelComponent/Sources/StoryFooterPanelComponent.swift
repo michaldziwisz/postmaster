@@ -802,6 +802,13 @@ public final class StoryFooterPanelComponent: Component {
                     if likeButtonView.superview == nil {
                         self.addSubview(likeButtonView)
                     }
+                    
+                    let likeResolved = StoryFooterPanelLikeButtonVoiceOver.resolve(strings: component.strings)
+                    likeButtonView.button.view.isAccessibilityElement = true
+                    likeButtonView.button.view.accessibilityLabel = likeResolved.label
+                    likeButtonView.button.view.accessibilityHint = likeResolved.hint
+                    likeButtonView.button.view.accessibilityTraits = likeResolved.traits
+                    
                     var likeButtonFrame = CGRect(origin: CGPoint(x: rightContentOffset - likeButtonSize.width, y: floor((size.height - likeButtonSize.height) * 0.5)), size: likeButtonSize)
                     likeButtonFrame.origin.y += component.expandFraction * 45.0
                     
@@ -914,6 +921,13 @@ public final class StoryFooterPanelComponent: Component {
                         if repostButtonView.superview == nil {
                             self.addSubview(repostButtonView)
                         }
+                        
+                        let repostResolved = StoryFooterPanelRepostButtonVoiceOver.resolve(strings: component.strings)
+                        repostButtonView.button.view.isAccessibilityElement = true
+                        repostButtonView.button.view.accessibilityLabel = repostResolved.label
+                        repostButtonView.button.view.accessibilityHint = repostResolved.hint
+                        repostButtonView.button.view.accessibilityTraits = repostResolved.traits
+                        
                         var repostButtonFrame = CGRect(origin: CGPoint(x: rightContentOffset - repostButtonSize.width, y: floor((size.height - repostButtonSize.height) * 0.5)), size: repostButtonSize)
                         repostButtonFrame.origin.y += component.expandFraction * 45.0
                         
@@ -971,6 +985,15 @@ public final class StoryFooterPanelComponent: Component {
                         if forwardButtonView.superview == nil {
                             self.addSubview(forwardButtonView)
                         }
+                        
+                        if let forwardActionButtonView = forwardButtonView as? MessageInputActionButtonComponent.View {
+                            let forwardResolved = StoryFooterPanelForwardButtonVoiceOver.resolve(strings: component.strings)
+                            forwardActionButtonView.button.view.isAccessibilityElement = true
+                            forwardActionButtonView.button.view.accessibilityLabel = forwardResolved.label
+                            forwardActionButtonView.button.view.accessibilityHint = forwardResolved.hint
+                            forwardActionButtonView.button.view.accessibilityTraits = forwardResolved.traits
+                        }
+                        
                         var forwardButtonFrame = CGRect(origin: CGPoint(x: rightContentOffset - likeButtonSize.width, y: floor((size.height - forwardButtonSize.height) * 0.5)), size: forwardButtonSize)
                         forwardButtonFrame.origin.y += component.expandFraction * 45.0
                         
