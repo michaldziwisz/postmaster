@@ -307,6 +307,8 @@ class ContactSelectionControllerImpl: ViewController, ContactSelectionController
             } else {
                 searchButtonNode = BarComponentHostNode(component: searchComponent, size: barButtonSize)
                 self.searchButtonNode = searchButtonNode
+            }
+            if self.navigationItem.rightBarButtonItem == nil {
                 self.navigationItem.rightBarButtonItem = UIBarButtonItem(customDisplayNode: searchButtonNode)
             }
         } else {

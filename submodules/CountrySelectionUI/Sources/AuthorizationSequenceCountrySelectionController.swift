@@ -390,6 +390,8 @@ public final class AuthorizationSequenceCountrySelectionController: ViewControll
             return
         }
         let barButtonSize = CGSize(width: 40.0, height: 40.0)
+        
+        let closeAccessibility = AuthorizationSequenceCountrySelectionNavigationButtonsVoiceOver.resolveClose(strings: self.strings)
         let closeComponent: AnyComponentWithIdentity<Empty> = AnyComponentWithIdentity(
             id: "close",
             component: AnyComponent(GlassBarButtonComponent(
@@ -405,12 +407,15 @@ public final class AuthorizationSequenceCountrySelectionController: ViewControll
                 )),
                 action: { [weak self] _ in
                     self?.cancelPressed()
-                }
+                },
+                accessibilityLabel: closeAccessibility.label,
+                accessibilityHint: closeAccessibility.hint
             ))
         )
         
         let searchComponent: AnyComponentWithIdentity<Empty>?
-        if !self.controllerNode.isSearching {
+        if AuthorizationSequenceCountrySelectionNavigationButtonsVoiceOver.shouldShowSearchButton(isSearching: self.controllerNode.isSearching) {
+            let searchAccessibility = AuthorizationSequenceCountrySelectionNavigationButtonsVoiceOver.resolveSearch(strings: self.strings)
             searchComponent = AnyComponentWithIdentity(
                 id: "search",
                 component: AnyComponent(GlassBarButtonComponent(
@@ -427,7 +432,9 @@ public final class AuthorizationSequenceCountrySelectionController: ViewControll
                     action: { [weak self] _ in
                         self?.controllerNode.isSearching = true
                         self?.requestLayout(transition: .animated(duration: 0.5, curve: .spring))
-                    }
+                    },
+                    accessibilityLabel: searchAccessibility.label,
+                    accessibilityHint: searchAccessibility.hint
                 ))
             )
         } else {
@@ -444,7 +451,7 @@ public final class AuthorizationSequenceCountrySelectionController: ViewControll
             self.navigationItem.leftBarButtonItem = UIBarButtonItem(customDisplayNode: closeButtonNode)
         }
          
-        if !self.glass {
+        if searchComponent != nil {
             let searchButtonNode: BarComponentHostNode
             if let current = self.searchButtonNode {
                 searchButtonNode = current
@@ -452,8 +459,12 @@ public final class AuthorizationSequenceCountrySelectionController: ViewControll
             } else {
                 searchButtonNode = BarComponentHostNode(component: searchComponent, size: barButtonSize)
                 self.searchButtonNode = searchButtonNode
+            }
+            if self.navigationItem.rightBarButtonItem == nil {
                 self.navigationItem.rightBarButtonItem = UIBarButtonItem(customDisplayNode: searchButtonNode)
             }
+        } else {
+            self.navigationItem.rightBarButtonItem = nil
         }
     }
     

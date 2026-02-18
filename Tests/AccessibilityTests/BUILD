@@ -26,6 +26,7 @@ swift_library(
         "//submodules/ContactsPeerItem",
         "//submodules/ContactListUI",
         "//submodules/HorizontalPeerItem",
+        "//submodules/CountrySelectionUI",
         "//submodules/ListMessageItem",
         "//submodules/MediaPickerUI",
         "//submodules/MediaPlayer:UniversalMediaPlayer",
