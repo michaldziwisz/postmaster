@@ -29,6 +29,7 @@ swift_library(
         "//submodules/TelegramUI/Components/MoreHeaderButton",
         "//submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen",
         "//submodules/TelegramUI/Components/Stories/StoryContainerScreen",
+        "//submodules/TelegramUI/Components/Stories/StoryFooterPanelComponent",
         "//submodules/TelegramUI/Components/Stories/StoryPeerListComponent",
         "//submodules/TelegramUI/Components/Stories/StorySetIndicatorComponent",
         "//submodules/TelegramUI/Components/TabBarComponent",

@@ -412,6 +412,16 @@ public final class StoryFooterPanelComponent: Component {
             }
             
             self.viewStatsButton.isEnabled = displayViewLists
+            let viewStatsResolved = StoryFooterPanelViewStatsVoiceOver.resolve(
+                strings: component.strings,
+                viewCount: viewCount,
+                isEnabled: displayViewLists
+            )
+            self.viewStatsButton.isAccessibilityElement = true
+            self.viewStatsButton.accessibilityLabel = viewStatsResolved.label
+            self.viewStatsButton.accessibilityHint = viewStatsResolved.hint
+            self.viewStatsButton.accessibilityTraits = viewStatsResolved.traits
+            self.externalContainerView.accessibilityElementsHidden = true
             
             var regularSegments: [AnimatedCountLabelView.Segment] = []
             if viewCount != 0 {
