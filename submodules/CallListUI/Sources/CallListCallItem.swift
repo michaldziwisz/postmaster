@@ -777,13 +777,31 @@ class CallListCallItemNode: ItemListRevealOptionsItemNode {
                             
                             strongSelf.updateLayout(size: nodeLayout.contentSize, leftInset: params.leftInset, rightInset: params.rightInset)
                             
-                            strongSelf.accessibilityArea.accessibilityLabel = titleAttributedString?.string
-                            strongSelf.accessibilityArea.accessibilityValue = statusAccessibilityString
+                            let resolvedAccessibility = CallListCallItemVoiceOver.resolve(
+                                strings: item.presentationData.strings,
+                                title: titleAttributedString?.string ?? "",
+                                status: statusAccessibilityString,
+                                date: dateText,
+                                isEditing: item.editing
+                            )
+                            strongSelf.accessibilityArea.accessibilityTraits = resolvedAccessibility.traits
+                            strongSelf.accessibilityArea.accessibilityLabel = resolvedAccessibility.label
+                            strongSelf.accessibilityArea.accessibilityValue = resolvedAccessibility.value
+                            strongSelf.accessibilityArea.accessibilityHint = resolvedAccessibility.hint
                             strongSelf.accessibilityArea.frame = CGRect(origin: CGPoint(), size: nodeLayout.contentSize)
                             
+                            strongSelf.infoButtonNode.isAccessibilityElement = true
                             strongSelf.infoButtonNode.accessibilityLabel = item.presentationData.strings.Conversation_Info
+                            strongSelf.infoButtonNode.accessibilityTraits = [.button]
                             
-                            strongSelf.view.accessibilityCustomActions = [UIAccessibilityCustomAction(name: item.presentationData.strings.Common_Delete, target: strongSelf, selector: #selector(strongSelf.performLocalAccessibilityCustomAction(_:)))]
+                            strongSelf.accessibilityArea.accessibilityCustomActions = [
+                                UIAccessibilityCustomAction(
+                                    name: item.presentationData.strings.Common_Delete,
+                                    target: strongSelf,
+                                    selector: #selector(strongSelf.performLocalAccessibilityCustomAction(_:))
+                                )
+                            ]
+                            strongSelf.view.accessibilityCustomActions = nil
                             
                             strongSelf.setRevealOptions((left: [], right: [ItemListRevealOption(key: 0, title: item.presentationData.strings.Common_Delete, icon: .none, color: item.presentationData.theme.list.itemDisclosureActions.destructive.fillColor, textColor: item.presentationData.theme.list.itemDisclosureActions.destructive.foregroundColor)]))
                             strongSelf.setRevealOptionsOpened(item.revealed, animated: animated)
@@ -891,9 +909,11 @@ class CallListCallItemNode: ItemListRevealOptionsItemNode {
         }
     }
     
-    @objc private func performLocalAccessibilityCustomAction(_ action: UIAccessibilityCustomAction) {
-        if let item = self.layoutParams?.0 {
-            item.interaction.delete(item.messages.map { $0.id })
+    @objc private func performLocalAccessibilityCustomAction(_ action: UIAccessibilityCustomAction) -> Bool {
+        guard let item = self.layoutParams?.0 else {
+            return false
         }
+        item.interaction.delete(item.messages.map { $0.id })
+        return true
     }
 }
