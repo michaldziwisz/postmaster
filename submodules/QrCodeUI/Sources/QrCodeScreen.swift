@@ -175,7 +175,9 @@ private final class SheetContent: CombinedComponent {
                     )),
                     action: { _ in
                         component.dismiss()
-                    }
+                    },
+                    accessibilityLabel: strings.Common_Close,
+                    accessibilityHint: nil
                 ),
                 availableSize: CGSize(width: 44.0, height: 44.0),
                 transition: .immediate
