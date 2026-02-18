@@ -29,12 +29,14 @@ class ChatHistoryNavigationButtonNode: ContextControllerSourceNode {
     var tapped: (() -> Void)? {
         didSet {
             self.tapRecognizer?.isEnabled = self.tapped != nil && self.isEnabled
+            self.updateVoiceOverTraits()
         }
     }
     
     var isEnabled: Bool = true {
         didSet {
             self.tapRecognizer?.isEnabled = self.tapped != nil && self.isEnabled
+            self.updateVoiceOverTraits()
         }
     }
     
@@ -81,6 +83,9 @@ class ChatHistoryNavigationButtonNode: ContextControllerSourceNode {
         self.badgeTextNode.reverseAnimationDirection = true
         
         super.init()
+
+        self.isAccessibilityElement = true
+        self.updateVoiceOverTraits()
         
         let tapRecognizer = UITapGestureRecognizer(target: self, action: #selector(self.onTapGesture(_:)))
         self.tapRecognizer = tapRecognizer
@@ -107,6 +112,29 @@ class ChatHistoryNavigationButtonNode: ContextControllerSourceNode {
         self.badgeBackgroundView.contentView.addSubview(self.badgeTextNode.view)
         
         self.frame = CGRect(origin: CGPoint(), size: size)
+    }
+
+    override func accessibilityActivate() -> Bool {
+        guard self.isEnabled, let tapped = self.tapped else {
+            return false
+        }
+        tapped()
+        return true
+    }
+
+    func applyVoiceOver(label: String, value: String?, hint: String?) {
+        self.accessibilityLabel = label
+        self.accessibilityValue = value
+        self.accessibilityHint = hint
+        self.updateVoiceOverTraits()
+    }
+
+    private func updateVoiceOverTraits() {
+        var traits: UIAccessibilityTraits = [.button]
+        if !self.isEnabled || self.tapped == nil {
+            traits.insert(.notEnabled)
+        }
+        self.accessibilityTraits = traits
     }
     
     func updateTheme(theme: PresentationTheme, preferClearGlass: Bool, backgroundNode: WallpaperBackgroundNode) {

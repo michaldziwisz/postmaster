@@ -28,6 +28,7 @@ final class ChatHistoryNavigationButtons: ASDisplayNode {
     private var theme: PresentationTheme
     private var preferClearGlass: Bool
     private var dateTimeFormat: PresentationDateTimeFormat
+    private var strings: PresentationStrings
     private let isChatRotated: Bool
     
     let reactionsButton: ChatHistoryNavigationButtonNode
@@ -53,6 +54,7 @@ final class ChatHistoryNavigationButtons: ASDisplayNode {
     var directionButtonState: DirectionState = DirectionState(up: nil, down: nil) {
         didSet {
             if oldValue != self.directionButtonState {
+                self.updateVoiceOver()
                 let _ = self.updateLayout(transition: .animated(duration: 0.3, curve: .spring))
             }
         }
@@ -65,6 +67,7 @@ final class ChatHistoryNavigationButtons: ASDisplayNode {
             } else {
                 self.downButton.badge = ""
             }
+            self.updateVoiceOver()
         }
     }
     
@@ -75,6 +78,7 @@ final class ChatHistoryNavigationButtons: ASDisplayNode {
             } else {
                 self.mentionsButton.badge = ""
             }
+            self.updateVoiceOver()
             
             if (oldValue != 0) != (self.mentionCount != 0) {
                 let _ = self.updateLayout(transition: .animated(duration: 0.3, curve: .spring))
@@ -89,6 +93,7 @@ final class ChatHistoryNavigationButtons: ASDisplayNode {
             } else {
                 self.reactionsButton.badge = ""
             }
+            self.updateVoiceOver()
             
             if (oldValue != 0) != (self.reactionsCount != 0) {
                 let _ = self.updateLayout(transition: .animated(duration: 0.3, curve: .spring))
@@ -96,11 +101,12 @@ final class ChatHistoryNavigationButtons: ASDisplayNode {
         }
     }
     
-    init(theme: PresentationTheme, preferClearGlass: Bool, dateTimeFormat: PresentationDateTimeFormat, backgroundNode: WallpaperBackgroundNode, isChatRotated: Bool) {
+    init(strings: PresentationStrings, theme: PresentationTheme, preferClearGlass: Bool, dateTimeFormat: PresentationDateTimeFormat, backgroundNode: WallpaperBackgroundNode, isChatRotated: Bool) {
         self.isChatRotated = isChatRotated
         self.theme = theme
         self.preferClearGlass = preferClearGlass
         self.dateTimeFormat = dateTimeFormat
+        self.strings = strings
         
         self.mentionsButton = ChatHistoryNavigationButtonNode(theme: theme, preferClearGlass: preferClearGlass, backgroundNode: backgroundNode, type: .mentions)
         self.mentionsButton.alpha = 0.0
@@ -135,21 +141,40 @@ final class ChatHistoryNavigationButtons: ASDisplayNode {
         
         self.downButton.isGestureEnabled = false
         self.upButton.isGestureEnabled = false
+        
+        self.updateVoiceOver()
     }
     
     override func didLoad() {
         super.didLoad()
     }
     
-    func update(theme: PresentationTheme, preferClearGlass: Bool, dateTimeFormat: PresentationDateTimeFormat, backgroundNode: WallpaperBackgroundNode) {
+    func update(strings: PresentationStrings, theme: PresentationTheme, preferClearGlass: Bool, dateTimeFormat: PresentationDateTimeFormat, backgroundNode: WallpaperBackgroundNode) {
         self.theme = theme
         self.preferClearGlass = preferClearGlass
         self.dateTimeFormat = dateTimeFormat
+        self.strings = strings
         
         self.reactionsButton.updateTheme(theme: theme, preferClearGlass: preferClearGlass, backgroundNode: backgroundNode)
         self.mentionsButton.updateTheme(theme: theme, preferClearGlass: preferClearGlass, backgroundNode: backgroundNode)
         self.downButton.updateTheme(theme: theme, preferClearGlass: preferClearGlass, backgroundNode: backgroundNode)
         self.upButton.updateTheme(theme: theme, preferClearGlass: preferClearGlass, backgroundNode: backgroundNode)
+        
+        self.updateVoiceOver()
+    }
+    
+    private func updateVoiceOver() {
+        let downResolved = ChatHistoryNavigationButtonsVoiceOver.resolveDown(strings: self.strings, unreadCount: self.unreadCount)
+        self.downButton.applyVoiceOver(label: downResolved.label, value: downResolved.value, hint: downResolved.hint)
+        
+        let upResolved = ChatHistoryNavigationButtonsVoiceOver.resolveUp(strings: self.strings)
+        self.upButton.applyVoiceOver(label: upResolved.label, value: upResolved.value, hint: upResolved.hint)
+        
+        let mentionsResolved = ChatHistoryNavigationButtonsVoiceOver.resolveMentions(strings: self.strings, mentionCount: self.mentionCount)
+        self.mentionsButton.applyVoiceOver(label: mentionsResolved.label, value: mentionsResolved.value, hint: mentionsResolved.hint)
+        
+        let reactionsResolved = ChatHistoryNavigationButtonsVoiceOver.resolveReactions(strings: self.strings, reactionsCount: self.reactionsCount)
+        self.reactionsButton.applyVoiceOver(label: reactionsResolved.label, value: reactionsResolved.value, hint: reactionsResolved.hint)
     }
     
     private var absoluteRect: (CGRect, CGSize)?
