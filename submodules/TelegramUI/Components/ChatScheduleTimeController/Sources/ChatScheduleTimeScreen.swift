@@ -168,6 +168,7 @@ private final class ChatScheduleTimeSheetContentComponent: Component {
             contentHeight += 30.0
                         
             let barButtonSize = CGSize(width: 44.0, height: 44.0)
+            let closeAccessibility = ChatScheduleTimeScreenNavigationButtonsVoiceOver.resolveClose(strings: strings)
             let cancelSize = self.cancel.update(
                 transition: transition,
                 component: AnyComponent(
@@ -187,7 +188,9 @@ private final class ChatScheduleTimeSheetContentComponent: Component {
                                 return
                             }
                             component.dismiss()
-                        }
+                        },
+                        accessibilityLabel: closeAccessibility.label,
+                        accessibilityHint: closeAccessibility.hint
                     )
                 ),
                 environment: {},
