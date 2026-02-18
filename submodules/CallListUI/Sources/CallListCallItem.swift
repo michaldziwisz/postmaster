@@ -790,9 +790,14 @@ class CallListCallItemNode: ItemListRevealOptionsItemNode {
                             strongSelf.accessibilityArea.accessibilityHint = resolvedAccessibility.hint
                             strongSelf.accessibilityArea.frame = CGRect(origin: CGPoint(), size: nodeLayout.contentSize)
                             
-                            strongSelf.infoButtonNode.isAccessibilityElement = true
-                            strongSelf.infoButtonNode.accessibilityLabel = item.presentationData.strings.Conversation_Info
-                            strongSelf.infoButtonNode.accessibilityTraits = [.button]
+                            let infoResolved = CallListCallItemInfoButtonVoiceOver.resolve(
+                                strings: item.presentationData.strings,
+                                isEditing: item.editing
+                            )
+                            strongSelf.infoButtonNode.isAccessibilityElement = infoResolved.isAccessibilityElement
+                            strongSelf.infoButtonNode.accessibilityLabel = infoResolved.label
+                            strongSelf.infoButtonNode.accessibilityHint = infoResolved.hint
+                            strongSelf.infoButtonNode.accessibilityTraits = infoResolved.traits
                             
                             strongSelf.accessibilityArea.accessibilityCustomActions = [
                                 UIAccessibilityCustomAction(
