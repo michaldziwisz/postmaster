@@ -760,19 +760,20 @@ final class CallListControllerNode: ASDisplayNode {
         self.emptyButtonTextNode.alpha = alpha
         self.emptyButtonTextNode.layer.animateAlpha(from: previousAlpha, to: alpha, duration: 0.25)
         self.emptyButtonNode.isUserInteractionEnabled = !isHidden
+        self.listNode.view.accessibilityElementsHidden = !isHidden
         
         self.listNode.alpha = 1.0 - alpha
         self.listNode.layer.animateAlpha(from: 1.0 - previousAlpha, to: 1.0 - alpha, duration: 0.25)
         
+        self.emptyAnimationNode.isAccessibilityElement = false
+        self.emptyButtonTextNode.isAccessibilityElement = false
+        self.emptyButtonIconNode.isAccessibilityElement = false
+        
         if !isHidden {
             let type = self.currentLocationAndType.scope
-            let emptyText: String
-            let buttonText = strings.Calls_StartNewCall
-            if type == .missed {
-                emptyText = strings.Calls_NoMissedCallsPlacehoder
-            } else {
-                emptyText = strings.Calls_NoVoiceAndVideoCallsPlaceholder
-            }
+            let emptyResolved = CallListEmptyStateVoiceOver.resolve(strings: strings, isMissed: type == .missed)
+            let emptyText = emptyResolved.text
+            let buttonText = emptyResolved.button.label
             let color: UIColor
             
             switch self.mode {
@@ -789,9 +790,24 @@ final class CallListControllerNode: ASDisplayNode {
             self.emptyTextNode.attributedText = NSAttributedString(string: emptyText, font: textFont, textColor: color, paragraphAlignment: .center)
             self.emptyButtonTextNode.attributedText = NSAttributedString(string: buttonText, font: buttonFont, textColor: theme.list.itemAccentColor, paragraphAlignment: .center)
             
+            self.emptyTextNode.isAccessibilityElement = true
+            self.emptyTextNode.accessibilityLabel = emptyText
+            self.emptyTextNode.accessibilityTraits = .staticText
+            
+            self.emptyButtonNode.isAccessibilityElement = true
+            self.emptyButtonNode.accessibilityLabel = emptyResolved.button.label
+            self.emptyButtonNode.accessibilityHint = emptyResolved.button.hint
+            self.emptyButtonNode.accessibilityTraits = emptyResolved.button.traits
+            
             if let layout = self.containerLayout {
                 self.updateLayout(layout.0, navigationBarHeight: layout.1, transition: .immediate)
             }
+        } else {
+            self.emptyTextNode.isAccessibilityElement = false
+            self.emptyTextNode.accessibilityLabel = nil
+            self.emptyButtonNode.isAccessibilityElement = false
+            self.emptyButtonNode.accessibilityLabel = nil
+            self.emptyButtonNode.accessibilityHint = nil
         }
     }
     
