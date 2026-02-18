@@ -10,6 +10,7 @@ swift_library(
     ]),
     deps = [
         "//submodules/ComponentFlow",
+        "//submodules/ChatListUI",
         "//submodules/TelegramPresentationData",
         "//submodules/TelegramUI/Components/ActionPanelComponent",
         "//submodules/TelegramUI/Components/ChatListHeaderComponent",

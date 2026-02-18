@@ -854,6 +854,31 @@ private final class ChatListItemAccessibilityCustomAction: UIAccessibilityCustom
     }
 }
 
+public struct ChatListItemVoiceOver {
+    public struct Resolved: Equatable {
+        public let isAccessibilityElement: Bool
+        public let traits: UIAccessibilityTraits
+        
+        public init(isAccessibilityElement: Bool, traits: UIAccessibilityTraits) {
+            self.isAccessibilityElement = isAccessibilityElement
+            self.traits = traits
+        }
+    }
+    
+    public static func resolve(isLoading: Bool, isEditing: Bool, isSelected: Bool) -> Resolved {
+        if isLoading {
+            return Resolved(isAccessibilityElement: false, traits: [])
+        }
+        
+        var traits: UIAccessibilityTraits = [.button]
+        if isEditing && isSelected {
+            traits.insert(.selected)
+        }
+        
+        return Resolved(isAccessibilityElement: true, traits: traits)
+    }
+}
+
 private let separatorHeight = 1.0 / UIScreen.main.scale
 
 private final class CachedChatListSearchResult {
@@ -2145,6 +2170,31 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                 }
             }
         }
+    }
+
+    override public func accessibilityActivate() -> Bool {
+        guard let item = self.item else {
+            return false
+        }
+        if case .loading = item.content {
+            return false
+        }
+        
+        if item.editing {
+            self.tapped()
+            return true
+        }
+        
+        var currentNode: ASDisplayNode? = self
+        while let supernode = currentNode?.supernode {
+            if let listView = supernode as? ListView {
+                item.selected(listView: listView)
+                return true
+            }
+            currentNode = supernode
+        }
+        
+        return false
     }
     
     func asyncLayout() -> (_ item: ChatListItem, _ params: ListViewItemLayoutParams, _ first: Bool, _ last: Bool, _ firstWithHeader: Bool, _ nextIsPinned: Bool) -> (ListViewItemNodeLayout, (Bool, Bool) -> Void) {
@@ -5101,14 +5151,32 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                         strongSelf.setRevealOptionsOpened(item.hasActiveRevealControls, animated: true)
                     }
                     
-                    strongSelf.view.accessibilityLabel = strongSelf.accessibilityLabel
-                    strongSelf.view.accessibilityValue = strongSelf.accessibilityValue
-                    
-                    if !customActions.isEmpty {
-                        strongSelf.view.accessibilityCustomActions = customActions.map({ action -> UIAccessibilityCustomAction in
-                            return ChatListItemAccessibilityCustomAction(name: action.name, target: strongSelf, selector: #selector(strongSelf.performLocalAccessibilityCustomAction(_:)), key: action.key)
-                        })
+                    let isLoading: Bool
+                    if case .loading = item.content {
+                        isLoading = true
                     } else {
+                        isLoading = false
+                    }
+                    let accessibility = ChatListItemVoiceOver.resolve(isLoading: isLoading, isEditing: item.editing, isSelected: item.selected)
+                    strongSelf.isAccessibilityElement = accessibility.isAccessibilityElement
+                    strongSelf.view.isAccessibilityElement = accessibility.isAccessibilityElement
+                    strongSelf.view.accessibilityTraits = accessibility.traits
+                    strongSelf.view.accessibilityElementsHidden = isLoading
+                    
+                    if accessibility.isAccessibilityElement {
+                        strongSelf.view.accessibilityLabel = strongSelf.accessibilityLabel
+                        strongSelf.view.accessibilityValue = strongSelf.accessibilityValue
+                        
+                        if !customActions.isEmpty {
+                            strongSelf.view.accessibilityCustomActions = customActions.map({ action -> UIAccessibilityCustomAction in
+                                return ChatListItemAccessibilityCustomAction(name: action.name, target: strongSelf, selector: #selector(strongSelf.performLocalAccessibilityCustomAction(_:)), key: action.key)
+                            })
+                        } else {
+                            strongSelf.view.accessibilityCustomActions = nil
+                        }
+                    } else {
+                        strongSelf.view.accessibilityLabel = nil
+                        strongSelf.view.accessibilityValue = nil
                         strongSelf.view.accessibilityCustomActions = nil
                     }
                     
