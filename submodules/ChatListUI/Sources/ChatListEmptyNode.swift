@@ -39,6 +39,7 @@ final class ChatListEmptyNode: ASDisplayNode {
     private let buttonNode: SolidRoundedButtonNode
     private let secondaryButtonNode: HighlightableButtonNode
     private let activityIndicator: ActivityIndicator
+    private let accessibilityArea: AccessibilityAreaNode
     
     private var emptyArchive: ComponentView<Empty>?
     
@@ -91,6 +92,9 @@ final class ChatListEmptyNode: ASDisplayNode {
         
         self.activityIndicator = ActivityIndicator(type: .custom(theme.list.itemAccentColor, 22.0, 1.0, false))
         
+        self.accessibilityArea = AccessibilityAreaNode()
+        self.accessibilityArea.accessibilityTraits = .staticText
+        
         var buttonIsHidden = false
         let animationName: String
         if case let .filter(showEdit) = subject {
@@ -110,6 +114,7 @@ final class ChatListEmptyNode: ASDisplayNode {
             self.addSubnode(self.animationNode)
             self.addSubnode(self.textNode)
             self.addSubnode(self.descriptionNode)
+            self.addSubnode(self.accessibilityArea)
             self.addSubnode(self.buttonNode)
             self.addSubnode(self.secondaryButtonNode)
             self.addSubnode(self.activityIndicator)
@@ -123,6 +128,7 @@ final class ChatListEmptyNode: ASDisplayNode {
         self.descriptionNode.isHidden = self.isLoading
         self.buttonNode.isHidden = self.buttonIsHidden || self.isLoading
         self.activityIndicator.isHidden = !self.isLoading
+        self.accessibilityArea.isHidden = self.isLoading
         
         self.buttonNode.hitTestSlop = UIEdgeInsets(top: -10.0, left: -10.0, bottom: -10.0, right: -10.0)
         self.buttonNode.pressed = { [weak self] in
@@ -205,6 +211,7 @@ final class ChatListEmptyNode: ASDisplayNode {
        
         self.textNode.attributedText = string
         self.descriptionNode.attributedText = descriptionString
+        self.accessibilityArea.accessibilityLabel = ChatListEmptyNodeVoiceOver.resolve(title: text, description: descriptionText.isEmpty ? nil : descriptionText)
         
         if let buttonText {
             self.buttonNode.title = buttonText
@@ -234,6 +241,7 @@ final class ChatListEmptyNode: ASDisplayNode {
         self.descriptionNode.isHidden = self.isLoading
         self.buttonNode.isHidden = self.buttonIsHidden || self.isLoading
         self.activityIndicator.isHidden = !self.isLoading
+        self.accessibilityArea.isHidden = self.isLoading
     }
     
     func updateLayout(size: CGSize, insets: UIEdgeInsets, transition: ContainedViewLayoutTransition) {
@@ -281,6 +289,9 @@ final class ChatListEmptyNode: ASDisplayNode {
         
         transition.updateFrame(node: self.textNode, frame: textFrame)
         transition.updateFrame(node: self.descriptionNode, frame: descriptionFrame)
+        let accessibilityAreaMaxY = max(textFrame.maxY, descriptionFrame.maxY)
+        let accessibilityAreaFrame = CGRect(origin: CGPoint(x: 0.0, y: textFrame.minY), size: CGSize(width: size.width, height: max(0.0, accessibilityAreaMaxY - textFrame.minY)))
+        transition.updateFrame(node: self.accessibilityArea, frame: accessibilityAreaFrame)
         
         var bottomInset: CGFloat = 16.0
         
