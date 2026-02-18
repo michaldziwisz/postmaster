@@ -1383,6 +1383,7 @@ final class LocationPickerControllerNode: ViewControllerTracingNode, CLLocationM
             }
             
             let barButtonSize = CGSize(width: 44.0, height: 44.0)
+            let cancelAccessibility = LocationPickerNavigationButtonsVoiceOver.resolveCancelOrBack(strings: self.presentationData.strings, isBack: isPickingLocation)
             let cancelButtonSize = self.cancelButton.update(
                 transition: ComponentTransition(transition),
                 component: AnyComponent(GlassBarButtonComponent(
@@ -1405,7 +1406,9 @@ final class LocationPickerControllerNode: ViewControllerTracingNode, CLLocationM
                         } else {
                             self.controller?.dismiss()
                         }
-                    }
+                    },
+                    accessibilityLabel: cancelAccessibility.label,
+                    accessibilityHint: cancelAccessibility.hint
                 )),
                 environment: {},
                 containerSize: barButtonSize
@@ -1418,6 +1421,7 @@ final class LocationPickerControllerNode: ViewControllerTracingNode, CLLocationM
                 transition.updateFrame(view: cancelButtonView, frame: cancelButtonFrame)
             }
             
+            let searchAccessibility = LocationPickerNavigationButtonsVoiceOver.resolveSearch(strings: self.presentationData.strings)
             let searchButtonSize = self.searchButton.update(
                 transition: ComponentTransition(transition),
                 component: AnyComponent(GlassBarButtonComponent(
@@ -1433,7 +1437,9 @@ final class LocationPickerControllerNode: ViewControllerTracingNode, CLLocationM
                     )),
                     action: { [weak self] _ in
                         self?.controller?.searchPressed()
-                    }
+                    },
+                    accessibilityLabel: searchAccessibility.label,
+                    accessibilityHint: searchAccessibility.hint
                 )),
                 environment: {},
                 containerSize: barButtonSize
