@@ -73,6 +73,72 @@ final class NavigationButtonComponentAccessibilityTests: XCTestCase {
         XCTAssertTrue(didPress)
     }
     
+    func testIconButtonDerivesAccessibilityLabelFromImageNameWhenNotProvided() {
+        XCTAssertTrue(Thread.isMainThread)
+        
+        var didPress = false
+        let component = NavigationButtonComponent(
+            content: .icon(imageName: "Chat List/AddIcon"),
+            pressed: { _ in
+                didPress = true
+            }
+        )
+        
+        let componentView = ComponentView<NavigationButtonComponentEnvironment>()
+        _ = componentView.update(
+            transition: .immediate,
+            component: AnyComponent(component),
+            environment: {
+                NavigationButtonComponentEnvironment(theme: defaultPresentationTheme)
+            },
+            containerSize: CGSize(width: 44.0, height: 44.0)
+        )
+        
+        guard let buttonView = componentView.view as? NavigationButtonComponent.View else {
+            XCTFail("Expected NavigationButtonComponent.View")
+            return
+        }
+        
+        XCTAssertTrue(buttonView.isAccessibilityElement)
+        XCTAssertEqual(buttonView.accessibilityLabel, "Add")
+        
+        XCTAssertTrue(buttonView.accessibilityActivate())
+        XCTAssertTrue(didPress)
+    }
+    
+    func testProxyButtonHasFallbackAccessibilityLabelWhenNotProvided() {
+        XCTAssertTrue(Thread.isMainThread)
+        
+        var didPress = false
+        let component = NavigationButtonComponent(
+            content: .proxy(status: .available),
+            pressed: { _ in
+                didPress = true
+            }
+        )
+        
+        let componentView = ComponentView<NavigationButtonComponentEnvironment>()
+        _ = componentView.update(
+            transition: .immediate,
+            component: AnyComponent(component),
+            environment: {
+                NavigationButtonComponentEnvironment(theme: defaultPresentationTheme)
+            },
+            containerSize: CGSize(width: 44.0, height: 44.0)
+        )
+        
+        guard let buttonView = componentView.view as? NavigationButtonComponent.View else {
+            XCTFail("Expected NavigationButtonComponent.View")
+            return
+        }
+        
+        XCTAssertTrue(buttonView.isAccessibilityElement)
+        XCTAssertEqual(buttonView.accessibilityLabel, "Proxy")
+        
+        XCTAssertTrue(buttonView.accessibilityActivate())
+        XCTAssertTrue(didPress)
+    }
+    
     func testMoreButtonUsesProvidedAccessibilityLabel() {
         XCTAssertTrue(Thread.isMainThread)
         
@@ -107,4 +173,3 @@ final class NavigationButtonComponentAccessibilityTests: XCTestCase {
         XCTAssertTrue(didPress)
     }
 }
-

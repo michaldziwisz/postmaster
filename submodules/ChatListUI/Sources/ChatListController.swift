@@ -7195,6 +7195,7 @@ private final class ChatListLocationContext {
                 
                 self.proxyButton = AnyComponentWithIdentity(id: "proxy", component: AnyComponent(NavigationButtonComponent(
                     content: .proxy(status: proxyStatus),
+                    accessibilityLabel: presentationData.strings.VoiceOver_Navigation_ProxySettings,
                     pressed: { [weak self] _ in
                         guard let self, let parentController = self.parentController else {
                             return

@@ -333,6 +333,7 @@ final class ContactsControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
             )))
             rightButtons = [AnyComponentWithIdentity(id: "add", component: AnyComponent(NavigationButtonComponent(
                 content: .icon(imageName: "Chat List/AddIcon"),
+                accessibilityLabel: self.presentationData.strings.Contacts_AddContact,
                 pressed: { [weak self] _ in
                     guard let self else {
                         return

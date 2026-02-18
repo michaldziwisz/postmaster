@@ -107,6 +107,27 @@ public final class NavigationButtonComponent: Component {
             fatalError("init(coder:) has not been implemented")
         }
         
+        private static func defaultAccessibilityLabel(forIconImageName imageName: String) -> String? {
+            let baseName = imageName.split(separator: "/").last.map(String.init) ?? imageName
+            let withoutExtension = baseName.split(separator: ".").first.map(String.init) ?? baseName
+            
+            var label = withoutExtension
+            for suffix in ["Icon", "Button"] {
+                if label.hasSuffix(suffix) {
+                    label.removeLast(suffix.count)
+                    break
+                }
+            }
+            
+            label = label.replacingOccurrences(of: "_", with: " ")
+            label = label.replacingOccurrences(of: "-", with: " ")
+            label = label.replacingOccurrences(of: "([A-Z]+)([A-Z][a-z])", with: "$1 $2", options: .regularExpression)
+            label = label.replacingOccurrences(of: "([a-z0-9])([A-Z])", with: "$1 $2", options: .regularExpression)
+            label = label.trimmingCharacters(in: .whitespacesAndNewlines)
+            
+            return label.isEmpty ? nil : label
+        }
+        
         override public func accessibilityActivate() -> Bool {
             self.sendActions(for: .touchUpInside)
             return true
@@ -151,12 +172,17 @@ public final class NavigationButtonComponent: Component {
             self.accessibilityHint = component.accessibilityHint
             if let accessibilityLabel = component.accessibilityLabel {
                 self.accessibilityLabel = accessibilityLabel
-            } else if case let .text(title, _) = component.content {
-                self.accessibilityLabel = title
-            } else if case .more = component.content {
-                self.accessibilityLabel = "More"
             } else {
-                self.accessibilityLabel = nil
+                switch component.content {
+                case let .text(title, _):
+                    self.accessibilityLabel = title
+                case .more:
+                    self.accessibilityLabel = "More"
+                case let .icon(imageName):
+                    self.accessibilityLabel = Self.defaultAccessibilityLabel(forIconImageName: imageName)
+                case .proxy:
+                    self.accessibilityLabel = "Proxy"
+                }
             }
             
             var size = CGSize(width: 0.0, height: availableSize.height)
