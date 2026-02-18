@@ -259,7 +259,11 @@ class ContactListActionItemNode: ListViewItemNode {
                 if let strongSelf = self {
                     strongSelf.item = item
                     
-                    strongSelf.activateArea.accessibilityLabel = item.title
+                    let voiceOverResolved = ContactListActionItemVoiceOver.resolve(strings: item.presentationData.strings, title: item.title, subtitle: item.subtitle)
+                    strongSelf.activateArea.accessibilityLabel = voiceOverResolved.label
+                    strongSelf.activateArea.accessibilityValue = voiceOverResolved.value
+                    strongSelf.activateArea.accessibilityHint = voiceOverResolved.hint
+                    strongSelf.activateArea.accessibilityTraits = voiceOverResolved.traits
                     strongSelf.activateArea.frame = CGRect(origin: CGPoint(x: params.leftInset, y: 0.0), size: CGSize(width: layout.contentSize.width - params.leftInset - params.rightInset, height: layout.contentSize.height))
                     
                     if let _ = updatedTheme {
