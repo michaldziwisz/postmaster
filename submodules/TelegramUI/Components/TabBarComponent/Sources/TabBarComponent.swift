@@ -54,6 +54,7 @@ public final class NavigationSearchView: UIView {
     private(set) var searchBarNode: SearchBarNode?
     
     private var close: (background: GlassBackgroundView, icon: UIImageView)?
+    private var closeAccessibilityButton: UIButton?
 
     private var params: Params?
     
@@ -73,6 +74,17 @@ public final class NavigationSearchView: UIView {
         self.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(self.onTapGesture(_:))))
     }
 
+    public override func accessibilityActivate() -> Bool {
+        guard let params = self.params else {
+            return false
+        }
+        guard !params.isActive else {
+            return false
+        }
+        self.action()
+        return true
+    }
+
     @objc private func onTapGesture(_ recognizer: UITapGestureRecognizer) {
         if case .ended = recognizer.state {
             self.action()
@@ -83,6 +95,10 @@ public final class NavigationSearchView: UIView {
         if case .ended = recognizer.state {
             self.closeAction()
         }
+    }
+    
+    @objc private func onCloseButtonPressed() {
+        self.closeAction()
     }
 
     required public init?(coder: NSCoder) {
@@ -99,6 +115,15 @@ public final class NavigationSearchView: UIView {
     }
 
     private func update(params: Params, transition: ComponentTransition) {
+        if params.isActive {
+            self.isAccessibilityElement = false
+            self.accessibilityLabel = nil
+        } else {
+            self.isAccessibilityElement = true
+            self.accessibilityTraits = [.button]
+            self.accessibilityLabel = params.strings.Common_Search
+        }
+
         let backgroundSize: CGSize
         if params.isActive {
             backgroundSize = CGSize(width: params.size.width - 48.0 - 8.0, height: params.size.height)
@@ -210,6 +235,16 @@ public final class NavigationSearchView: UIView {
                 close.background.contentView.addSubview(close.icon)
                 self.insertSubview(close.background, at: 0)
                 
+                let closeAccessibilityButton = UIButton(type: .custom)
+                closeAccessibilityButton.backgroundColor = .clear
+                closeAccessibilityButton.accessibilityTraits = [.button]
+                closeAccessibilityButton.addTarget(self, action: #selector(self.onCloseButtonPressed), for: .primaryActionTriggered)
+                closeAccessibilityButton.addTarget(self, action: #selector(self.onCloseButtonPressed), for: .touchUpInside)
+                closeAccessibilityButton.frame = close.background.contentView.bounds
+                closeAccessibilityButton.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+                close.background.contentView.addSubview(closeAccessibilityButton)
+                self.closeAccessibilityButton = closeAccessibilityButton
+                
                 if let image = close.icon.image {
                     close.icon.frame = image.size.centered(in: CGRect(origin: CGPoint(), size: closeFrame.size))
                 }
@@ -220,6 +255,7 @@ public final class NavigationSearchView: UIView {
             }
             
             close.icon.tintColor = params.theme.chat.inputPanel.panelControlColor
+            self.closeAccessibilityButton?.accessibilityLabel = params.strings.Common_Close
             
             transition.setPosition(view: close.background, position: closeFrame.center)
             transition.setBounds(view: close.background, bounds: CGRect(origin: CGPoint(), size: closeFrame.size))
@@ -233,6 +269,7 @@ public final class NavigationSearchView: UIView {
         } else {
             if let close = self.close {
                 self.close = nil
+                self.closeAccessibilityButton = nil
                 let closeBackground = close.background
                 let closeFrame = CGSize(width: 48.0, height: 48.0).centered(in: CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: params.size))
                 transition.setPosition(view: closeBackground, position: closeFrame.center)
@@ -705,6 +742,21 @@ public final class TabBarComponent: Component {
                         self.liquidLensView.selectedContentView.addSubview(selectedItemComponentView)
                     }
 
+                    itemComponentView.configureAccessibility(
+                        tabBarItem: item.item,
+                        isSelected: isItemSelected,
+                        action: { item.action(false) }
+                    )
+                    selectedItemComponentView.configureAccessibility(
+                        tabBarItem: item.item,
+                        isSelected: isItemSelected,
+                        action: { item.action(false) }
+                    )
+                    itemComponentView.isAccessibilityElement = !isItemSelected
+                    itemComponentView.accessibilityElementsHidden = isItemSelected
+                    selectedItemComponentView.isAccessibilityElement = isItemSelected
+                    selectedItemComponentView.accessibilityElementsHidden = !isItemSelected
+
                     if let search = component.search, search.isActive {
                         if isItemSelected {
                             itemFrame.origin.x = floor((48.0 - itemSize.width) * 0.5)
@@ -900,6 +952,8 @@ private final class ItemComponent: Component {
         private var setSelectedImageListener: Int?
         private var setBadgeListener: Int?
         
+        private var accessibilityAction: (() -> Void)?
+        
         override init(frame: CGRect) {
             self.contextContainerView = ContextExtractedContentContainingView()
             
@@ -930,6 +984,31 @@ private final class ItemComponent: Component {
             if let animationIconView = self.animationIcon?.view as? LottieComponent.View {
                 animationIconView.playOnce()
             }
+        }
+
+        fileprivate func configureAccessibility(tabBarItem: UITabBarItem, isSelected: Bool, action: @escaping () -> Void) {
+            self.isAccessibilityElement = true
+            self.accessibilityLabel = tabBarItem.accessibilityLabel ?? tabBarItem.title
+            self.accessibilityValue = tabBarItem.badgeValue
+            
+            var traits: UIAccessibilityTraits = [.button]
+            if isSelected {
+                traits.insert(.selected)
+            }
+            if !tabBarItem.isEnabled {
+                traits.insert(.notEnabled)
+            }
+            self.accessibilityTraits = traits
+            
+            self.accessibilityAction = action
+        }
+        
+        override func accessibilityActivate() -> Bool {
+            guard let accessibilityAction = self.accessibilityAction else {
+                return false
+            }
+            accessibilityAction()
+            return true
         }
         
         func update(component: ItemComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
