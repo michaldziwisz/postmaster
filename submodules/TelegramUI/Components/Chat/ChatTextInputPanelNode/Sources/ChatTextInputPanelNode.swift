@@ -684,10 +684,12 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         self.sendAsAvatarContainerNode.animateScale = false
         self.sendAsAvatarNode = AvatarNode(font: avatarPlaceholderFont(size: 16.0))
         self.sendAsCloseIconView = UIImageView()
+        self.sendAsAvatarButtonNode.isAccessibilityElement = false
         
         self.attachmentButton = HighlightTrackingButton()
-        self.attachmentButton.accessibilityLabel = presentationInterfaceState.strings.VoiceOver_AttachMedia
-        self.attachmentButton.accessibilityTraits = [.button]
+        let attachmentAccessibility = ChatTextInputPanelAttachmentButtonVoiceOver.resolve(strings: presentationInterfaceState.strings, isEnabled: true)
+        self.attachmentButton.accessibilityLabel = attachmentAccessibility.label
+        self.attachmentButton.accessibilityTraits = attachmentAccessibility.traits
         self.attachmentButton.isAccessibilityElement = true
         
         self.attachmentButtonBackground = GlassBackgroundView(frame: CGRect())
@@ -699,8 +701,9 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         
         self.attachmentButtonDisabledNode = HighlightableButtonNode()
         self.attachmentButtonDisabledNode.isAccessibilityElement = true
-        self.attachmentButtonDisabledNode.accessibilityLabel = presentationInterfaceState.strings.VoiceOver_AttachMedia
-        self.attachmentButtonDisabledNode.accessibilityTraits = [.button]
+        let disabledAttachmentAccessibility = ChatTextInputPanelAttachmentButtonVoiceOver.resolve(strings: presentationInterfaceState.strings, isEnabled: false)
+        self.attachmentButtonDisabledNode.accessibilityLabel = disabledAttachmentAccessibility.label
+        self.attachmentButtonDisabledNode.accessibilityTraits = disabledAttachmentAccessibility.traits
         self.searchLayoutClearButton = HighlightTrackingButton()
         self.searchLayoutClearButton.isAccessibilityElement = true
         self.searchLayoutClearButton.accessibilityLabel = presentationInterfaceState.strings.Common_Cancel
@@ -1626,9 +1629,21 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             if currentPeer == nil {
                 currentPeer = sendAsPeers.first?.peer
             }
+            let currentPeerTitle = currentPeer.flatMap { $0.displayTitle(strings: interfaceState.strings, displayOrder: interfaceState.nameDisplayOrder) }
             if let context = self.context, let peer = currentPeer {
                 self.sendAsAvatarNode.setPeer(context: context, theme: interfaceState.theme, peer: EnginePeer(peer), emptyColor: interfaceState.theme.list.mediaPlaceholderColor)
             }
+            
+            let sendAsAccessibility = ChatTextInputPanelSendAsButtonVoiceOver.resolve(
+                strings: interfaceState.strings,
+                currentPeerTitle: currentPeerTitle,
+                isEnabled: true
+            )
+            self.sendAsAvatarButtonNode.isAccessibilityElement = true
+            self.sendAsAvatarButtonNode.accessibilityLabel = sendAsAccessibility.label
+            self.sendAsAvatarButtonNode.accessibilityValue = sendAsAccessibility.value
+            self.sendAsAvatarButtonNode.accessibilityHint = sendAsAccessibility.hint
+            self.sendAsAvatarButtonNode.accessibilityTraits = sendAsAccessibility.traits
         } else if let peer = interfaceState.renderedPeer?.peer as? TelegramUser, let _ = peer.botInfo, shouldDisplayMenuButton && interfaceState.editMessageState == nil {
             hasMenuButton = true
             
@@ -3158,6 +3173,13 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         ComponentTransition(transition).setPosition(view: self.sendAsCloseIconView, position: CGRect(origin: CGPoint(), size: sendAsButtonFrame.size).center)
         ComponentTransition(transition).setBounds(view: self.sendAsCloseIconView, bounds: CGRect(origin: CGPoint(), size: sendAsButtonFrame.size))
         self.sendAsAvatarButtonNode.isUserInteractionEnabled = hasSendAsButton
+        let isSendAsVisibleForVoiceOver = sendAsAvatarButtonAlpha > 0.0
+        if !isSendAsVisibleForVoiceOver {
+            self.sendAsAvatarButtonNode.isAccessibilityElement = false
+            self.sendAsAvatarButtonNode.accessibilityLabel = nil
+            self.sendAsAvatarButtonNode.accessibilityValue = nil
+            self.sendAsAvatarButtonNode.accessibilityHint = nil
+        }
         
         if interfaceState.showSendAsPeers {
             transition.updateTransformScale(layer: self.sendAsCloseIconView.layer, scale: 1.0)

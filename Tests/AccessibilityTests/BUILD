@@ -19,6 +19,7 @@ swift_library(
         "//submodules/TelegramUI/Components/Chat/ChatMessageInstantVideoItemNode",
         "//submodules/TelegramUI/Components/Chat/ChatMessageStickerItemNode",
         "//submodules/TelegramUI/Components/Chat/ChatTextInputActionButtonsNode",
+        "//submodules/TelegramUI/Components/Chat/ChatTextInputPanelNode",
         "//submodules/ContactsPeerItem",
         "//submodules/ContactListUI",
         "//submodules/HorizontalPeerItem",
