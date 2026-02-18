@@ -12,6 +12,7 @@ swift_library(
         "//submodules/ComponentFlow",
         "//submodules/ChatListUI",
         "//submodules/TelegramUI",
+        "//submodules/TelegramUI/Components/ChatTitleView",
         "//submodules/TelegramUI/Components/Chat/ChatMessageAnimatedStickerItemNode",
         "//submodules/TelegramUI/Components/Chat/ChatMessageBubbleItemNode",
         "//submodules/TelegramUI/Components/Chat/ChatMessageInstantVideoItemNode",

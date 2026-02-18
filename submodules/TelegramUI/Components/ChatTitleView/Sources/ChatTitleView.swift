@@ -253,8 +253,15 @@ public final class ChatTitleView: UIView, NavigationBarTitleView {
         }
     }
     
-    public var pressed: (() -> Void)?
+    public var pressed: (() -> Void)? {
+        didSet {
+            self.updateVoiceOver()
+        }
+    }
     public var longPressed: (() -> Void)?
+    
+    private var voiceOverPeerKind: ChatTitleViewVoiceOver.PeerKind = .other
+    private var voiceOverIsEnabled: Bool = false
     
     public var titleContent: ChatTitleContent? {
         didSet {
@@ -268,6 +275,7 @@ public final class ChatTitleView: UIView, NavigationBarTitleView {
                 var titleVerifiedIcon: ChatTitleCredibilityIcon = .none
                 var titleStatusIcon: ChatTitleCredibilityIcon = .none
                 var isEnabled = true
+                var voiceOverPeerKind: ChatTitleViewVoiceOver.PeerKind = .other
                 switch titleContent {
                     case let .peer(peerView, customTitle, _, _, isScheduledMessages, isMuted, _, isEnabledValue):
                         if peerView.peerId.isReplies {
@@ -283,6 +291,18 @@ public final class ChatTitleView: UIView, NavigationBarTitleView {
                             isEnabled = false
                         } else {
                             if let peer = peerView.peer {
+                                if peer is TelegramUser {
+                                    voiceOverPeerKind = .user
+                                } else if peer is TelegramGroup {
+                                    voiceOverPeerKind = .group
+                                } else if let channel = peer as? TelegramChannel {
+                                    if case .group = channel.info {
+                                        voiceOverPeerKind = .group
+                                    } else {
+                                        voiceOverPeerKind = .channel
+                                    }
+                                }
+                                
                                 if let customTitle {
                                     segments = [.text(0, NSAttributedString(string: customTitle, font: titleFont, textColor: titleTheme.rootController.navigationBar.primaryTextColor))]
                                 } else if peerView.peerId == self.context.account.peerId {
@@ -473,6 +493,10 @@ public final class ChatTitleView: UIView, NavigationBarTitleView {
                 }
                 self.isUserInteractionEnabled = isEnabled
                 self.button.isUserInteractionEnabled = isEnabled
+                
+                self.voiceOverPeerKind = voiceOverPeerKind
+                self.voiceOverIsEnabled = isEnabled
+                self.updateVoiceOver()
                 
                 var enableAnimation = false
                 switch titleContent {
@@ -798,7 +822,7 @@ public final class ChatTitleView: UIView, NavigationBarTitleView {
         super.init(frame: CGRect())
         
         self.isAccessibilityElement = true
-        self.accessibilityTraits = .header
+        self.updateVoiceOver()
         
         self.addSubnode(self.contentContainer)
         self.contentContainer.view.addSubview(self.backgroundView)
@@ -1100,6 +1124,27 @@ public final class ChatTitleView: UIView, NavigationBarTitleView {
         self.backgroundView.update(size: backgroundFrame.size, cornerRadius: backgroundFrame.height * 0.5, isDark: self.theme.overallDarkAppearance, tintColor: .init(kind: .panel), isInteractive: false, transition: componentTransition)
         
         return availableSize
+    }
+    
+    override public func accessibilityActivate() -> Bool {
+        guard self.isUserInteractionEnabled, let pressed = self.pressed else {
+            return false
+        }
+        pressed()
+        return true
+    }
+    
+    private func updateVoiceOver() {
+        guard self.titleContent != nil else {
+            self.accessibilityTraits = .header
+            self.accessibilityHint = nil
+            return
+        }
+        
+        let isEnabled = self.voiceOverIsEnabled && self.pressed != nil
+        let resolved = ChatTitleViewVoiceOver.resolve(strings: self.strings, isEnabled: isEnabled, peerKind: self.voiceOverPeerKind)
+        self.accessibilityTraits = resolved.traits
+        self.accessibilityHint = resolved.hint
     }
     
     @objc private func buttonPressed() {
