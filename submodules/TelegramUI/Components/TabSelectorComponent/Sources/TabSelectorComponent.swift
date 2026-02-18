@@ -87,17 +87,20 @@ public final class TabSelectorComponent: Component {
         
         public let id: AnyHashable
         public let content: Content
+        public let accessibilityLabel: String?
         public let isReorderable: Bool
         public let contextAction: ((ASDisplayNode, ContextGesture) -> Void)?
 
         public init(
             id: AnyHashable,
             content: Content,
+            accessibilityLabel: String? = nil,
             isReorderable: Bool = false,
             contextAction: ((ASDisplayNode, ContextGesture) -> Void)? = nil
         ) {
             self.id = id
             self.content = content
+            self.accessibilityLabel = accessibilityLabel
             self.isReorderable = isReorderable
             self.contextAction = contextAction
         }
@@ -108,7 +111,7 @@ public final class TabSelectorComponent: Component {
             isReorderable: Bool = false,
             contextAction: ((ASDisplayNode, ContextGesture) -> Void)? = nil
         ) {
-            self.init(id: id, content: .text(title), isReorderable: isReorderable, contextAction: contextAction)
+            self.init(id: id, content: .text(title), accessibilityLabel: title, isReorderable: isReorderable, contextAction: contextAction)
         }
         
         public static func ==(lhs: Item, rhs: Item) -> Bool {
@@ -116,6 +119,9 @@ public final class TabSelectorComponent: Component {
                 return false
             }
             if lhs.content != rhs.content {
+                return false
+            }
+            if lhs.accessibilityLabel != rhs.accessibilityLabel {
                 return false
             }
             if lhs.isReorderable != rhs.isReorderable {
@@ -207,6 +213,7 @@ public final class TabSelectorComponent: Component {
         let title = ComponentView<Empty>()
         
         var item: Item?
+        private var isEnabledForAccessibility: Bool = true
         
         var tapGesture: UITapGestureRecognizer?
         var theme: PresentationTheme?
@@ -223,6 +230,8 @@ public final class TabSelectorComponent: Component {
             self.containerButton = UIView()
             
             super.init(frame: CGRect())
+            
+            self.isAccessibilityElement = true
             
             self.extractedContainerNode.contentNode.view.addSubview(self.containerButton)
             
@@ -280,6 +289,14 @@ public final class TabSelectorComponent: Component {
         
         required init?(coder: NSCoder) {
             fatalError("init(coder:) has not been implemented")
+        }
+        
+        override func accessibilityActivate() -> Bool {
+            guard self.isEnabledForAccessibility else {
+                return false
+            }
+            self.action()
+            return true
         }
         
         @objc private func onTapGesture(_ recognizer: UITapGestureRecognizer) {
@@ -350,11 +367,12 @@ public final class TabSelectorComponent: Component {
             }
         }
         
-        func update(theme: PresentationTheme, size: CGSize, item: Item, isReordering: Bool, transition: ComponentTransition) {
+        func update(theme: PresentationTheme, size: CGSize, item: Item, isSelected: Bool, isEnabled: Bool, isReordering: Bool, transition: ComponentTransition) {
             self.theme = theme
             self.size = size
             self.isReordering = isReordering
             self.item = item
+            self.isEnabledForAccessibility = isEnabled && !isReordering
             
             self.containerNode.isGestureEnabled = item.contextAction != nil && !isReordering
             self.tapGesture?.isEnabled = !isReordering
@@ -365,6 +383,15 @@ public final class TabSelectorComponent: Component {
             self.extractedContainerNode.contentNode.frame = CGRect(origin: CGPoint(), size: size)
             self.extractedContainerNode.contentRect = CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: size.width, height: size.height))
             self.containerNode.frame = CGRect(origin: CGPoint(), size: size)
+            
+            let resolved = TabSelectorItemVoiceOver.resolve(
+                title: item.accessibilityLabel ?? "",
+                isSelected: isSelected,
+                isEnabled: isEnabled && !isReordering
+            )
+            self.accessibilityLabel = resolved.label
+            self.accessibilityHint = resolved.hint
+            self.accessibilityTraits = resolved.traits
             
             self.updateIsShaking(animated: !transition.animation.isImmediate)
         }
@@ -723,13 +750,23 @@ public final class TabSelectorComponent: Component {
                         itemTransition.setTransform(view: itemView, transform: CATransform3DIdentity)
                     }
                     
-                    itemView.update(theme: component.theme, size: itemBackgroundRect.size, item: item, isReordering: item.isReorderable && component.reorderItem != nil, transition: itemTransition)
+                    let isSelected = item.id == component.selectedId
+                    let isEnabled = !(component.reorderItem != nil && !item.isReorderable)
+                    itemView.update(
+                        theme: component.theme,
+                        size: itemBackgroundRect.size,
+                        item: item,
+                        isSelected: isSelected,
+                        isEnabled: isEnabled,
+                        isReordering: item.isReorderable && component.reorderItem != nil,
+                        transition: itemTransition
+                    )
                     
                     itemTransition.setPosition(view: itemTitleView, position: CGPoint(x: itemTitleFrame.minX, y: itemTitleFrame.minY))
                     itemTransition.setBounds(view: itemTitleView, bounds: CGRect(origin: CGPoint(), size: itemTitleFrame.size))
                     
                     var itemAlpha: CGFloat = item.id == component.selectedId || isLineSelection || component.colors.simple ? 1.0 : 0.4
-                    if component.reorderItem != nil && !item.isReorderable {
+                    if !isEnabled {
                         itemAlpha *= 0.5
                         itemView.isUserInteractionEnabled = false
                     } else {
@@ -1155,4 +1192,3 @@ private final class ReorderGestureRecognizer: UIGestureRecognizer {
         }
     }
 }
-
