@@ -4398,8 +4398,23 @@ public final class StoryItemSetContainerComponent: Component {
                 }
             }
             
+            var centerPeerAccessibility: (id: EnginePeer.Id, title: String)?
             var currentCenterInfoItem: InfoItem?
             if let focusedItem {
+                let centerPeerId: EnginePeer.Id
+                let centerPeerTitle: String
+                if let forwardInfo = focusedItem.storyItem.forwardInfo, case let .known(peer, _, _) = forwardInfo {
+                    centerPeerId = peer.id
+                    centerPeerTitle = peer.id == component.context.account.peerId ? component.strings.Story_HeaderYourStory : peer.compactDisplayTitle
+                } else if let author = focusedItem.storyItem.author {
+                    centerPeerId = author.id
+                    centerPeerTitle = author.id == component.context.account.peerId ? component.strings.Story_HeaderYourStory : author.compactDisplayTitle
+                } else {
+                    centerPeerId = component.slice.effectivePeer.id
+                    centerPeerTitle = centerPeerId == component.context.account.peerId ? component.strings.Story_HeaderYourStory : component.slice.effectivePeer.compactDisplayTitle
+                }
+                centerPeerAccessibility = (id: centerPeerId, title: centerPeerTitle)
+                
                 var counters: StoryAuthorInfoComponent.Counters?
                 if focusedItem.dayCounters != nil, let position = focusedItem.position {
                     counters = StoryAuthorInfoComponent.Counters(
@@ -4487,6 +4502,18 @@ public final class StoryItemSetContainerComponent: Component {
                     }
                     transition.setFrame(view: view, frame: CGRect(origin: CGPoint(x: 0.0, y: component.isEmbeddedInCamera ? 9.0 - UIScreenPixel : 10.0), size: centerInfoItemSize))
                     
+                    if let centerPeerAccessibility {
+                        let centerResolved = StoryItemSetContainerPeerButtonVoiceOver.resolve(
+                            strings: component.strings,
+                            title: centerPeerAccessibility.title,
+                            isEnabled: !component.isEmbeddedInCamera
+                        )
+                        view.isAccessibilityElement = true
+                        view.accessibilityLabel = centerResolved.label
+                        view.accessibilityHint = centerResolved.hint
+                        view.accessibilityTraits = centerResolved.traits
+                    }
+                    
                     if animateIn, !isFirstTime {
                         //view.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.2)
                     }
@@ -4525,6 +4552,26 @@ public final class StoryItemSetContainerComponent: Component {
                         animateIn = true
                     }
                     transition.setFrame(view: view, frame: CGRect(origin: CGPoint(x: 12.0, y: component.isEmbeddedInCamera ? 17.0 - UIScreenPixel : 18.0), size: leftInfoItemSize))
+                    
+                    if centerPeerAccessibility?.id == component.slice.effectivePeer.id {
+                        view.isAccessibilityElement = false
+                        view.accessibilityElementsHidden = true
+                        view.accessibilityLabel = nil
+                        view.accessibilityHint = nil
+                        view.accessibilityTraits = []
+                    } else {
+                        let leftTitle = component.slice.effectivePeer.id == component.context.account.peerId ? component.strings.Story_HeaderYourStory : component.slice.effectivePeer.compactDisplayTitle
+                        let leftResolved = StoryItemSetContainerPeerButtonVoiceOver.resolve(
+                            strings: component.strings,
+                            title: leftTitle,
+                            isEnabled: !component.isEmbeddedInCamera
+                        )
+                        view.accessibilityElementsHidden = false
+                        view.isAccessibilityElement = true
+                        view.accessibilityLabel = leftResolved.label
+                        view.accessibilityHint = leftResolved.hint
+                        view.accessibilityTraits = leftResolved.traits
+                    }
                     
                     if animateIn, !isFirstTime, !transition.animation.isImmediate {
                         view.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.2)
