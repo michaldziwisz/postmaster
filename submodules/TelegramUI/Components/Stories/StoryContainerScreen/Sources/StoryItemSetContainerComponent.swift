@@ -4366,6 +4366,12 @@ public final class StoryItemSetContainerComponent: Component {
                         self.controlsClippingView.addSubview(pictureInPictureIconView)
                     }
                     
+                    let pictureInPictureResolved = StoryItemSetContainerPictureInPictureVoiceOver.resolve(strings: component.strings)
+                    pictureInPictureIconView.isAccessibilityElement = true
+                    pictureInPictureIconView.accessibilityLabel = pictureInPictureResolved.label
+                    pictureInPictureIconView.accessibilityHint = pictureInPictureResolved.hint
+                    pictureInPictureIconView.accessibilityTraits = pictureInPictureResolved.traits
+                    
                     pictureInPictureIconTransition.setFrame(view: pictureInPictureIconView, frame: pictureInPictureIconFrame)
                     headerRightOffset -= 44.0
                 }
