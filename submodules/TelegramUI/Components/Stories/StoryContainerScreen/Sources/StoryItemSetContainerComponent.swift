@@ -430,6 +430,7 @@ public final class StoryItemSetContainerComponent: Component {
         let componentContainerView: UIView
         let overlayContainerView: SparseContainerView
         let itemsContainerView: UIView
+        private let voiceOverNavigationArea: AccessibilityAreaNode
         let controlsContainerView: UIView
         let controlsClippingView: UIView
         let controlsNavigationClippingView: UIView
@@ -528,6 +529,7 @@ public final class StoryItemSetContainerComponent: Component {
             self.overlayContainerView = SparseContainerView()
             
             self.itemsContainerView = UIView()
+            self.voiceOverNavigationArea = AccessibilityAreaNode()
             
             self.scroller = Scroller()
             self.scroller.alwaysBounceHorizontal = true
@@ -576,6 +578,7 @@ public final class StoryItemSetContainerComponent: Component {
             self.addSubview(self.overlayContainerView)
 
             self.itemsContainerView.addSubview(self.scroller)
+            self.itemsContainerView.addSubview(self.voiceOverNavigationArea.view)
             self.scroller.delegate = self
             self.itemsContainerView.addGestureRecognizer(self.scroller.panGestureRecognizer)
             
@@ -597,6 +600,22 @@ public final class StoryItemSetContainerComponent: Component {
             let tapRecognizer = UITapGestureRecognizer(target: self, action: #selector(self.tapGesture(_:)))
             tapRecognizer.delegate = self
             self.itemsContainerView.addGestureRecognizer(tapRecognizer)
+            
+            self.voiceOverNavigationArea.activate = {
+                return false
+            }
+            self.voiceOverNavigationArea.increment = { [weak self] in
+                guard let self, let component = self.component else {
+                    return
+                }
+                component.navigate(.next)
+            }
+            self.voiceOverNavigationArea.decrement = { [weak self] in
+                guard let self, let component = self.component else {
+                    return
+                }
+                component.navigate(.previous)
+            }
             
             let verticalPanRecognizer = InteractiveTransitionGestureRecognizer(target: self, action: #selector(self.viewListDismissPanGesture(_:)), allowedDirections: { [weak self] point in
                 guard let self else {
@@ -4001,6 +4020,18 @@ public final class StoryItemSetContainerComponent: Component {
             let itemsContainerFrame = CGRect(origin: CGPoint(), size: CGSize(width: availableSize.width, height: component.containerInsets.top + floor(contentVisualHeight)))
             transition.setPosition(view: self.itemsContainerView, position: CGPoint(x: itemsContainerFrame.center.x, y: itemsContainerFrame.center.y))
             transition.setBounds(view: self.itemsContainerView, bounds: CGRect(origin: .zero, size: itemsContainerFrame.size))
+            
+            let currentIndex = component.slice.allItems.firstIndex(where: { $0.id == component.slice.item.id }) ?? 0
+            let navigationResolved = StoryItemSetContainerNavigationVoiceOver.resolve(
+                strings: component.strings,
+                index: currentIndex,
+                count: component.slice.allItems.count
+            )
+            self.voiceOverNavigationArea.accessibilityLabel = navigationResolved.label
+            self.voiceOverNavigationArea.accessibilityValue = navigationResolved.value
+            self.voiceOverNavigationArea.accessibilityHint = navigationResolved.hint
+            self.voiceOverNavigationArea.accessibilityTraits = navigationResolved.traits
+            self.voiceOverNavigationArea.frame = CGRect(origin: .zero, size: itemsContainerFrame.size)
             
             transition.setPosition(view: self.controlsContainerView, position: contentFrame.center)
             transition.setBounds(view: self.controlsContainerView, bounds: CGRect(origin: CGPoint(), size: contentFrame.size))
