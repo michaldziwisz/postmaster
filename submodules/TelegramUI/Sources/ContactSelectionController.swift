@@ -185,7 +185,10 @@ class ContactSelectionControllerImpl: ViewController, ContactSelectionController
         if self.multipleSelection == .always {
             if glass {
             } else {
-                self.navigationItem.rightBarButtonItem = UIBarButtonItem(image: PresentationResourcesRootController.navigationCompactSearchIcon(self.presentationData.theme), style: .plain, target: self, action: #selector(self.beginSearch))
+                let searchItem = UIBarButtonItem(image: PresentationResourcesRootController.navigationCompactSearchIcon(self.presentationData.theme), style: .plain, target: self, action: #selector(self.beginSearch))
+                searchItem.accessibilityLabel = self.presentationData.strings.Common_Search
+                searchItem.accessibilityTraits = [.button]
+                self.navigationItem.rightBarButtonItem = searchItem
             }
         } else if self.multipleSelection == .possible {
             self.navigationItem.rightBarButtonItem = UIBarButtonItem(title: self.presentationData.strings.Common_Select, style: .plain, target: self, action: #selector(self.beginSelection))
@@ -253,7 +256,9 @@ class ContactSelectionControllerImpl: ViewController, ContactSelectionController
                 )),
                 action: { [weak self] _ in
                     self?.cancelPressed()
-                }
+                },
+                accessibilityLabel: self.presentationData.strings.Common_Close,
+                accessibilityHint: nil
             ))
         )
         
@@ -275,7 +280,9 @@ class ContactSelectionControllerImpl: ViewController, ContactSelectionController
                     )),
                     action: { [weak self] _ in
                         self?.beginSearch()
-                    }
+                    },
+                    accessibilityLabel: self.presentationData.strings.Common_Search,
+                    accessibilityHint: nil
                 ))
             )
         } else {
@@ -321,6 +328,11 @@ class ContactSelectionControllerImpl: ViewController, ContactSelectionController
         self.contactsNode.updatePresentationData(self.presentationData)
         
         self.updateNavigationButtons()
+        
+        if !glass, self.multipleSelection == .always, self.navigationItem.rightBarButtonItem?.image != nil {
+            self.navigationItem.rightBarButtonItem?.accessibilityLabel = self.presentationData.strings.Common_Search
+            self.navigationItem.rightBarButtonItem?.accessibilityTraits = [.button]
+        }
     }
     
     @objc func cancelPressed() {

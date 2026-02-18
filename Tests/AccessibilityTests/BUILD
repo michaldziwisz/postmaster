@@ -32,6 +32,7 @@ swift_library(
         "//submodules/TelegramUI/Components/ActionPanelComponent",
         "//submodules/TelegramUI/Components/ChatList/ChatListFilterTabContainerNode",
         "//submodules/TelegramUI/Components/ChatListHeaderComponent",
+        "//submodules/TelegramUI/Components/GlassBarButtonComponent",
         "//submodules/TelegramUI/Components/HorizontalTabsComponent",
         "//submodules/TelegramUI/Components/MoreHeaderButton",
         "//submodules/TelegramUI/Components/NavigationSearchComponent",

@@ -21,6 +21,8 @@ public final class GlassBarButtonComponent: Component {
     public let animateScale: Bool
     public let component: AnyComponentWithIdentity<Empty>
     public let action: ((UIView) -> Void)?
+    public let accessibilityLabel: String?
+    public let accessibilityHint: String?
     public let tag: AnyObject?
 
     public init(
@@ -33,6 +35,8 @@ public final class GlassBarButtonComponent: Component {
         animateScale: Bool = true,
         component: AnyComponentWithIdentity<Empty>,
         action: ((UIView) -> Void)?,
+        accessibilityLabel: String? = nil,
+        accessibilityHint: String? = nil,
         tag: AnyObject? = nil
     ) {
         self.size = size
@@ -44,6 +48,8 @@ public final class GlassBarButtonComponent: Component {
         self.animateScale = animateScale
         self.component = component
         self.action = action
+        self.accessibilityLabel = accessibilityLabel
+        self.accessibilityHint = accessibilityHint
         self.tag = tag
     }
 
@@ -70,6 +76,12 @@ public final class GlassBarButtonComponent: Component {
             return false
         }
         if lhs.component != rhs.component {
+            return false
+        }
+        if lhs.accessibilityLabel != rhs.accessibilityLabel {
+            return false
+        }
+        if lhs.accessibilityHint != rhs.accessibilityHint {
             return false
         }
         if lhs.tag !== rhs.tag {
@@ -166,6 +178,15 @@ public final class GlassBarButtonComponent: Component {
             self.component = component
             
             self.containerView.isEnabled = component.isEnabled
+            self.containerView.isAccessibilityElement = component.isVisible
+            self.containerView.accessibilityElementsHidden = !component.isVisible
+            self.containerView.accessibilityLabel = component.accessibilityLabel
+            self.containerView.accessibilityHint = component.accessibilityHint
+            var accessibilityTraits: UIAccessibilityTraits = [.button]
+            if !component.isEnabled {
+                accessibilityTraits.insert(.notEnabled)
+            }
+            self.containerView.accessibilityTraits = accessibilityTraits
             
             var componentView: ComponentView<Empty>
             var animateAppearance = false
