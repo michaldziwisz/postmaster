@@ -138,6 +138,24 @@ public class ChatListAdditionalCategoryItem: ItemListItem, ListViewItemWithHeade
 
 private let avatarFont = avatarPlaceholderFont(size: 16.0)
 
+public struct ChatListAdditionalCategoryItemVoiceOver {
+    public struct Resolved: Equatable {
+        public let traits: UIAccessibilityTraits
+        
+        public init(traits: UIAccessibilityTraits) {
+            self.traits = traits
+        }
+    }
+    
+    public static func resolve(isSelected: Bool) -> Resolved {
+        var traits: UIAccessibilityTraits = [.button]
+        if isSelected {
+            traits.insert(.selected)
+        }
+        return Resolved(traits: traits)
+    }
+}
+
 public class ChatListAdditionalCategoryItemNode: ItemListRevealOptionsItemNode {
     private let backgroundNode: ASDisplayNode
     private let topSeparatorNode: ASDisplayNode
@@ -226,6 +244,24 @@ public class ChatListAdditionalCategoryItemNode: ItemListRevealOptionsItemNode {
         }
     }
     
+    override public func accessibilityActivate() -> Bool {
+        guard let item = self.item else {
+            return false
+        }
+        
+        var currentNode: ASDisplayNode? = self
+        while let supernode = currentNode?.supernode {
+            if let listView = supernode as? ListView {
+                item.selected(listView: listView)
+                return true
+            }
+            currentNode = supernode
+        }
+        
+        item.action()
+        return true
+    }
+    
     public func asyncLayout() -> (_ item: ChatListAdditionalCategoryItem, _ params: ListViewItemLayoutParams, _ first: Bool, _ last: Bool, _ firstWithHeader: Bool, _ neighbors: ItemListNeighbors) -> (ListViewItemNodeLayout, () -> (Signal<Void, NoError>?, (Bool, Bool) -> Void)) {
         let makeTitleLayout = TextNode.asyncLayout(self.titleNode)
         let currentSelectionNode = self.selectionNode
@@ -292,6 +328,7 @@ public class ChatListAdditionalCategoryItemNode: ItemListRevealOptionsItemNode {
                             strongSelf.item = item
                             
                             strongSelf.accessibilityLabel = titleAttributedString?.string
+                            strongSelf.view.accessibilityTraits = ChatListAdditionalCategoryItemVoiceOver.resolve(isSelected: isSelected).traits
                             
                             //strongSelf.containerNode.frame = CGRect(origin: CGPoint(), size: nodeLayout.contentSize)
                             //strongSelf.containerNode.isGestureEnabled = item.contextAction != nil

@@ -98,6 +98,22 @@ final class ChatListFilterPresetCategoryItem: ListViewItem, ItemListItem {
 private let avatarFont = avatarPlaceholderFont(size: floor(40.0 * 16.0 / 37.0))
 private let badgeFont = Font.regular(15.0)
 
+public struct ChatListFilterPresetCategoryItemVoiceOver {
+    public struct Resolved: Equatable {
+        public let traits: UIAccessibilityTraits
+        public let deleteActionName: String
+        
+        public init(traits: UIAccessibilityTraits, deleteActionName: String) {
+            self.traits = traits
+            self.deleteActionName = deleteActionName
+        }
+    }
+    
+    public static func resolve(strings: PresentationStrings) -> Resolved {
+        return Resolved(traits: [.staticText], deleteActionName: strings.Common_Delete)
+    }
+}
+
 class ChatListFilterPresetCategoryItemNode: ItemListRevealOptionsItemNode, ItemListItemNode {
     private let backgroundNode: ASDisplayNode
     private let topStripeNode: ASDisplayNode
@@ -158,6 +174,10 @@ class ChatListFilterPresetCategoryItemNode: ItemListRevealOptionsItemNode, ItemL
     
     override func didLoad() {
         super.didLoad()
+    }
+    
+    @objc private func performLocalAccessibilityCustomAction(_ action: UIAccessibilityCustomAction) {
+        self.revealOptionSelected(ItemListRevealOption(key: 0, title: "", icon: .none, color: .black, textColor: .white), animated: false)
     }
     
     func asyncLayout() -> (_ item: ChatListFilterPresetCategoryItem, _ params: ListViewItemLayoutParams, _ neighbors: ItemListNeighbors, _ headerAtTop: Bool) -> (ListViewItemNodeLayout, (Bool, Bool) -> Void) {
@@ -227,6 +247,11 @@ class ChatListFilterPresetCategoryItemNode: ItemListRevealOptionsItemNode, ItemL
                     strongSelf.layoutParams = params
                     
                     strongSelf.accessibilityLabel = titleAttributedString?.string
+                    let accessibility = ChatListFilterPresetCategoryItemVoiceOver.resolve(strings: item.presentationData.strings)
+                    strongSelf.view.accessibilityTraits = accessibility.traits
+                    strongSelf.view.accessibilityCustomActions = [
+                        UIAccessibilityCustomAction(name: accessibility.deleteActionName, target: strongSelf, selector: #selector(strongSelf.performLocalAccessibilityCustomAction(_:)))
+                    ]
                     
                     if let _ = updatedTheme {
                         strongSelf.topStripeNode.backgroundColor = item.presentationData.theme.list.itemBlocksSeparatorColor
