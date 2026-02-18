@@ -46,6 +46,7 @@ final class PeerInfoAvatarTransformContainerNode: ASDisplayNode {
     var tapped: (() -> Void)?
     var emojiTapped: (() -> Void)?
     var contextAction: ((ASDisplayNode, ContextGesture?) -> Void)?
+    private var voiceOverIsEnabled: Bool = true
     
     private var isFirstAvatarLoading = true
     var item: PeerInfoAvatarListItem?
@@ -63,6 +64,8 @@ final class PeerInfoAvatarTransformContainerNode: ASDisplayNode {
         self.avatarNode = AvatarNode(font: avatarFont)
         
         super.init()
+
+        self.isAccessibilityElement = true
         
         self.addSubnode(self.containerNode)
         self.containerNode.addSubnode(self.avatarNode)
@@ -95,6 +98,22 @@ final class PeerInfoAvatarTransformContainerNode: ASDisplayNode {
             }
         }
         self.layer.addSublayer(self.hierarchyTrackingLayer)
+    }
+
+    override func accessibilityActivate() -> Bool {
+        guard self.voiceOverIsEnabled, let tapped = self.tapped else {
+            return false
+        }
+        tapped()
+        return true
+    }
+
+    func applyVoiceOver(resolved: PeerInfoAvatarVoiceOver.Resolved, isEnabled: Bool) {
+        self.voiceOverIsEnabled = isEnabled
+        self.accessibilityLabel = resolved.label
+        self.accessibilityValue = resolved.value
+        self.accessibilityHint = resolved.hint
+        self.accessibilityTraits = resolved.traits
     }
     
     deinit {
