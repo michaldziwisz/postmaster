@@ -11,6 +11,11 @@ swift_library(
     deps = [
         "//submodules/ComponentFlow",
         "//submodules/ChatListUI",
+        "//submodules/TelegramUI/Components/Chat/ChatMessageAnimatedStickerItemNode",
+        "//submodules/TelegramUI/Components/Chat/ChatMessageBubbleItemNode",
+        "//submodules/TelegramUI/Components/Chat/ChatMessageInstantVideoItemNode",
+        "//submodules/TelegramUI/Components/Chat/ChatMessageStickerItemNode",
+        "//submodules/TelegramUI/Components/Chat/ChatTextInputActionButtonsNode",
         "//submodules/ContactsPeerItem",
         "//submodules/ContactListUI",
         "//submodules/HorizontalPeerItem",

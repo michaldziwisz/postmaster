@@ -262,18 +262,20 @@ public class ChatMessageInstantVideoItemNode: ChatMessageItemView, ASGestureReco
         }
     }
     
-    @objc private func performLocalAccessibilityCustomAction(_ action: UIAccessibilityCustomAction) {
-        if let action = action as? ChatMessageAccessibilityCustomAction {
-            switch action.action {
-                case .reply:
-                    if let item = self.item {
-                        item.controllerInteraction.setupReply(item.message.id)
-                    }
-                case .options:
-                    if let item = self.item {
-                        item.controllerInteraction.openMessageContextMenu(item.message, false, self, self.interactiveVideoNode.frame, nil, nil)
-                    }
-            }
+    @objc private func performLocalAccessibilityCustomAction(_ action: UIAccessibilityCustomAction) -> Bool {
+        guard let action = action as? ChatMessageAccessibilityCustomAction else {
+            return false
+        }
+        guard let item = self.item else {
+            return false
+        }
+        switch action.action {
+            case .reply:
+                item.controllerInteraction.setupReply(item.message.id)
+                return true
+            case .options:
+                item.controllerInteraction.openMessageContextMenu(item.message, false, self, self.interactiveVideoNode.frame, nil, nil)
+                return true
         }
     }
     

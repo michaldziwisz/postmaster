@@ -660,7 +660,9 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         self.menuButton = HighlightTrackingButtonNode()
         self.menuButton.clipsToBounds = true
         self.menuButton.cornerRadius = 16.0
+        self.menuButton.isAccessibilityElement = true
         self.menuButton.accessibilityLabel = presentationInterfaceState.strings.Conversation_InputMenu
+        self.menuButton.accessibilityTraits = [.button]
         self.menuButtonBackgroundView = GlassBackgroundView()
         self.menuButtonBackgroundView.isUserInteractionEnabled = false
         self.menuButtonClippingNode = ASDisplayNode()
@@ -696,7 +698,13 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         self.attachmentButtonBackground.contentView.addSubview(self.attachmentButtonIcon)
         
         self.attachmentButtonDisabledNode = HighlightableButtonNode()
+        self.attachmentButtonDisabledNode.isAccessibilityElement = true
+        self.attachmentButtonDisabledNode.accessibilityLabel = presentationInterfaceState.strings.VoiceOver_AttachMedia
+        self.attachmentButtonDisabledNode.accessibilityTraits = [.button]
         self.searchLayoutClearButton = HighlightTrackingButton()
+        self.searchLayoutClearButton.isAccessibilityElement = true
+        self.searchLayoutClearButton.accessibilityLabel = presentationInterfaceState.strings.Common_Cancel
+        self.searchLayoutClearButton.accessibilityTraits = [.button]
         self.searchLayoutClearButtonIcon = GlassBackgroundView.ContentImageView()
         
         self.sendActionButtons = ChatTextInputActionButtonsNode(context: context, presentationInterfaceState: presentationInterfaceState, presentationContext: presentationContext, presentController: presentController)
@@ -1172,9 +1180,13 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         self.touchDownGestureRecognizer = recognizer
         
         textInputNode.textView.accessibilityHint = self.textPlaceholderNode.attributedText?.string
-        
-        self.isAccessibilityContainer = true
-        self.accessibilityElements = [textInputNode.textView]
+    }
+
+    override public var accessibilityElements: [Any]? {
+        get {
+            return nil
+        } set(value) {
+        }
     }
     
     private func textFieldMaxHeight(_ maxHeight: CGFloat, metrics: LayoutMetrics, bottomInset: CGFloat) -> CGFloat {
@@ -1548,6 +1560,15 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         self.attachmentButton.isEnabled = isMediaEnabled && !isRecording
         self.attachmentButton.accessibilityTraits = (!isSlowmodeActive || isMediaEnabled) ? [.button] : [.button, .notEnabled]
         self.attachmentButtonDisabledNode.isHidden = !isSlowmodeActive || isMediaEnabled
+        
+        let isAttachmentVisibleForVoiceOver = attachmentButtonAlpha > 0.0
+        if isAttachmentVisibleForVoiceOver && !self.attachmentButtonDisabledNode.isHidden {
+            self.attachmentButton.isAccessibilityElement = false
+            self.attachmentButtonDisabledNode.isAccessibilityElement = true
+        } else {
+            self.attachmentButton.isAccessibilityElement = isAttachmentVisibleForVoiceOver
+            self.attachmentButtonDisabledNode.isAccessibilityElement = false
+        }
         
         let canBypassRestrictions = canBypassRestrictions(chatPresentationInterfaceState: interfaceState)
         

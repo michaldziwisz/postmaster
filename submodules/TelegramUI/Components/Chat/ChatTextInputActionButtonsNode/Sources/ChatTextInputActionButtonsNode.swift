@@ -210,8 +210,7 @@ public final class ChatTextInputActionButtonsNode: ASDisplayNode, ChatSendMessag
         
         super.init()
         
-        self.isAccessibilityElement = true
-        self.accessibilityTraits = [.button, .notEnabled]
+        self.isAccessibilityElement = false
         
         self.sendButton.highligthedChanged = { [weak self] highlighted in
             if let strongSelf = self {
@@ -252,6 +251,13 @@ public final class ChatTextInputActionButtonsNode: ASDisplayNode, ChatSendMessag
             } else if let presentationLayer = self.expandMediaInputButton.layer.presentation() {
                 self.expandMediaInputButton.layer.animateScale(from: CGFloat((presentationLayer.value(forKeyPath: "transform.scale.y") as? NSNumber)?.floatValue ?? 1.0), to: 1.0, duration: 0.25, removeOnCompletion: false)
             }
+        }
+    }
+
+    override public var accessibilityElements: [Any]? {
+        get {
+            return nil
+        } set(value) {
         }
     }
     
@@ -442,20 +448,35 @@ public final class ChatTextInputActionButtonsNode: ASDisplayNode, ChatSendMessag
     }
     
     public func updateAccessibility() {
-        self.accessibilityTraits = .button
-        if !self.micButton.alpha.isZero {
+        let isMicVisible = !self.micButton.alpha.isZero
+        
+        var isVideoMode = false
+        if isMicVisible {
             switch self.micButton.mode {
-                case .audio:
-                    self.accessibilityLabel = self.strings.VoiceOver_Chat_RecordModeVoiceMessage
-                    self.accessibilityHint = self.strings.VoiceOver_Chat_RecordModeVoiceMessageInfo
-                case .video:
-                    self.accessibilityLabel = self.strings.VoiceOver_Chat_RecordModeVideoMessage
-                    self.accessibilityHint = self.strings.VoiceOver_Chat_RecordModeVideoMessageInfo
+            case .audio:
+                isVideoMode = false
+            case .video:
+                isVideoMode = true
             }
-        } else {
-            self.accessibilityLabel = self.strings.MediaPicker_Send
-            self.accessibilityHint = nil
         }
+        
+        let resolved = ChatTextInputActionButtonsVoiceOver.resolve(
+            strings: self.strings,
+            isMicVisible: isMicVisible,
+            isVideoMode: isVideoMode
+        )
+        
+        self.micButton.isAccessibilityElement = isMicVisible
+        self.micButton.accessibilityTraits = [.button, .startsMediaSession]
+        self.micButton.accessibilityLabel = isMicVisible ? resolved.label : nil
+        self.micButton.accessibilityHint = isMicVisible ? resolved.hint : nil
+        
+        self.sendButton.isAccessibilityElement = !isMicVisible
+        self.sendButton.accessibilityTraits = [.button]
+        self.sendButton.accessibilityLabel = isMicVisible ? nil : resolved.label
+        self.sendButton.accessibilityHint = isMicVisible ? nil : resolved.hint
+        
+        self.expandMediaInputButton.isAccessibilityElement = false
     }
     
     public func makeCustomContents() -> UIView? {
