@@ -405,21 +405,31 @@ public final class CallListController: TelegramBaseController {
                         switch strongSelf.mode {
                             case .tab:
                                 if strongSelf.editingMode {
-                                    strongSelf.navigationItem.setLeftBarButton(UIBarButtonItem(title: strongSelf.presentationData.strings.Common_Done, style: .done, target: strongSelf, action: #selector(strongSelf.donePressed)), animated: strongSelf.controllerNode.didSetReady)
-                                    strongSelf.navigationItem.setRightBarButton(UIBarButtonItem(customDisplayNode: buttonNode), animated: strongSelf.controllerNode.didSetReady)
-                                    strongSelf.navigationItem.rightBarButtonItem?.setCustomAction({
+                                    let deleteAllResolved = CallListDeleteAllButtonVoiceOver.resolve(strings: strongSelf.presentationData.strings)
+                                    let deleteAllItem = UIBarButtonItem(customDisplayNode: buttonNode)
+                                    deleteAllItem.accessibilityLabel = deleteAllResolved.label
+                                    deleteAllItem.accessibilityHint = deleteAllResolved.hint
+                                    deleteAllItem.setCustomAction({
                                         pressedImpl?()
                                     })
+                                    
+                                    strongSelf.navigationItem.setLeftBarButton(UIBarButtonItem(title: strongSelf.presentationData.strings.Common_Done, style: .done, target: strongSelf, action: #selector(strongSelf.donePressed)), animated: strongSelf.controllerNode.didSetReady)
+                                    strongSelf.navigationItem.setRightBarButton(deleteAllItem, animated: strongSelf.controllerNode.didSetReady)
                                 } else {
                                     strongSelf.navigationItem.setLeftBarButton(UIBarButtonItem(title: strongSelf.presentationData.strings.Common_Edit, style: .plain, target: strongSelf, action: #selector(strongSelf.editPressed)), animated: strongSelf.controllerNode.didSetReady)
                                     strongSelf.navigationItem.setRightBarButton(nil, animated: strongSelf.controllerNode.didSetReady)
                                 }
                             case .navigation:
                                 if strongSelf.editingMode {
-                                    strongSelf.navigationItem.setLeftBarButton(UIBarButtonItem(customDisplayNode: buttonNode), animated: strongSelf.controllerNode.didSetReady)
-                                    strongSelf.navigationItem.leftBarButtonItem?.setCustomAction({
+                                    let deleteAllResolved = CallListDeleteAllButtonVoiceOver.resolve(strings: strongSelf.presentationData.strings)
+                                    let deleteAllItem = UIBarButtonItem(customDisplayNode: buttonNode)
+                                    deleteAllItem.accessibilityLabel = deleteAllResolved.label
+                                    deleteAllItem.accessibilityHint = deleteAllResolved.hint
+                                    deleteAllItem.setCustomAction({
                                         pressedImpl?()
                                     })
+                                    
+                                    strongSelf.navigationItem.setLeftBarButton(deleteAllItem, animated: strongSelf.controllerNode.didSetReady)
                                     strongSelf.navigationItem.setRightBarButton(UIBarButtonItem(title: strongSelf.presentationData.strings.Common_Done, style: .done, target: strongSelf, action: #selector(strongSelf.donePressed)), animated: strongSelf.controllerNode.didSetReady)
                                 } else {
                                     strongSelf.navigationItem.setRightBarButton(UIBarButtonItem(title: strongSelf.presentationData.strings.Common_Edit, style: .plain, target: strongSelf, action: #selector(strongSelf.editPressed)), animated: strongSelf.controllerNode.didSetReady)
@@ -681,15 +691,23 @@ public final class CallListController: TelegramBaseController {
             case .tab:
                 self.navigationItem.setLeftBarButton(UIBarButtonItem(title: self.presentationData.strings.Common_Done, style: .done, target: self, action: #selector(self.donePressed)), animated: true)
                
-                self.navigationItem.setRightBarButton(UIBarButtonItem(customDisplayNode: buttonNode), animated: true)
-                self.navigationItem.rightBarButtonItem?.setCustomAction({
+                let deleteAllResolved = CallListDeleteAllButtonVoiceOver.resolve(strings: self.presentationData.strings)
+                let deleteAllItem = UIBarButtonItem(customDisplayNode: buttonNode)
+                deleteAllItem.accessibilityLabel = deleteAllResolved.label
+                deleteAllItem.accessibilityHint = deleteAllResolved.hint
+                deleteAllItem.setCustomAction({
                     pressedImpl?()
                 })
+                self.navigationItem.setRightBarButton(deleteAllItem, animated: true)
             case .navigation:
-                self.navigationItem.setLeftBarButton(UIBarButtonItem(customDisplayNode: buttonNode), animated: true)
-                self.navigationItem.leftBarButtonItem?.setCustomAction({
+                let deleteAllResolved = CallListDeleteAllButtonVoiceOver.resolve(strings: self.presentationData.strings)
+                let deleteAllItem = UIBarButtonItem(customDisplayNode: buttonNode)
+                deleteAllItem.accessibilityLabel = deleteAllResolved.label
+                deleteAllItem.accessibilityHint = deleteAllResolved.hint
+                deleteAllItem.setCustomAction({
                     pressedImpl?()
                 })
+                self.navigationItem.setLeftBarButton(deleteAllItem, animated: true)
             
                 self.navigationItem.setRightBarButton(UIBarButtonItem(title: self.presentationData.strings.Common_Done, style: .done, target: self, action: #selector(self.donePressed)), animated: true)
         }
