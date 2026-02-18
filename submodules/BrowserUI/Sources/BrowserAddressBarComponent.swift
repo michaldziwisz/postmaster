@@ -383,7 +383,9 @@ final class AddressBarContentComponent: Component {
                         )),
                         action: { [weak self] _ in
                             self?.cancelPressed()
-                        }
+                        },
+                        accessibilityLabel: strings.Common_Close,
+                        accessibilityHint: nil
                     )
                 ),
                 environment: {},
