@@ -44,6 +44,8 @@ final class ChatRestrictedInputPanelNode: ChatInputPanelNode {
         
         self.buttonNode = HighlightTrackingButtonNode()
         self.buttonNode.isUserInteractionEnabled = false
+        self.buttonNode.isAccessibilityElement = true
+        self.buttonNode.accessibilityTraits = [.staticText]
         
         super.init()
         
@@ -152,6 +154,17 @@ final class ChatRestrictedInputPanelNode: ChatInputPanelNode {
             self.textNode.attributedText = NSAttributedString(string: interfaceState.strings.Chat_QuickReplyMessageLimitReachedText(Int32(displayCount)), font: Font.regular(13.0), textColor: interfaceState.theme.chat.inputPanel.secondaryTextColor)
         }
         self.buttonNode.isUserInteractionEnabled = isUserInteractionEnabled
+        
+        let resolvedAccessibility = ChatRestrictedInputPanelVoiceOver.resolve(
+            label: self.textNode.attributedText?.string ?? "",
+            subtitle: self.subtitleNode.attributedText?.string,
+            isInteractive: isUserInteractionEnabled
+        )
+        self.buttonNode.isAccessibilityElement = !resolvedAccessibility.label.isEmpty
+        self.buttonNode.accessibilityLabel = resolvedAccessibility.label
+        self.buttonNode.accessibilityValue = resolvedAccessibility.value
+        self.buttonNode.accessibilityHint = resolvedAccessibility.hint
+        self.buttonNode.accessibilityTraits = resolvedAccessibility.traits
         
         self.tintTextNode.attributedText = NSAttributedString(string: self.textNode.attributedText?.string ?? "", font: Font.regular(15.0), textColor: .black)
         self.tintSubtitleNode.attributedText = NSAttributedString(string: self.subtitleNode.attributedText?.string ?? "", font: Font.regular(13.0), textColor: .black)
