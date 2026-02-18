@@ -130,11 +130,31 @@ class ContactsAddItemNode: ListViewItemNode {
         self.titleNode = TextNode()
         
         super.init(layerBacked: false, rotated: false, seeThrough: false)
+
+        self.isAccessibilityElement = true
         
         self.addSubnode(self.backgroundNode)
         self.addSubnode(self.separatorNode)
         self.addSubnode(self.iconNode)
         self.addSubnode(self.titleNode)
+    }
+
+    override public func accessibilityActivate() -> Bool {
+        guard let item = self.item else {
+            return false
+        }
+        
+        var supernode: ASDisplayNode? = self
+        while let current = supernode {
+            if let listView = current as? ListView {
+                item.selected(listView: listView)
+                return true
+            }
+            supernode = current.supernode
+        }
+        
+        item.action()
+        return true
     }
     
     override func layoutForParams(_ params: ListViewItemLayoutParams, item: ListViewItem, previousItem: ListViewItem?, nextItem: ListViewItem?) {
@@ -201,6 +221,13 @@ class ContactsAddItemNode: ListViewItemNode {
             return (nodeLayout, { [weak self] animated in
                 if let strongSelf = self {
                     strongSelf.layoutParams = (item, params, first, last, firstWithHeader)
+
+                    let voiceOver = ContactsAddItemVoiceOver.resolve(label: titleAttributedString.string)
+                    strongSelf.accessibilityLabel = voiceOver.label
+                    strongSelf.accessibilityTraits = voiceOver.traits
+                    strongSelf.view.isAccessibilityElement = true
+                    strongSelf.view.accessibilityLabel = voiceOver.label
+                    strongSelf.view.accessibilityTraits = voiceOver.traits
                     
                     let transition: ContainedViewLayoutTransition
                     if animated {
