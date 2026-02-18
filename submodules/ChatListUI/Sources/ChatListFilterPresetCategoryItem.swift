@@ -176,8 +176,10 @@ class ChatListFilterPresetCategoryItemNode: ItemListRevealOptionsItemNode, ItemL
         super.didLoad()
     }
     
-    @objc private func performLocalAccessibilityCustomAction(_ action: UIAccessibilityCustomAction) {
+    @objc private func performLocalAccessibilityCustomAction(_ action: UIAccessibilityCustomAction) -> Bool {
+        let _ = action
         self.revealOptionSelected(ItemListRevealOption(key: 0, title: "", icon: .none, color: .black, textColor: .white), animated: false)
+        return true
     }
     
     func asyncLayout() -> (_ item: ChatListFilterPresetCategoryItem, _ params: ListViewItemLayoutParams, _ neighbors: ItemListNeighbors, _ headerAtTop: Bool) -> (ListViewItemNodeLayout, (Bool, Bool) -> Void) {

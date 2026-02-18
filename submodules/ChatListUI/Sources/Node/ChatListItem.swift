@@ -5499,10 +5499,12 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
         }
     }
     
-    @objc private func performLocalAccessibilityCustomAction(_ action: UIAccessibilityCustomAction) {
+    @objc private func performLocalAccessibilityCustomAction(_ action: UIAccessibilityCustomAction) -> Bool {
         if let action = action as? ChatListItemAccessibilityCustomAction {
             self.revealOptionSelected(ItemListRevealOption(key: action.key, title: "", icon: .none, color: .black, textColor: .white), animated: false)
+            return true
         }
+        return false
     }
     
     override public func snapshotForReordering() -> UIView? {
