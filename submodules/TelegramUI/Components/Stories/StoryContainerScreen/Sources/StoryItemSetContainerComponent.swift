@@ -4234,6 +4234,13 @@ public final class StoryItemSetContainerComponent: Component {
             }
             
             if let storyPrivacyIcon {
+                let resolvedPrivacy = StoryItemSetContainerPrivacyIconVoiceOver.resolve(
+                    strings: component.strings,
+                    privacy: StoryItemSetContainerPrivacyIconVoiceOver.Privacy(storyPrivacyIcon),
+                    isEditable: component.slice.effectivePeer.id == component.context.account.peerId,
+                    peerTitle: component.slice.effectivePeer.compactDisplayTitle
+                )
+                
                 let privacyIcon: ComponentView<Empty>
                 var privacyIconTransition: ComponentTransition = itemChanged ? .immediate : .easeInOut(duration: 0.2)
                 if let current = self.privacyIcon {
@@ -4307,6 +4314,12 @@ public final class StoryItemSetContainerComponent: Component {
                     if closeFriendIconView.superview == nil {
                         self.controlsClippingView.addSubview(closeFriendIconView)
                     }
+                    
+                    closeFriendIconView.isAccessibilityElement = true
+                    closeFriendIconView.accessibilityLabel = resolvedPrivacy.label
+                    closeFriendIconView.accessibilityValue = resolvedPrivacy.value
+                    closeFriendIconView.accessibilityHint = resolvedPrivacy.hint
+                    closeFriendIconView.accessibilityTraits = resolvedPrivacy.traits
                     
                     privacyIconTransition.setFrame(view: closeFriendIconView, frame: closeFriendIconFrame)
                     headerRightOffset -= 44.0
