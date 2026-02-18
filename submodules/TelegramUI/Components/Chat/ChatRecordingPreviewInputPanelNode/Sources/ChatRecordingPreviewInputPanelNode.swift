@@ -84,6 +84,7 @@ final class PlayButtonNode: ASDisplayNode {
         
         self.playButton = HighlightableButtonNode()
         self.playButton.displaysAsynchronously = false
+        self.playButton.isAccessibilityElement = false
         
         self.playPauseIconNode = PlayPauseIconNode()
         self.playPauseIconNode.enqueueState(.play, animated: false)
@@ -323,6 +324,8 @@ public final class ChatRecordingPreviewInputPanelNodeImpl: ChatInputPanelNode {
             }
             let transition = ContainedViewLayoutTransition.animated(duration: 0.3, curve: .easeInOut)
             transition.updateAlpha(node: self.playButtonNodeImpl, alpha: value != nil ? 0.0 : 1.0)
+            
+            self.playButtonNodeImpl.playButton.isAccessibilityElement = value == nil && !self.playButtonNodeImpl.isHidden && !self.playButtonNodeImpl.bounds.width.isZero
         })
         
         self.waveformButton.addTarget(self, action: #selector(self.waveformPressed), forControlEvents: .touchUpInside)
@@ -402,6 +405,11 @@ public final class ChatRecordingPreviewInputPanelNodeImpl: ChatInputPanelNode {
             }
             if self.presentationInterfaceState?.strings !== interfaceState.strings {
                 self.waveformButton.accessibilityLabel = interfaceState.strings.VoiceOver_Chat_RecordPreviewVoiceMessage
+                
+                let resolved = ChatRecordingPreviewPlayButtonVoiceOver.resolve(strings: interfaceState.strings, isPlaying: self.statusValue != nil)
+                self.playButtonNodeImpl.playButton.accessibilityLabel = resolved.label
+                self.playButtonNodeImpl.playButton.accessibilityHint = resolved.hint
+                self.playButtonNodeImpl.playButton.accessibilityTraits = resolved.traits
             }
             
             self.presentationInterfaceState = interfaceState
@@ -453,17 +461,27 @@ public final class ChatRecordingPreviewInputPanelNodeImpl: ChatInputPanelNode {
                         self.statusDisposable.set((mediaPlayer.status
                         |> deliverOnMainQueue).startStrict(next: { [weak self] status in
                             if let self {
+                                let isPlaying: Bool
                                 switch status.status {
                                 case .playing, .buffering(_, true, _, _):
+                                    isPlaying = true
                                     self.statusValue = status
                                     if let recordedMediaPreview = self.presentationInterfaceState?.interfaceState.mediaDraftState, case let .audio(audio) = recordedMediaPreview, let _ = audio.trimRange {
                                         self.ensureHasTimer()
                                     }
                                     self.playButtonNodeImpl.playPauseIconNode.enqueueState(.pause, animated: true)
                                 default:
+                                    isPlaying = false
                                     self.statusValue = nil
                                     self.stopTimer()
                                     self.playButtonNodeImpl.playPauseIconNode.enqueueState(.play, animated: true)
+                                }
+                                
+                                if let strings = self.presentationInterfaceState?.strings {
+                                    let resolved = ChatRecordingPreviewPlayButtonVoiceOver.resolve(strings: strings, isPlaying: isPlaying)
+                                    self.playButtonNodeImpl.playButton.accessibilityLabel = resolved.label
+                                    self.playButtonNodeImpl.playButton.accessibilityHint = resolved.hint
+                                    self.playButtonNodeImpl.playButton.accessibilityTraits = resolved.traits
                                 }
                             }
                         }))
@@ -519,12 +537,30 @@ public final class ChatRecordingPreviewInputPanelNodeImpl: ChatInputPanelNode {
                     let playButtonSize = CGSize(width: max(0.0, rightHandleFrame.minX - leftHandleFrame.maxX), height: waveformBackgroundFrame.height)
                     self.playButtonNodeImpl.update(theme: interfaceState.theme, size: playButtonSize, transition: transition)
                     transition.updateFrame(node: self.playButtonNodeImpl, frame: CGRect(origin: CGPoint(x: waveformBackgroundFrame.minX + leftHandleFrame.maxX, y: waveformBackgroundFrame.minY), size: playButtonSize))
+                    
+                    let isPlayButtonVisibleForVoiceOver = playButtonSize.width > 0.0 && !self.playButtonNodeImpl.alpha.isZero
+                    if isPlayButtonVisibleForVoiceOver {
+                        let resolved = ChatRecordingPreviewPlayButtonVoiceOver.resolve(strings: interfaceState.strings, isPlaying: self.statusValue != nil)
+                        self.playButtonNodeImpl.playButton.isAccessibilityElement = true
+                        self.playButtonNodeImpl.playButton.accessibilityLabel = resolved.label
+                        self.playButtonNodeImpl.playButton.accessibilityHint = resolved.hint
+                        self.playButtonNodeImpl.playButton.accessibilityTraits = resolved.traits
+                    } else {
+                        self.playButtonNodeImpl.playButton.isAccessibilityElement = false
+                        self.playButtonNodeImpl.playButton.accessibilityLabel = nil
+                        self.playButtonNodeImpl.playButton.accessibilityHint = nil
+                        self.playButtonNodeImpl.playButton.accessibilityTraits = []
+                    }
                 case let .video(video):
                     self.waveformButton.isHidden = true
                     self.waveformBackgroundNodeImpl.isHidden = true
                     self.waveformForegroundNode.isHidden = true
                     self.waveformScrubberNodeImpl.isHidden = true
                     self.playButtonNodeImpl.isHidden = true
+                    self.playButtonNodeImpl.playButton.isAccessibilityElement = false
+                    self.playButtonNodeImpl.playButton.accessibilityLabel = nil
+                    self.playButtonNodeImpl.playButton.accessibilityHint = nil
+                    self.playButtonNodeImpl.playButton.accessibilityTraits = []
                     
                     let scrubberSize = self.scrubber.update(
                         transition: .immediate,
