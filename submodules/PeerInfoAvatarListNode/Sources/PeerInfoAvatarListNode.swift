@@ -1772,12 +1772,18 @@ public final class PeerInfoAvatarListContainerNode: ASDisplayNode {
             if let photoTitle = photoTitle {
                 transition.updateAlpha(node: self.setByYouNode, alpha: 0.7)
                 self.setByYouNode.attributedText = NSAttributedString(string: photoTitle, font: Font.regular(12.0), textColor: UIColor.white)
+                let setByYouResolved = PeerInfoAvatarListSetByYouVoiceOver.resolve(strings: presentationData.strings, title: photoTitle, isLink: hasLink)
+                self.setByYouNode.isAccessibilityElement = true
+                self.setByYouNode.accessibilityLabel = setByYouResolved.label
+                self.setByYouNode.accessibilityHint = setByYouResolved.hint
+                self.setByYouNode.accessibilityTraits = setByYouResolved.traits
                 let setByYouSize = self.setByYouNode.updateLayout(size)
                 self.setByYouNode.frame = CGRect(origin: CGPoint(x: size.width - setByYouSize.width - 14.0, y: size.height - setByYouSize.height - 40.0), size: setByYouSize)
                 self.setByYouNode.isUserInteractionEnabled = hasLink
             } else {
                 transition.updateAlpha(node: self.setByYouNode, alpha: 0.0)
                 self.setByYouNode.isUserInteractionEnabled = false
+                self.setByYouNode.isAccessibilityElement = false
             }
             
             if let fallbackImageSignal = fallbackImageSignal {
