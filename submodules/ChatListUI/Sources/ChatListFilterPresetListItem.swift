@@ -16,6 +16,33 @@ struct ChatListFilterPresetListItemEditing: Equatable {
     let revealed: Bool
 }
 
+public struct ChatListFilterPresetListItemVoiceOver {
+    public struct Resolved: Equatable {
+        public let label: String
+        public let value: String?
+        public let traits: UIAccessibilityTraits
+        
+        public init(label: String, value: String?, traits: UIAccessibilityTraits) {
+            self.label = label
+            self.value = value
+            self.traits = traits
+        }
+    }
+    
+    public static func resolve(title: String, subtitle: String, isDisabled: Bool) -> Resolved {
+        let _ = isDisabled
+        
+        let value: String?
+        if subtitle.isEmpty {
+            value = nil
+        } else {
+            value = subtitle
+        }
+        
+        return Resolved(label: title, value: value, traits: [.button])
+    }
+}
+
 final class ChatListFilterPresetListItem: ListViewItem, ItemListItem {
     let context: AccountContext
     let presentationData: ItemListPresentationData
@@ -302,7 +329,10 @@ final class ChatListFilterPresetListItemNode: ItemListRevealOptionsItemNode {
                     strongSelf.item = item
                     strongSelf.layoutParams = params
                     
-                    strongSelf.activateArea.accessibilityLabel = "\(titleAttributedString.string))"
+                    let accessibility = ChatListFilterPresetListItemVoiceOver.resolve(title: titleAttributedString.string, subtitle: item.label, isDisabled: item.isDisabled)
+                    strongSelf.activateArea.accessibilityLabel = accessibility.label
+                    strongSelf.activateArea.accessibilityValue = accessibility.value
+                    strongSelf.activateArea.accessibilityTraits = accessibility.traits
                     
                     if let _ = updatedTheme {
                         strongSelf.topStripeNode.backgroundColor = item.presentationData.theme.list.itemBlocksSeparatorColor

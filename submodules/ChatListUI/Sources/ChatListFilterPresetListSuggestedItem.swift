@@ -6,6 +6,24 @@ import SwiftSignalKit
 import TelegramPresentationData
 import ItemListUI
 
+public struct ChatListFilterPresetListSuggestedItemVoiceOver {
+    public struct Resolved: Equatable {
+        public let traits: UIAccessibilityTraits
+        
+        public init(traits: UIAccessibilityTraits) {
+            self.traits = traits
+        }
+    }
+    
+    public static func resolve(isEnabled: Bool) -> Resolved {
+        var traits: UIAccessibilityTraits = [.button]
+        if !isEnabled {
+            traits.insert(.notEnabled)
+        }
+        return Resolved(traits: traits)
+    }
+}
+
 public class ChatListFilterPresetListSuggestedItem: ListViewItem, ItemListItem {
     let presentationData: ItemListPresentationData
     let systemStyle: ItemListSystemStyle
@@ -143,6 +161,14 @@ public class ChatListFilterPresetListSuggestedItemNode: ListViewItemNode, ItemLi
         
         self.addSubnode(self.activateArea)
         
+        self.activateArea.activate = { [weak self] in
+            guard let self, let installAction = self.item?.installAction else {
+                return false
+            }
+            installAction()
+            return true
+        }
+        
         self.buttonNode.addTarget(self, action: #selector(self.buttonPressed), forControlEvents: .touchUpInside)
         self.buttonNode.highligthedChanged = { [weak self] highlighted in
             if let strongSelf = self {
@@ -249,7 +275,7 @@ public class ChatListFilterPresetListSuggestedItemNode: ListViewItemNode, ItemLi
                     strongSelf.activateArea.frame = CGRect(origin: CGPoint(x: params.leftInset, y: 0.0), size: CGSize(width: params.width - params.leftInset - params.rightInset, height: layout.contentSize.height))
                     strongSelf.activateArea.accessibilityLabel = item.title
                     strongSelf.activateArea.accessibilityValue = item.label
-                    strongSelf.activateArea.accessibilityTraits = []
+                    strongSelf.activateArea.accessibilityTraits = ChatListFilterPresetListSuggestedItemVoiceOver.resolve(isEnabled: item.installAction != nil).traits
                     
                     if let _ = updatedTheme {
                         strongSelf.topStripeNode.backgroundColor = itemSeparatorColor
