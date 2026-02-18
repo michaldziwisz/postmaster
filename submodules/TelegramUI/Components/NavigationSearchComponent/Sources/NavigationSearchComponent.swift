@@ -27,6 +27,7 @@ public final class NavigationSearchComponent: Component {
 
     public let colors: Colors
     public let cancel: String
+    public let clear: String
     public let placeholder: String
     public let isSearchActive: Bool
     public let collapseFraction: CGFloat
@@ -37,6 +38,7 @@ public final class NavigationSearchComponent: Component {
     public init(
         colors: Colors,
         cancel: String,
+        clear: String,
         placeholder: String,
         isSearchActive: Bool,
         collapseFraction: CGFloat,
@@ -46,6 +48,7 @@ public final class NavigationSearchComponent: Component {
     ) {
         self.colors = colors
         self.cancel = cancel
+        self.clear = clear
         self.placeholder = placeholder
         self.isSearchActive = isSearchActive
         self.collapseFraction = collapseFraction
@@ -59,6 +62,9 @@ public final class NavigationSearchComponent: Component {
             return false
         }
         if lhs.cancel != rhs.cancel {
+            return false
+        }
+        if lhs.clear != rhs.clear {
             return false
         }
         if lhs.placeholder != rhs.placeholder {
@@ -86,7 +92,7 @@ public final class NavigationSearchComponent: Component {
         
         private var button: ComponentView<Empty>?
         
-        private var textField: UITextField?
+        private let textField: UITextField
         
         override init(frame: CGRect) {
             self.backgroundView = UIView()
@@ -95,6 +101,8 @@ public final class NavigationSearchComponent: Component {
             
             self.clearButton = HighlightableButton()
             self.clearIconView = UIImageView(image: UIImage(bundleImageName: "Components/Search Bar/Clear")?.withRenderingMode(.alwaysTemplate))
+            
+            self.textField = UITextField()
             
             super.init(frame: frame)
             
@@ -108,6 +116,12 @@ public final class NavigationSearchComponent: Component {
             self.backgroundView.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(self.backgroundTapGesture(_:))))
             
             self.clearButton.addTarget(self, action: #selector(self.clearPressed), for: .touchUpInside)
+            
+            self.textField.delegate = self
+            self.textField.addTarget(self, action: #selector(self.textChanged), for: .editingChanged)
+            self.addSubview(self.textField)
+            self.textField.keyboardAppearance = .dark
+            self.textField.returnKeyType = .done
         }
         
         required init?(coder: NSCoder) {
@@ -119,17 +133,7 @@ public final class NavigationSearchComponent: Component {
         
         @objc private func backgroundTapGesture(_ recognizer: UITapGestureRecognizer) {
             if case .ended = recognizer.state {
-                if self.textField == nil {
-                    let textField = UITextField()
-                    self.textField = textField
-                    textField.delegate = self
-                    textField.addTarget(self, action: #selector(self.textChanged), for: .editingChanged)
-                    self.addSubview(textField)
-                    textField.keyboardAppearance = .dark
-                    textField.returnKeyType = .done
-                }
-                
-                self.textField?.becomeFirstResponder()
+                self.textField.becomeFirstResponder()
             }
         }
         
@@ -152,18 +156,18 @@ public final class NavigationSearchComponent: Component {
         }
         
         @objc private func clearPressed() {
-            self.textField?.text = ""
+            self.textField.text = ""
             self.updateText(updateComponent: true)
         }
         
         @objc private func updateText(updateComponent: Bool) {
-            let isEmpty = self.textField?.text?.isEmpty ?? true
+            let isEmpty = self.textField.text?.isEmpty ?? true
             self.placeholderText.view?.isHidden = !isEmpty
             
             self.clearButton.isHidden = isEmpty
             
             if updateComponent, let component = self.component {
-                component.updateQuery(self.textField?.text ?? "")
+                component.updateQuery(self.textField.text ?? "")
             }
         }
         
@@ -172,6 +176,18 @@ public final class NavigationSearchComponent: Component {
             
             self.component = component
             self.state = state
+
+            let searchResolved = NavigationSearchComponentVoiceOver.resolveSearchField(placeholder: component.placeholder)
+            self.textField.isAccessibilityElement = true
+            self.textField.accessibilityLabel = searchResolved.label
+            self.textField.accessibilityHint = searchResolved.hint
+            self.textField.accessibilityTraits = searchResolved.traits
+            
+            let clearResolved = NavigationSearchComponentVoiceOver.resolveClearButton(clear: component.clear)
+            self.clearButton.isAccessibilityElement = true
+            self.clearButton.accessibilityLabel = clearResolved.label
+            self.clearButton.accessibilityHint = clearResolved.hint
+            self.clearButton.accessibilityTraits = clearResolved.traits
             
             let baseHeight: CGFloat = 52.0
             let size = CGSize(width: availableSize.width, height: baseHeight)
@@ -264,6 +280,7 @@ public final class NavigationSearchComponent: Component {
             if let placeholderTextView = self.placeholderText.view {
                 if placeholderTextView.superview == nil {
                     placeholderTextView.layer.anchorPoint = CGPoint()
+                    placeholderTextView.isAccessibilityElement = false
                     placeholderTextView.isUserInteractionEnabled = false
                     self.insertSubview(placeholderTextView, aboveSubview: self.searchIconView)
                 } else {
@@ -287,39 +304,35 @@ public final class NavigationSearchComponent: Component {
                 transition.setFrame(view: self.clearIconView, frame: clearFrame.offsetBy(dx: -clearButtonFrame.minX, dy: -clearButtonFrame.minY))
             }
             
-            if let textField = self.textField {
-                var textFieldTransition = transition
-                var animateIn = false
-                if textField.bounds.isEmpty {
-                    textFieldTransition = textFieldTransition.withAnimation(.none)
-                    animateIn = true
-                }
-                
-                if textField.textColor != component.colors.foreground {
-                    textField.textColor = component.colors.foreground
-                    textField.font = Font.regular(17.0)
-                }
-                
-                let textLeftInset: CGFloat = fieldSideInset + searchIconSize.width + searchIconSpacing
-                let textRightInset: CGFloat = 8.0 + 30.0
-                textFieldTransition.setFrame(view: textField, frame: CGRect(origin: CGPoint(x: placeholderTextFrame.minX, y: backgroundFrame.minY - 1.0), size: CGSize(width: backgroundFrame.width - textLeftInset - textRightInset, height: backgroundFrame.height)))
-                
-                if animateIn {
-                    transition.animatePosition(view: textField, from: CGPoint(x: -placeholderDeltaX, y: 0.0), to: CGPoint(), additive: true)
-                }
+            var textFieldTransition = transition
+            var animateIn = false
+            if self.textField.bounds.isEmpty {
+                textFieldTransition = textFieldTransition.withAnimation(.none)
+                animateIn = true
             }
             
-            if let textField = self.textField {
-                if !component.isSearchActive {
-                    if !(textField.text?.isEmpty ?? true) {
-                        textField.text = ""
-                        self.updateText(updateComponent: false)
-                    }
-                    
-                    if textField.isFirstResponder {
-                        DispatchQueue.main.async { [weak textField] in
-                            textField?.resignFirstResponder()
-                        }
+            if self.textField.textColor != component.colors.foreground {
+                self.textField.textColor = component.colors.foreground
+                self.textField.font = Font.regular(17.0)
+            }
+            
+            let textLeftInset: CGFloat = fieldSideInset + searchIconSize.width + searchIconSpacing
+            let textRightInset: CGFloat = 8.0 + 30.0
+            textFieldTransition.setFrame(view: self.textField, frame: CGRect(origin: CGPoint(x: placeholderTextFrame.minX, y: backgroundFrame.minY - 1.0), size: CGSize(width: backgroundFrame.width - textLeftInset - textRightInset, height: backgroundFrame.height)))
+            
+            if animateIn {
+                transition.animatePosition(view: self.textField, from: CGPoint(x: -placeholderDeltaX, y: 0.0), to: CGPoint(), additive: true)
+            }
+            
+            if !component.isSearchActive {
+                if !(self.textField.text?.isEmpty ?? true) {
+                    self.textField.text = ""
+                    self.updateText(updateComponent: false)
+                }
+                
+                if self.textField.isFirstResponder {
+                    DispatchQueue.main.async { [weak textField = self.textField] in
+                        textField?.resignFirstResponder()
                     }
                 }
             }

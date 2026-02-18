@@ -710,6 +710,7 @@ public final class StoryItemSetViewListComponent: Component {
                             button: component.theme.rootController.navigationBar.accentTextColor
                         ),
                         cancel: component.strings.Common_Cancel,
+                        clear: component.strings.WebSearch_RecentSectionClear,
                         placeholder: component.strings.Common_Search,
                         isSearchActive: component.isSearchActive,
                         collapseFraction: navigationSearchFieldCollapseFraction,
