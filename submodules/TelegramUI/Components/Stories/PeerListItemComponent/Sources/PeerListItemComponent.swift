@@ -695,6 +695,46 @@ public final class PeerListItemComponent: Component {
             } else {
                 labelData = ("", .neutral)
             }
+
+            let resolvedAccessibility = PeerListItemVoiceOver.resolve(
+                strings: component.strings,
+                title: component.title,
+                subtitle: labelData.0,
+                selectionState: component.selectionState,
+                rightAccessory: component.rightAccessory,
+                isEnabled: component.isEnabled,
+                hasAction: component.action != nil
+            )
+            self.containerButton.isAccessibilityElement = true
+            self.containerButton.accessibilityLabel = resolvedAccessibility.label
+            self.containerButton.accessibilityValue = resolvedAccessibility.value
+            self.containerButton.accessibilityHint = resolvedAccessibility.hint
+            self.containerButton.accessibilityTraits = resolvedAccessibility.traits
+            
+            if let inlineActions = component.inlineActions?.actions, !inlineActions.isEmpty {
+                self.containerButton.accessibilityCustomActions = inlineActions.map { inlineAction in
+                    return UIAccessibilityCustomAction(name: inlineAction.title, actionHandler: { _ in
+                        inlineAction.action()
+                        return true
+                    })
+                }
+            } else {
+                self.containerButton.accessibilityCustomActions = nil
+            }
+            
+            let hasAvatarStoriesAction = component.peer != nil && component.storyStats != nil && component.openStories != nil && component.avatarComponent == nil
+            if hasAvatarStoriesAction && component.isEnabled {
+                self.avatarButtonView.isAccessibilityElement = true
+                self.avatarButtonView.accessibilityLabel = component.title
+                self.avatarButtonView.accessibilityValue = component.strings.PeerInfo_PaneStories
+                self.avatarButtonView.accessibilityHint = component.strings.VoiceOver_Stories_OpenHint
+                self.avatarButtonView.accessibilityTraits = [.button]
+            } else {
+                self.avatarButtonView.isAccessibilityElement = false
+                self.avatarButtonView.accessibilityLabel = nil
+                self.avatarButtonView.accessibilityValue = nil
+                self.avatarButtonView.accessibilityHint = nil
+            }
             
             let contextInset: CGFloat
             if self.isExtractedToContextMenu {
