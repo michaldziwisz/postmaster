@@ -5603,12 +5603,32 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
         case .customChatContents:
             chatInfoButtonItem = UIBarButtonItem(title: "", style: .plain, target: nil, action: nil)
         }
+        let chatInfoPeerTitle: String?
+        if let peer = self.presentationInterfaceState.renderedPeer?.chatMainPeer {
+            if peer.id == self.context.account.peerId {
+                chatInfoPeerTitle = self.presentationData.strings.DialogList_SavedMessages
+            } else {
+                chatInfoPeerTitle = peer.displayTitle(strings: self.presentationData.strings, displayOrder: self.presentationData.nameDisplayOrder)
+            }
+        } else {
+            chatInfoPeerTitle = nil
+        }
+        let chatInfoAccessibility = PeerInfoAvatarVoiceOver.resolve(strings: self.presentationData.strings, peerTitle: chatInfoPeerTitle, isEnabled: true)
+        chatInfoButtonItem.accessibilityLabel = chatInfoAccessibility.label
+        chatInfoButtonItem.accessibilityValue = chatInfoAccessibility.value
+        chatInfoButtonItem.accessibilityHint = chatInfoAccessibility.hint
+        chatInfoButtonItem.accessibilityTraits = chatInfoAccessibility.traits
         chatInfoButtonItem.target = self
         chatInfoButtonItem.action = #selector(self.rightNavigationButtonAction)
         self.chatInfoNavigationButton = ChatNavigationButton(action: .openChatInfo(expandAvatar: true, section: nil), buttonItem: chatInfoButtonItem)
         
         self.moreBarButton.setContent(.more(MoreHeaderButton.optionsCircleImage(color: self.presentationData.theme.rootController.navigationBar.buttonColor)))
-        self.moreInfoNavigationButton = ChatNavigationButton(action: .toggleInfoPanel, buttonItem: UIBarButtonItem(customDisplayNode: self.moreBarButton)!)
+        let moreBarButtonItem = UIBarButtonItem(customDisplayNode: self.moreBarButton)!
+        let moreAccessibility = ChatNavigationBarMoreButtonVoiceOver.resolve(strings: self.presentationData.strings, isEnabled: true)
+        moreBarButtonItem.accessibilityLabel = moreAccessibility.label
+        moreBarButtonItem.accessibilityHint = moreAccessibility.hint
+        moreBarButtonItem.accessibilityTraits = moreAccessibility.traits
+        self.moreInfoNavigationButton = ChatNavigationButton(action: .toggleInfoPanel, buttonItem: moreBarButtonItem)
         self.moreBarButton.contextAction = { [weak self] sourceNode, gesture in
             guard let self else {
                 return
