@@ -1759,6 +1759,27 @@ public final class StoryItemSetViewListComponent: Component {
                 if orderSelectorView.superview == nil {
                     self.navigationContainerView.addSubview(orderSelectorView)
                 }
+                
+                let orderSortMode: StoryItemSetViewListOrderSelectorVoiceOver.SortMode
+                switch self.sortMode {
+                case .repostsFirst:
+                    orderSortMode = .repostsFirst
+                case .reactionsFirst:
+                    orderSortMode = .reactionsFirst
+                case .recentFirst:
+                    orderSortMode = .recentFirst
+                }
+                
+                let orderResolved = StoryItemSetViewListOrderSelectorVoiceOver.resolve(
+                    strings: component.strings,
+                    sortMode: orderSortMode,
+                    isChannel: component.peerId.isGroupOrChannel
+                )
+                orderSelectorView.isAccessibilityElement = true
+                orderSelectorView.accessibilityLabel = orderResolved.label
+                orderSelectorView.accessibilityHint = orderResolved.hint
+                orderSelectorView.accessibilityTraits = orderResolved.traits
+                
                 transition.setFrame(view: orderSelectorView, frame: CGRect(origin: CGPoint(x: availableSize.width - sideInset - orderSelectorSize.width, y: floor((56.0 - orderSelectorSize.height) * 0.5) + (component.isSearchActive ? (-56.0) : 0.0)), size: orderSelectorSize))
                 transition.setAlpha(view: orderSelectorView, alpha: component.isSearchActive ? 0.0 : 1.0)
                 
