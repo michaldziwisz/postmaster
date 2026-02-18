@@ -19,6 +19,7 @@ swift_library(
         "//submodules/SelectablePeerNode:SelectablePeerNode",
         "//submodules/PeerOnlineMarkerNode:PeerOnlineMarkerNode",
         "//submodules/TelegramStringFormatting:TelegramStringFormatting",
+        "//submodules/LocalizedPeerData:LocalizedPeerData",
         "//submodules/ContextUI:ContextUI",
         "//submodules/AccountContext:AccountContext",
         "//submodules/TelegramUIPreferences",

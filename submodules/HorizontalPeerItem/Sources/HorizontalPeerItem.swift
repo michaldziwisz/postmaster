@@ -7,6 +7,7 @@ import Postbox
 import SwiftSignalKit
 import TelegramPresentationData
 import TelegramStringFormatting
+import LocalizedPeerData
 import PeerOnlineMarkerNode
 import SelectablePeerNode
 import ContextUI
@@ -21,6 +22,45 @@ public enum HorizontalPeerItemMode {
 }
 
 private let badgeFont = Font.regular(14.0)
+
+public struct HorizontalPeerItemVoiceOver {
+    public struct Resolved: Equatable {
+        public let label: String
+        public let value: String?
+        public let hint: String?
+        public let traits: UIAccessibilityTraits
+        
+        public init(label: String, value: String?, hint: String?, traits: UIAccessibilityTraits) {
+            self.label = label
+            self.value = value
+            self.hint = hint
+            self.traits = traits
+        }
+    }
+    
+    public static func resolve(strings: PresentationStrings, peerTitle: String, unreadCount: Int32?, isSelected: Bool) -> Resolved {
+        let unreadCount = unreadCount.flatMap { max(0, $0) }
+        
+        var traits: UIAccessibilityTraits = [.button]
+        if isSelected {
+            traits.insert(.selected)
+        }
+        
+        let value: String?
+        if let unreadCount, unreadCount > 0 {
+            value = strings.VoiceOver_Chat_UnreadMessages(unreadCount)
+        } else {
+            value = nil
+        }
+        
+        return Resolved(
+            label: peerTitle,
+            value: value,
+            hint: strings.VoiceOver_Chat_OpenHint,
+            traits: traits
+        )
+    }
+}
 
 public final class HorizontalPeerItem: ListViewItem {
     let theme: PresentationTheme
@@ -124,6 +164,41 @@ public final class HorizontalPeerItemNode: ListViewItemNode {
     let badgeTextNode: TextNode
     let onlineNode: PeerOnlineMarkerNode
     public private(set) var item: HorizontalPeerItem?
+    
+    private func updateAccessibility() {
+        guard let item = self.item else {
+            return
+        }
+        
+        self.isAccessibilityElement = true
+        
+        let peerTitle: String
+        if item.peer.id == item.accountPeerId {
+            peerTitle = item.strings.DialogList_SavedMessages
+        } else {
+            peerTitle = item.peer.displayTitle(strings: item.strings, displayOrder: .firstLast)
+        }
+        
+        let resolved = HorizontalPeerItemVoiceOver.resolve(
+            strings: item.strings,
+            peerTitle: peerTitle,
+            unreadCount: item.unreadBadge?.0,
+            isSelected: item.isPeerSelected(item.peer.id)
+        )
+        
+        self.accessibilityLabel = resolved.label
+        self.accessibilityValue = resolved.value
+        self.accessibilityHint = resolved.hint
+        self.accessibilityTraits = resolved.traits
+        
+        if self.isNodeLoaded {
+            self.view.isAccessibilityElement = true
+            self.view.accessibilityLabel = resolved.label
+            self.view.accessibilityValue = resolved.value
+            self.view.accessibilityHint = resolved.hint
+            self.view.accessibilityTraits = resolved.traits
+        }
+    }
     
     public init() {
         self.peerNode = SelectablePeerNode()
@@ -271,6 +346,7 @@ public final class HorizontalPeerItemNode: ListViewItemNode {
                     
                     let _ = badgeApply()
                     let _ = onlineApply(animateContent)
+                    strongSelf.updateAccessibility()
                 }
             })
         }
@@ -279,7 +355,16 @@ public final class HorizontalPeerItemNode: ListViewItemNode {
     public func updateSelection(animated: Bool) {
         if let item = self.item {
             self.peerNode.updateSelection(selected: item.isPeerSelected(item.peer.id), animated: animated)
+            self.updateAccessibility()
         }
+    }
+    
+    override public func accessibilityActivate() -> Bool {
+        guard let item = self.item else {
+            return false
+        }
+        item.action(item.peer)
+        return true
     }
     
     override public func animateInsertion(_ currentTimestamp: Double, duration: Double, options: ListViewItemAnimationOptions) {
@@ -300,4 +385,3 @@ public final class HorizontalPeerItemNode: ListViewItemNode {
         self.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.2)
     }
 }
-
