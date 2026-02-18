@@ -179,14 +179,16 @@ public final class HorizontalTabsComponent: Component {
         public let id: AnyHashable
         public let content: Content
         public let badge: Badge?
+        public let accessibilityLabel: String?
         public let action: () -> Void
         public let contextAction: ((ContextExtractedContentContainingView, ContextGesture?) -> Void)?
         public let deleteAction: (() -> Void)?
         
-        public init(id: AnyHashable, content: Content, badge: Badge?, action: @escaping () -> Void, contextAction: ((ContextExtractedContentContainingView, ContextGesture?) -> Void)?, deleteAction: (() -> Void)?) {
+        public init(id: AnyHashable, content: Content, badge: Badge?, accessibilityLabel: String? = nil, action: @escaping () -> Void, contextAction: ((ContextExtractedContentContainingView, ContextGesture?) -> Void)?, deleteAction: (() -> Void)?) {
             self.id = id
             self.content = content
             self.badge = badge
+            self.accessibilityLabel = accessibilityLabel
             self.action = action
             self.contextAction = contextAction
             self.deleteAction = deleteAction
@@ -200,6 +202,9 @@ public final class HorizontalTabsComponent: Component {
                 return false
             }
             if lhs.badge != rhs.badge {
+                return false
+            }
+            if lhs.accessibilityLabel != rhs.accessibilityLabel {
                 return false
             }
             if (lhs.contextAction == nil) != (rhs.contextAction == nil) {
@@ -666,7 +671,7 @@ public final class HorizontalTabsComponent: Component {
                 }
             }
             
-            var items: [(tabId: AnyHashable, itemView: ItemView, size: CGSize, itemTransition: ComponentTransition)] = []
+            var items: [(tabId: AnyHashable, tab: Tab, itemView: ItemView, size: CGSize, itemTransition: ComponentTransition)] = []
             
             for tab in orderedTabs {
                 let tabId = tab.id
@@ -712,7 +717,7 @@ public final class HorizontalTabsComponent: Component {
                     containerSize: CGSize(width: 1000.0, height: sizeHeight - 3.0 * 2.0)
                 )
                 
-                items.append((tabId, itemView, itemSize, itemTransition))
+                items.append((tabId, tab, itemView, itemSize, itemTransition))
             }
             
             var totalContentWidth: CGFloat = sideInset
@@ -753,7 +758,7 @@ public final class HorizontalTabsComponent: Component {
                 scrollContentWidth = contentWidth
             }
             
-            for (tabId, itemView, _, itemTransition) in items {
+            for (tabId, tab, itemView, _, itemTransition) in items {
                 let itemFrame = itemView.frame
                 
                 if let itemRegularView = itemView.regularView.view, let itemSelectedView = itemView.selectedView.view {
@@ -769,6 +774,17 @@ public final class HorizontalTabsComponent: Component {
                     }
                     itemTransition.setFrame(view: itemRegularView, frame: itemFrame)
                     itemTransition.setFrame(view: itemSelectedView, frame: itemFrame)
+
+                    if let itemRegularView = itemRegularView as? ItemComponent.View, let itemSelectedView = itemSelectedView as? ItemComponent.View {
+                        let isSelected = component.selectedTab == tabId
+                        itemRegularView.configureAccessibility(tab: tab, isSelected: isSelected, action: tab.action)
+                        itemSelectedView.configureAccessibility(tab: tab, isSelected: isSelected, action: tab.action)
+                        
+                        itemRegularView.isAccessibilityElement = !isSelected
+                        itemRegularView.accessibilityElementsHidden = isSelected
+                        itemSelectedView.isAccessibilityElement = isSelected
+                        itemSelectedView.accessibilityElementsHidden = !isSelected
+                    }
                     
                     if tabId == self.reorderingItem {
                         itemTransition.setSublayerTransform(view: itemRegularView, transform: CATransform3DMakeScale(1.2, 1.2, 1.0))
@@ -959,6 +975,8 @@ private final class ItemComponent: Component {
         
         var component: ItemComponent?
         
+        private var accessibilityAction: (() -> Void)?
+        
         override init(frame: CGRect) {
             self.extractedContainerView = ContextExtractedContentContainingView()
             self.containerView = ContextControllerSourceView()
@@ -997,6 +1015,40 @@ private final class ItemComponent: Component {
         
         required public init?(coder: NSCoder) {
             fatalError("init(coder:) has not been implemented")
+        }
+
+        fileprivate func configureAccessibility(tab: HorizontalTabsComponent.Tab, isSelected: Bool, action: @escaping () -> Void) {
+            self.isAccessibilityElement = true
+            
+            let label: String?
+            if let explicitLabel = tab.accessibilityLabel {
+                label = explicitLabel
+            } else {
+                switch tab.content {
+                case let .title(title):
+                    label = title.text
+                case .custom:
+                    label = nil
+                }
+            }
+            self.accessibilityLabel = label
+            self.accessibilityValue = tab.badge?.title
+            
+            var traits: UIAccessibilityTraits = [.button]
+            if isSelected {
+                traits.insert(.selected)
+            }
+            self.accessibilityTraits = traits
+            
+            self.accessibilityAction = action
+        }
+        
+        override func accessibilityActivate() -> Bool {
+            guard let accessibilityAction = self.accessibilityAction else {
+                return false
+            }
+            accessibilityAction()
+            return true
         }
         
         private func updateIsShaking(animated: Bool) {
