@@ -4037,6 +4037,13 @@ public final class StoryItemSetContainerComponent: Component {
                 self.closeButtonIconView.image = UIImage(bundleImageName: "Stories/Close")?.withRenderingMode(.alwaysTemplate)
                 self.closeButtonIconView.tintColor = .white
             }
+            
+            let closeResolved = StoryItemSetContainerCloseButtonVoiceOver.resolve(strings: component.strings)
+            self.closeButton.isAccessibilityElement = true
+            self.closeButton.accessibilityLabel = closeResolved.label
+            self.closeButton.accessibilityHint = closeResolved.hint
+            self.closeButton.accessibilityTraits = closeResolved.traits
+            
             if let image = self.closeButtonIconView.image {
                 let closeButtonCollapsedFrame = CGRect(origin: CGPoint(x: contentFrame.minX + headerRightOffset - 50.0, y: component.containerInsets.top + 2.0), size: CGSize(width: 50.0, height: 64.0))
                 let closeButtonExpandedFrame = CGRect(origin: CGPoint(x: contentFrame.minX + headerRightOffset - 50.0, y: component.containerInsets.top - 15.0), size: CGSize(width: 50.0, height: 64.0))
