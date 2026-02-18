@@ -25,6 +25,7 @@ swift_library(
         "//submodules/ListMessageItem",
         "//submodules/TelegramPresentationData",
         "//submodules/TelegramUI/Components/ActionPanelComponent",
+        "//submodules/TelegramUI/Components/ChatList/ChatListFilterTabContainerNode",
         "//submodules/TelegramUI/Components/ChatListHeaderComponent",
         "//submodules/TelegramUI/Components/HorizontalTabsComponent",
         "//submodules/TelegramUI/Components/MoreHeaderButton",

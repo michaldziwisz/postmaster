@@ -232,19 +232,16 @@ private final class ItemNode: ASDisplayNode {
             self.unreadCount = unreadCount
         }
         
-        self.buttonNode.accessibilityLabel = title.text
-        if unreadCount > 0 {
-            if self.buttonNode.accessibilityValue == nil || unreadCountUpdated {
-                self.buttonNode.accessibilityValue = strings.VoiceOver_Chat_UnreadMessages(Int32(unreadCount))
-            }
-        } else {
-            self.buttonNode.accessibilityValue = ""
-        }
-        if selectionFraction == 1.0 {
-            self.buttonNode.accessibilityTraits = [.button, .selected]
-        } else {
-            self.buttonNode.accessibilityTraits = [.button]
-        }
+        let voiceOver = ChatListFilterTabItemVoiceOver.resolve(
+            strings: strings,
+            title: title.text,
+            unreadCount: unreadCount,
+            isSelected: selectionFraction == 1.0,
+            isEnabled: !isEditing && !isReordering
+        )
+        self.buttonNode.accessibilityLabel = voiceOver.label
+        self.buttonNode.accessibilityValue = voiceOver.value
+        self.buttonNode.accessibilityTraits = voiceOver.traits
         
         self.containerNode.isGestureEnabled = !isEditing && !isReordering
         self.buttonNode.isUserInteractionEnabled = !isEditing && !isReordering
@@ -263,6 +260,14 @@ private final class ItemNode: ASDisplayNode {
                     deleteButtonNode.layer.animateScale(from: 0.1, to: 1.0, duration: 0.25)
                     deleteButtonNode.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.25)
                 }
+            }
+            if let deleteButtonNode = self.deleteButtonNode {
+                let deleteAccessibility = ChatListFilterTabDeleteButtonVoiceOver.resolve(strings: strings, tabTitle: title.text)
+                deleteButtonNode.isAccessibilityElement = true
+                deleteButtonNode.accessibilityLabel = deleteAccessibility.label
+                deleteButtonNode.accessibilityValue = deleteAccessibility.value
+                deleteButtonNode.accessibilityHint = deleteAccessibility.hint
+                deleteButtonNode.accessibilityTraits = deleteAccessibility.traits
             }
         } else if let deleteButtonNode = self.deleteButtonNode {
             self.deleteButtonNode = nil
