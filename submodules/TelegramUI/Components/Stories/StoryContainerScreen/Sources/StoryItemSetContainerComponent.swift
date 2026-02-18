@@ -4171,6 +4171,26 @@ public final class StoryItemSetContainerComponent: Component {
                 if soundButtonView.superview == nil {
                     self.controlsClippingView.addSubview(soundButtonView)
                 }
+                
+                let soundResolved = StoryItemSetContainerSoundButtonVoiceOver.resolve(
+                    strings: component.strings,
+                    isVideo: isVideo,
+                    isSilentVideo: isSilentVideo,
+                    isMuted: component.isAudioMuted
+                )
+                if let soundResolved {
+                    soundButtonView.isAccessibilityElement = true
+                    soundButtonView.accessibilityLabel = soundResolved.label
+                    soundButtonView.accessibilityValue = soundResolved.value
+                    soundButtonView.accessibilityHint = soundResolved.hint
+                    soundButtonView.accessibilityTraits = soundResolved.traits
+                } else {
+                    soundButtonView.isAccessibilityElement = false
+                    soundButtonView.accessibilityLabel = nil
+                    soundButtonView.accessibilityValue = nil
+                    soundButtonView.accessibilityHint = nil
+                }
+                
                 transition.setFrame(view: soundButtonView, frame: CGRect(origin: CGPoint(x: headerRightOffset - soundButtonSize.width, y: 2.0), size: soundButtonSize))
                 transition.setAlpha(view: soundButtonView, alpha: soundAlpha)
                 
