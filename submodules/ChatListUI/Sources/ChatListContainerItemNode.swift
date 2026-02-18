@@ -341,7 +341,8 @@ final class ChatListContainerItemNode: ASDisplayNode {
                             return
                         }
                         let _ = self.context.engine.peers.hideChatFolderUpdates(folderId: chatFolderUpdates.folderId).startStandalone()
-                    }
+                    },
+                    dismissAccessibilityLabel: self.presentationData.strings.Common_Close
                 )),
                 environment: {},
                 containerSize: CGSize(width: size.width, height: topPanelHeight)
@@ -407,7 +408,8 @@ final class ChatListContainerItemNode: ASDisplayNode {
                             return
                         }
                         let _ = self.context.engine.peers.dismissPeerStatusOptions(peerId: peerId).startStandalone()
-                    }
+                    },
+                    dismissAccessibilityLabel: self.presentationData.strings.Common_Close
                 )),
                 environment: {},
                 containerSize: CGSize(width: size.width, height: topPanelHeight)

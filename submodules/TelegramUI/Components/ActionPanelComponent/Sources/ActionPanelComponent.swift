@@ -17,19 +17,22 @@ public final class ActionPanelComponent: Component {
     public let color: Color
     public let action: () -> Void
     public let dismissAction: () -> Void
+    public let dismissAccessibilityLabel: String?
     
     public init(
         theme: PresentationTheme,
         title: String,
         color: Color,
         action: @escaping () -> Void,
-        dismissAction: @escaping () -> Void
+        dismissAction: @escaping () -> Void,
+        dismissAccessibilityLabel: String? = nil
     ) {
         self.theme = theme
         self.title = title
         self.color = color
         self.action = action
         self.dismissAction = dismissAction
+        self.dismissAccessibilityLabel = dismissAccessibilityLabel
     }
     
     public static func ==(lhs: ActionPanelComponent, rhs: ActionPanelComponent) -> Bool {
@@ -42,10 +45,22 @@ public final class ActionPanelComponent: Component {
         if lhs.color != rhs.color {
             return false
         }
+        if lhs.dismissAccessibilityLabel != rhs.dismissAccessibilityLabel {
+            return false
+        }
         return true
     }
     
     public final class View: HighlightTrackingButton {
+        private final class AccessibilityActivationButton: UIButton {
+            var activationAction: (() -> Void)?
+            
+            override func accessibilityActivate() -> Bool {
+                self.activationAction?()
+                return true
+            }
+        }
+        
         private let backgroundView: BlurredBackgroundView
         private let separatorLayer: SimpleLayer
         
@@ -54,6 +69,9 @@ public final class ActionPanelComponent: Component {
         
         private let dismissButton: HighlightTrackingButton
         private let dismissIconView: UIImageView
+        
+        private let actionAccessibilityButton: AccessibilityActivationButton
+        private let dismissAccessibilityButton: AccessibilityActivationButton
         
         private var component: ActionPanelComponent?
         
@@ -64,11 +82,17 @@ public final class ActionPanelComponent: Component {
             self.separatorLayer = SimpleLayer()
             self.contentView = UIView()
             self.contentView.isUserInteractionEnabled = false
+            self.contentView.accessibilityElementsHidden = true
             
             self.dismissButton = HighlightTrackingButton()
             self.dismissIconView = UIImageView()
             
+            self.actionAccessibilityButton = AccessibilityActivationButton()
+            self.dismissAccessibilityButton = AccessibilityActivationButton()
+            
             super.init(frame: frame)
+            
+            self.isAccessibilityElement = false
             
             self.addSubview(self.backgroundView)
             self.layer.addSublayer(self.separatorLayer)
@@ -76,6 +100,20 @@ public final class ActionPanelComponent: Component {
             
             self.dismissButton.addSubview(self.dismissIconView)
             self.addSubview(self.dismissButton)
+            self.dismissButton.isAccessibilityElement = false
+            self.dismissButton.accessibilityElementsHidden = true
+            
+            self.actionAccessibilityButton.backgroundColor = .clear
+            self.actionAccessibilityButton.isUserInteractionEnabled = false
+            self.actionAccessibilityButton.isAccessibilityElement = true
+            self.actionAccessibilityButton.accessibilityTraits = [.button]
+            self.addSubview(self.actionAccessibilityButton)
+            
+            self.dismissAccessibilityButton.backgroundColor = .clear
+            self.dismissAccessibilityButton.isUserInteractionEnabled = false
+            self.dismissAccessibilityButton.isAccessibilityElement = true
+            self.dismissAccessibilityButton.accessibilityTraits = [.button]
+            self.addSubview(self.dismissAccessibilityButton)
             
             self.highligthedChanged = { [weak self] highlighted in
                 if let self {
@@ -130,6 +168,7 @@ public final class ActionPanelComponent: Component {
             let themeUpdated = self.component?.theme !== component.theme
             
             self.component = component
+            self.isAccessibilityElement = false
             
             if themeUpdated {
                 self.backgroundView.updateColor(color: component.theme.rootController.navigationBar.blurredBackgroundColor, transition: .immediate)
@@ -146,6 +185,11 @@ public final class ActionPanelComponent: Component {
             transition.setFrame(view: self.contentView, frame: CGRect(origin: CGPoint(), size: availableSize))
             
             let rightInset: CGFloat = 44.0
+            let actionAccessibilityWidth = max(0.0, availableSize.width - rightInset)
+            
+            self.actionAccessibilityButton.accessibilityLabel = component.title
+            self.actionAccessibilityButton.activationAction = component.action
+            transition.setFrame(view: self.actionAccessibilityButton, frame: CGRect(origin: CGPoint(), size: CGSize(width: actionAccessibilityWidth, height: availableSize.height)))
             
             let resolvedColor: UIColor
             switch component.color {
@@ -173,6 +217,9 @@ public final class ActionPanelComponent: Component {
             
             let dismissButtonFrame = CGRect(origin: CGPoint(x: availableSize.width - rightInset, y: 0.0), size: CGSize(width: rightInset, height: availableSize.height))
             transition.setFrame(view: self.dismissButton, frame: dismissButtonFrame)
+            self.dismissAccessibilityButton.accessibilityLabel = component.dismissAccessibilityLabel ?? "Close"
+            self.dismissAccessibilityButton.activationAction = component.dismissAction
+            transition.setFrame(view: self.dismissAccessibilityButton, frame: dismissButtonFrame)
             if let iconImage = self.dismissIconView.image {
                 transition.setFrame(view: self.dismissIconView, frame: CGRect(origin: CGPoint(x: floor((dismissButtonFrame.width - iconImage.size.width) * 0.5), y: floor((dismissButtonFrame.height - iconImage.size.height) * 0.5)), size: iconImage.size))
             }
