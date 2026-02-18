@@ -327,6 +327,7 @@ public final class StorySetIndicatorComponent: Component {
         
         override init(frame: CGRect) {
             self.button = HighlightTrackingButton()
+            self.button.accessibilityElementsHidden = true
             
             self.imageView = ShapeImageView(frame: CGRect())
             self.imageView.isUserInteractionEnabled = false
@@ -443,6 +444,13 @@ public final class StorySetIndicatorComponent: Component {
             } else {
                 textValue = component.strings.Profile_AvatarStoryCount(Int32(component.totalCount))
             }
+
+            let voiceOverResolved = StorySetIndicatorVoiceOver.resolve(strings: component.strings, totalCount: component.totalCount)
+            self.button.isAccessibilityElement = true
+            self.button.accessibilityLabel = voiceOverResolved.label
+            self.button.accessibilityHint = voiceOverResolved.hint
+            self.button.accessibilityTraits = voiceOverResolved.traits
+
             let textSize = self.text.update(
                 transition: .immediate,
                 component: AnyComponent(Text(text: textValue, font: Font.semibold(17.0), color: .white)),
