@@ -728,6 +728,8 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         
         self.viewOnceButton = ChatRecordingViewOnceButtonNode(icon: .viewOnce)
         self.recordMoreButton = ChatRecordingViewOnceButtonNode(icon: .recordMore)
+        self.viewOnceButton.isAccessibilityElement = false
+        self.recordMoreButton.isAccessibilityElement = false
         
         super.init()
         
@@ -3501,6 +3503,40 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         
         transition.updateAlpha(node: self.recordMoreButton, alpha: recordMoreIsVisible ? 1.0 : 0.0)
         transition.updateTransformScale(node: self.recordMoreButton, scale: recordMoreIsVisible ? 1.0 : 0.01)
+        
+        let isViewOnceVisibleForVoiceOver = viewOnceIsVisible && !self.viewOnceButton.isHidden && !self.viewOnceButton.alpha.isZero
+        if isViewOnceVisibleForVoiceOver {
+            let resolved = ChatTextInputPanelViewOnceButtonVoiceOver.resolve(
+                strings: interfaceState.strings,
+                isSelected: self.viewOnce,
+                isEnabled: true
+            )
+            self.viewOnceButton.isAccessibilityElement = true
+            self.viewOnceButton.accessibilityLabel = resolved.label
+            self.viewOnceButton.accessibilityValue = resolved.value
+            self.viewOnceButton.accessibilityHint = resolved.hint
+            self.viewOnceButton.accessibilityTraits = resolved.traits
+        } else {
+            self.viewOnceButton.isAccessibilityElement = false
+            self.viewOnceButton.accessibilityLabel = nil
+            self.viewOnceButton.accessibilityValue = nil
+            self.viewOnceButton.accessibilityHint = nil
+            self.viewOnceButton.accessibilityTraits = []
+        }
+        
+        let isRecordMoreVisibleForVoiceOver = recordMoreIsVisible && !self.recordMoreButton.alpha.isZero
+        if isRecordMoreVisibleForVoiceOver {
+            let resolved = ChatTextInputPanelRecordMoreButtonVoiceOver.resolve(strings: interfaceState.strings, isEnabled: true)
+            self.recordMoreButton.isAccessibilityElement = true
+            self.recordMoreButton.accessibilityLabel = resolved.label
+            self.recordMoreButton.accessibilityHint = resolved.hint
+            self.recordMoreButton.accessibilityTraits = resolved.traits
+        } else {
+            self.recordMoreButton.isAccessibilityElement = false
+            self.recordMoreButton.accessibilityLabel = nil
+            self.recordMoreButton.accessibilityHint = nil
+            self.recordMoreButton.accessibilityTraits = []
+        }
         
         let contextPanelMaskInset: CGFloat = 32.0
         let contextPanelBottomInset = floor(minimalInputHeight * 0.5)

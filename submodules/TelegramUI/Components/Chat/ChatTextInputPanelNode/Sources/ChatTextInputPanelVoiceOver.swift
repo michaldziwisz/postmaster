@@ -66,8 +66,63 @@ public enum ChatTextInputPanelBoostToUnrestrictButtonVoiceOver {
             self.hint = hint
             self.traits = traits
         }
+}
+
+public enum ChatTextInputPanelViewOnceButtonVoiceOver {
+    public struct Resolved: Equatable {
+        public let label: String
+        public let value: String?
+        public let hint: String?
+        public let traits: UIAccessibilityTraits
+        
+        public init(label: String, value: String?, hint: String?, traits: UIAccessibilityTraits) {
+            self.label = label
+            self.value = value
+            self.hint = hint
+            self.traits = traits
+        }
     }
     
+    public static func resolve(strings: PresentationStrings, isSelected: Bool, isEnabled: Bool) -> Resolved {
+        var traits: UIAccessibilityTraits = [.button]
+        if isSelected {
+            traits.insert(.selected)
+        }
+        if !isEnabled {
+            traits.insert(.notEnabled)
+        }
+        
+        return Resolved(
+            label: strings.MediaPicker_Timer_ViewOnce,
+            value: nil,
+            hint: strings.Chat_PlayVoiceMessageOnceTooltip,
+            traits: traits
+        )
+    }
+}
+
+public enum ChatTextInputPanelRecordMoreButtonVoiceOver {
+    public struct Resolved: Equatable {
+        public let label: String
+        public let hint: String?
+        public let traits: UIAccessibilityTraits
+        
+        public init(label: String, hint: String?, traits: UIAccessibilityTraits) {
+            self.label = label
+            self.hint = hint
+            self.traits = traits
+        }
+    }
+    
+    public static func resolve(strings: PresentationStrings, isEnabled: Bool) -> Resolved {
+        var traits: UIAccessibilityTraits = [.button]
+        if !isEnabled {
+            traits.insert(.notEnabled)
+        }
+        return Resolved(label: strings.VoiceOver_Chat_RecordModeVoiceMessage, hint: nil, traits: traits)
+    }
+}
+
     public static func resolve(
         strings: PresentationStrings,
         slowmodeState: ChatSlowmodeState?,

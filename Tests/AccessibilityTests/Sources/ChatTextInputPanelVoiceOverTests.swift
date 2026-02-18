@@ -61,4 +61,29 @@ final class ChatTextInputPanelVoiceOverTests: XCTestCase {
         )
         XCTAssertEqual(resolved.value, defaultPresentationStrings.Chat_SlowmodeTooltipPending)
     }
+    
+    func testViewOnceButtonResolvesLabelHintAndSelectedTrait() {
+        let resolved = ChatTextInputPanelViewOnceButtonVoiceOver.resolve(
+            strings: defaultPresentationStrings,
+            isSelected: true,
+            isEnabled: true
+        )
+        XCTAssertEqual(resolved.label, defaultPresentationStrings.MediaPicker_Timer_ViewOnce)
+        XCTAssertNil(resolved.value)
+        XCTAssertEqual(resolved.hint, defaultPresentationStrings.Chat_PlayVoiceMessageOnceTooltip)
+        XCTAssertTrue(resolved.traits.contains(.button))
+        XCTAssertTrue(resolved.traits.contains(.selected))
+        XCTAssertFalse(resolved.traits.contains(.notEnabled))
+    }
+    
+    func testRecordMoreButtonResolvesVoiceMessageLabel() {
+        let resolved = ChatTextInputPanelRecordMoreButtonVoiceOver.resolve(
+            strings: defaultPresentationStrings,
+            isEnabled: true
+        )
+        XCTAssertEqual(resolved.label, defaultPresentationStrings.VoiceOver_Chat_RecordModeVoiceMessage)
+        XCTAssertNil(resolved.hint)
+        XCTAssertTrue(resolved.traits.contains(.button))
+        XCTAssertFalse(resolved.traits.contains(.notEnabled))
+    }
 }
