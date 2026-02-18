@@ -1040,6 +1040,16 @@ public final class StoryFooterPanelComponent: Component {
                 if deleteButtonView.superview == nil {
                     self.addSubview(deleteButtonView)
                 }
+                
+                let deleteResolved = StoryFooterPanelDeleteButtonVoiceOver.resolve(
+                    strings: component.strings,
+                    isPending: component.storyItem.isPending
+                )
+                deleteButtonView.isAccessibilityElement = true
+                deleteButtonView.accessibilityLabel = deleteResolved.label
+                deleteButtonView.accessibilityHint = deleteResolved.hint
+                deleteButtonView.accessibilityTraits = deleteResolved.traits
+                
                 var deleteButtonFrame = CGRect(origin: CGPoint(x: rightContentOffset - deleteButtonSize.width, y: floor((size.height - deleteButtonSize.height) * 0.5)), size: deleteButtonSize)
                 deleteButtonFrame.origin.y += component.expandFraction * 45.0
                 transition.setPosition(view: deleteButtonView, position: deleteButtonFrame.center)
