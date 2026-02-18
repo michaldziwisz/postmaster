@@ -309,6 +309,18 @@ public final class MediaPlayerScrubbingNode: ASDisplayNode {
     private var scrubbingBeginTimestamp: Double?
     private var scrubbingTimestampValue: Double?
     
+    private let accessibilityArea: AccessibilityAreaNode = AccessibilityAreaNode()
+    public var voiceOverLabel: String = "Timeline" {
+        didSet {
+            self.updateAccessibility()
+        }
+    }
+    public var voiceOverHint: String? {
+        didSet {
+            self.updateAccessibility()
+        }
+    }
+    
     public var playbackStatusUpdated: ((MediaPlayerPlaybackStatus?) -> Void)?
     public var playerStatusUpdated: ((MediaPlayerStatus?) -> Void)?
     public var seek: ((Double) -> Void)?
@@ -338,6 +350,7 @@ public final class MediaPlayerScrubbingNode: ASDisplayNode {
                 case let .custom(node):
                     node.handleNodeContainer?.isUserInteractionEnabled = self.enableScrubbing
             }
+            self.updateAccessibility()
         }
     }
     
@@ -385,6 +398,7 @@ public final class MediaPlayerScrubbingNode: ASDisplayNode {
                     }
                     
                     self.playerStatusUpdated?(value)
+                    self.updateAccessibility()
                 }
             }
         }
@@ -528,6 +542,13 @@ public final class MediaPlayerScrubbingNode: ASDisplayNode {
         
         super.init()
         
+        self.accessibilityArea.increment = { [weak self] in
+            self?.accessibilitySeek(direction: 1)
+        }
+        self.accessibilityArea.decrement = { [weak self] in
+            self?.accessibilitySeek(direction: -1)
+        }
+        
         self.setupContentNodes()
         
         self.statusDisposable = (self.statusValuePromise.get()
@@ -558,11 +579,19 @@ public final class MediaPlayerScrubbingNode: ASDisplayNode {
         self.bufferingStatusDisposable?.dispose()
     }
     
+    override public func layout() {
+        super.layout()
+        self.accessibilityArea.frame = self.bounds
+    }
+    
     private func setupContentNodes() {
         if let subnodes = self.subnodes {
-            for subnode in subnodes {
+            for subnode in subnodes where subnode !== self.accessibilityArea {
                 subnode.removeFromSupernode()
             }
+        }
+        if self.accessibilityArea.supernode == nil {
+            self.addSubnode(self.accessibilityArea)
         }
         
         switch self.contentNodes {
@@ -776,6 +805,81 @@ public final class MediaPlayerScrubbingNode: ASDisplayNode {
     
     public func update(size: CGSize, animator: ControlledTransitionAnimator) {
         self.updateProgressAnimations(animator: animator)
+    }
+    
+    private func updateAccessibility() {
+        guard let statusValue = self.statusValue, Double(0.0).isLess(than: statusValue.duration) else {
+            self.accessibilityArea.isAccessibilityElement = false
+            self.accessibilityArea.accessibilityLabel = nil
+            self.accessibilityArea.accessibilityValue = nil
+            self.accessibilityArea.accessibilityHint = nil
+            self.accessibilityArea.accessibilityTraits = []
+            return
+        }
+        
+        var timestamp = statusValue.timestamp
+        if let scrubbingTimestampValue = self.scrubbingTimestampValue {
+            timestamp = scrubbingTimestampValue
+        } else if statusValue.generationTimestamp > 0 && statusValue.status == .playing {
+            let currentTimestamp = CACurrentMediaTime()
+            timestamp = timestamp + (currentTimestamp - statusValue.generationTimestamp) * statusValue.baseRate
+        }
+        
+        let isPlaying: Bool
+        switch statusValue.status {
+        case .playing:
+            isPlaying = true
+        default:
+            isPlaying = false
+        }
+        
+        let resolved = MediaPlayerScrubbingNodeVoiceOver.resolve(
+            label: self.voiceOverLabel,
+            timestamp: timestamp,
+            duration: statusValue.duration,
+            isEnabled: self.enableScrubbing,
+            isPlaying: isPlaying
+        )
+        
+        self.accessibilityArea.isAccessibilityElement = true
+        self.accessibilityArea.accessibilityLabel = resolved.label
+        self.accessibilityArea.accessibilityValue = resolved.value
+        self.accessibilityArea.accessibilityHint = self.voiceOverHint ?? resolved.hint
+        self.accessibilityArea.accessibilityTraits = resolved.traits
+    }
+    
+    private func accessibilitySeek(direction: Int) {
+        guard self.enableScrubbing, let statusValue = self.statusValue, Double(0.0).isLess(than: statusValue.duration) else {
+            return
+        }
+        
+        var timestamp = statusValue.timestamp
+        if let scrubbingTimestampValue = self.scrubbingTimestampValue {
+            timestamp = scrubbingTimestampValue
+        } else if statusValue.generationTimestamp > 0 && statusValue.status == .playing {
+            let currentTimestamp = CACurrentMediaTime()
+            timestamp = timestamp + (currentTimestamp - statusValue.generationTimestamp) * statusValue.baseRate
+        }
+        
+        let step = MediaPlayerScrubbingNodeVoiceOver.seekStep(duration: statusValue.duration)
+        let updatedTimestamp = MediaPlayerScrubbingNodeVoiceOver.adjustedTimestamp(
+            timestamp: timestamp,
+            duration: statusValue.duration,
+            step: step,
+            direction: direction
+        )
+        
+        let resolved = MediaPlayerScrubbingNodeVoiceOver.resolve(
+            label: self.voiceOverLabel,
+            timestamp: updatedTimestamp,
+            duration: statusValue.duration,
+            isEnabled: true,
+            isPlaying: statusValue.status == .playing
+        )
+        self.accessibilityArea.accessibilityValue = resolved.value
+        
+        self.animateTo(updatedTimestamp)
+        self.seek?(updatedTimestamp)
     }
     
     public func updateColors(backgroundColor: UIColor, foregroundColor: UIColor) {
@@ -1089,6 +1193,8 @@ public final class MediaPlayerScrubbingNode: ASDisplayNode {
                     node.foregroundNode.frame = CGRect(origin: backgroundFrame.origin, size: CGSize(width: 0.0, height: backgroundFrame.size.height))
                 }
         }
+        
+        self.updateAccessibility()
     }
     
     override public func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {

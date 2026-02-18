@@ -405,6 +405,7 @@ public final class ChatRecordingPreviewInputPanelNodeImpl: ChatInputPanelNode {
             }
             if self.presentationInterfaceState?.strings !== interfaceState.strings {
                 self.waveformButton.accessibilityLabel = interfaceState.strings.VoiceOver_Chat_RecordPreviewVoiceMessage
+                self.waveformScrubberNodeImpl.voiceOverLabel = interfaceState.strings.MediaEditor_Timeline
                 
                 let resolved = ChatRecordingPreviewPlayButtonVoiceOver.resolve(strings: interfaceState.strings, isPlaying: self.statusValue != nil)
                 self.playButtonNodeImpl.playButton.accessibilityLabel = resolved.label

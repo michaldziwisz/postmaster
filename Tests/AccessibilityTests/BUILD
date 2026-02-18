@@ -27,6 +27,7 @@ swift_library(
         "//submodules/ContactListUI",
         "//submodules/HorizontalPeerItem",
         "//submodules/ListMessageItem",
+        "//submodules/MediaPlayer:UniversalMediaPlayer",
         "//submodules/TelegramPresentationData",
         "//submodules/TelegramUI/Components/ActionPanelComponent",
         "//submodules/TelegramUI/Components/ChatList/ChatListFilterTabContainerNode",
