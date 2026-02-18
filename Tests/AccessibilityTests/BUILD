@@ -25,6 +25,7 @@ swift_library(
         "//submodules/TelegramUI/Components/MediaScrubberComponent",
         "//submodules/ContactsPeerItem",
         "//submodules/ContactListUI",
+        "//submodules/ComposePollUI",
         "//submodules/HorizontalPeerItem",
         "//submodules/CountrySelectionUI",
         "//submodules/ListMessageItem",

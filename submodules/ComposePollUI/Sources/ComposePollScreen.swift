@@ -1647,6 +1647,7 @@ final class ComposePollScreenComponent: Component {
             }
             
             let barButtonSize = CGSize(width: 44.0, height: 44.0)
+            let cancelAccessibility = ComposePollNavigationButtonsVoiceOver.resolveClose(strings: environment.strings)
             let cancelButtonSize = self.cancelButton.update(
                 transition: transition,
                 component: AnyComponent(GlassBarButtonComponent(
@@ -1665,7 +1666,9 @@ final class ComposePollScreenComponent: Component {
                             return
                         }
                         controller.dismiss()
-                    }
+                    },
+                    accessibilityLabel: cancelAccessibility.label,
+                    accessibilityHint: cancelAccessibility.hint
                 )),
                 environment: {},
                 containerSize: barButtonSize
@@ -1679,6 +1682,7 @@ final class ComposePollScreenComponent: Component {
             }
             
             let isValid = self.validatedInput() != nil
+            let doneAccessibility = ComposePollNavigationButtonsVoiceOver.resolveDone(strings: environment.strings)
             let doneButtonSize = self.doneButton.update(
                 transition: transition,
                 component: AnyComponent(GlassBarButtonComponent(
@@ -1701,7 +1705,9 @@ final class ComposePollScreenComponent: Component {
                             controller.completion(input)
                         }
                         controller.dismiss()
-                    }
+                    },
+                    accessibilityLabel: doneAccessibility.label,
+                    accessibilityHint: doneAccessibility.hint
                 )),
                 environment: {},
                 containerSize: barButtonSize
