@@ -23,6 +23,7 @@ swift_library(
         "//submodules/TelegramUIPreferences:TelegramUIPreferences",
         "//submodules/ListSectionHeaderNode:ListSectionHeaderNode",
         "//submodules/TelegramStringFormatting:TelegramStringFormatting",
+        "//submodules/LocalizedPeerData:LocalizedPeerData",
         "//submodules/UrlHandling:UrlHandling",
         "//submodules/UrlWhitelist:UrlWhitelist",
         "//submodules/WebsiteType:WebsiteType",

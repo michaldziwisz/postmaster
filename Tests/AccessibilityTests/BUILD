@@ -13,6 +13,7 @@ swift_library(
         "//submodules/ChatListUI",
         "//submodules/ContactsPeerItem",
         "//submodules/HorizontalPeerItem",
+        "//submodules/ListMessageItem",
         "//submodules/TelegramPresentationData",
         "//submodules/TelegramUI/Components/ActionPanelComponent",
         "//submodules/TelegramUI/Components/ChatListHeaderComponent",

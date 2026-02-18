@@ -11,6 +11,7 @@ import PresentationDataUtils
 import AccountContext
 import TelegramStringFormatting
 import AccountContext
+import LocalizedPeerData
 import RadialStatusNode
 import SemanticStatusNode
 import PhotoResources
