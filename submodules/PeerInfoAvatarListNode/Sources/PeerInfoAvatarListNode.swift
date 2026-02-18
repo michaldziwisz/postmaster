@@ -849,6 +849,8 @@ public final class PeerInfoAvatarListContainerNode: ASDisplayNode {
     private let context: AccountContext
     private let isSettings: Bool
     public var peer: EnginePeer?
+
+    private let voiceOverArea: AccessibilityAreaNode
     
     public let controlsContainerNode: ASDisplayNode
     public let controlsClippingNode: ASDisplayNode
@@ -993,6 +995,8 @@ public final class PeerInfoAvatarListContainerNode: ASDisplayNode {
     public init(context: AccountContext, isSettings: Bool = false) {
         self.context = context
         self.isSettings = isSettings
+
+        self.voiceOverArea = AccessibilityAreaNode()
         
         self.contentNode = AvatarListContentNode()
         
@@ -1111,6 +1115,17 @@ public final class PeerInfoAvatarListContainerNode: ASDisplayNode {
         super.init()
         
         //self.backgroundColor = .black
+
+        self.addSubnode(self.voiceOverArea)
+        self.voiceOverArea.activate = {
+            return false
+        }
+        self.voiceOverArea.increment = { [weak self] in
+            self?.voiceOverIncrement()
+        }
+        self.voiceOverArea.decrement = { [weak self] in
+            self?.voiceOverDecrement()
+        }
         
         self.addSubnode(self.contentNode)
         
@@ -1181,6 +1196,45 @@ public final class PeerInfoAvatarListContainerNode: ASDisplayNode {
             }
         }
         self.view.addGestureRecognizer(recognizer)
+    }
+
+    private func updateVoiceOver() {
+        let strings = self.context.sharedContext.currentPresentationData.with { $0 }.strings
+        let resolved = PeerInfoAvatarListContainerVoiceOver.resolve(strings: strings, index: self.currentIndex, count: self.items.count)
+        self.voiceOverArea.accessibilityLabel = resolved.label
+        self.voiceOverArea.accessibilityValue = resolved.value
+        self.voiceOverArea.accessibilityHint = resolved.hint
+        self.voiceOverArea.accessibilityTraits = resolved.traits
+    }
+
+    private func voiceOverIncrement() {
+        guard self.items.count > 1 else {
+            return
+        }
+
+        let previousIndex = self.currentIndex
+        self.currentIndex = min(self.currentIndex + 1, self.items.count - 1)
+        if self.currentIndex != previousIndex {
+            self.currentIndexUpdated?()
+        }
+        if let size = self.validLayout {
+            self.updateItems(size: size, transition: .immediate, stripTransition: .immediate, synchronous: true)
+        }
+    }
+
+    private func voiceOverDecrement() {
+        guard self.items.count > 1 else {
+            return
+        }
+
+        let previousIndex = self.currentIndex
+        self.currentIndex = max(0, self.currentIndex - 1)
+        if self.currentIndex != previousIndex {
+            self.currentIndexUpdated?()
+        }
+        if let size = self.validLayout {
+            self.updateItems(size: size, transition: .immediate, stripTransition: .immediate, synchronous: true)
+        }
     }
     
     deinit {
@@ -1445,6 +1499,7 @@ public final class PeerInfoAvatarListContainerNode: ASDisplayNode {
     private var additionalEntryProgress: Signal<Float?, NoError>? = nil
     public func update(size: CGSize, peer: EnginePeer?, customNode: ASDisplayNode? = nil, additionalEntry: Signal<(TelegramMediaImageRepresentation, Float)?, NoError> = .single(nil), isExpanded: Bool, transition: ContainedViewLayoutTransition) {
         self.validLayout = size
+        self.voiceOverArea.frame = CGRect(origin: CGPoint(), size: size)
         let previousExpanded = self.isExpanded
         self.isExpanded = isExpanded
         if !isExpanded && previousExpanded {
@@ -1750,6 +1805,8 @@ public final class PeerInfoAvatarListContainerNode: ASDisplayNode {
         }
         
         self.updateStrips(size: size, itemsAdded: itemsAdded, stripTransition: stripTransition)
+
+        self.updateVoiceOver()
         
         if let item = self.items.first, let itemNode = self.itemNodes[item.id] {
             if !self.didSetReady {

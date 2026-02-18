@@ -30,6 +30,7 @@ swift_library(
         "//submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen",
         "//submodules/TelegramUI/Components/Stories/StoryPeerListComponent",
         "//submodules/TelegramUI/Components/TabBarComponent",
+        "//submodules/PeerInfoAvatarListNode",
     ],
 )
 
