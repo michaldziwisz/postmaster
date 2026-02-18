@@ -1034,11 +1034,39 @@ private final class ItemComponent: Component {
             self.accessibilityLabel = label
             self.accessibilityValue = tab.badge?.title
             
-            var traits: UIAccessibilityTraits = [.button]
-            if isSelected {
-                traits.insert(.selected)
+            let strings = self.component?.context?.sharedContext.currentPresentationData.with { $0 }.strings ?? defaultPresentationStrings
+            let voiceOver = HorizontalTabsComponentTabVoiceOver.resolve(
+                strings: strings,
+                isSelected: isSelected,
+                hasContextAction: tab.contextAction != nil,
+                hasDeleteAction: tab.deleteAction != nil
+            )
+            self.accessibilityTraits = voiceOver.traits
+            
+            if voiceOver.customActions.isEmpty {
+                self.accessibilityCustomActions = nil
+            } else {
+                self.accessibilityCustomActions = voiceOver.customActions.compactMap { customAction in
+                    switch customAction {
+                    case let .more(name):
+                        return UIAccessibilityCustomAction(name: name, actionHandler: { [weak self] in
+                            guard let self, let component = self.component else {
+                                return false
+                            }
+                            component.tab.contextAction?(self.extractedContainerView, nil)
+                            return true
+                        })
+                    case let .delete(name):
+                        return UIAccessibilityCustomAction(name: name, actionHandler: { [weak self] in
+                            guard let self, let component = self.component else {
+                                return false
+                            }
+                            component.tab.deleteAction?()
+                            return true
+                        })
+                    }
+                }
             }
-            self.accessibilityTraits = traits
             
             self.accessibilityAction = action
         }

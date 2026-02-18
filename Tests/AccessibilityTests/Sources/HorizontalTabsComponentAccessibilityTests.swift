@@ -107,6 +107,65 @@ final class HorizontalTabsComponentAccessibilityTests: XCTestCase {
         let updatedUnreadElement = elements.first(where: { $0.accessibilityLabel == "Unread" })
         XCTAssertTrue(updatedUnreadElement?.accessibilityTraits.contains(.selected) ?? false)
     }
+
+    func testTabExposesMoreAndDeleteAsCustomActions() {
+        XCTAssertTrue(Thread.isMainThread)
+        
+        var didOpenMore = false
+        var didDelete = false
+        
+        let tabId = AnyHashable(0)
+        
+        let tabs: [HorizontalTabsComponent.Tab] = [
+            HorizontalTabsComponent.Tab(
+                id: tabId,
+                content: .title(.init(text: "Work", entities: [], enableAnimations: false)),
+                badge: nil,
+                action: {},
+                contextAction: { _, _ in didOpenMore = true },
+                deleteAction: { didDelete = true }
+            ),
+        ]
+        
+        let componentView = ComponentView<Empty>()
+        _ = componentView.update(
+            transition: .immediate,
+            component: AnyComponent(HorizontalTabsComponent(
+                context: nil,
+                theme: defaultPresentationTheme,
+                tabs: tabs,
+                selectedTab: tabId,
+                isEditing: true,
+                layout: .fit
+            )),
+            environment: {},
+            containerSize: CGSize(width: 320.0, height: 44.0)
+        )
+        
+        guard let tabsView = componentView.view as? HorizontalTabsComponent.View else {
+            XCTFail("Expected HorizontalTabsComponent.View")
+            return
+        }
+        
+        let elements = Self.collectAccessibilityElements(in: tabsView)
+        let workTab = elements.first(where: { $0.accessibilityLabel == "Work" })
+        XCTAssertNotNil(workTab)
+        
+        guard let customActions = workTab?.accessibilityCustomActions else {
+            XCTFail("Expected accessibilityCustomActions to be set")
+            return
+        }
+        
+        let moreAction = customActions.first(where: { $0.name == defaultPresentationStrings.Common_More })
+        XCTAssertNotNil(moreAction)
+        XCTAssertTrue(moreAction?.actionHandler?() ?? false)
+        XCTAssertTrue(didOpenMore)
+        
+        let deleteAction = customActions.first(where: { $0.name == defaultPresentationStrings.Common_Delete })
+        XCTAssertNotNil(deleteAction)
+        XCTAssertTrue(deleteAction?.actionHandler?() ?? false)
+        XCTAssertTrue(didDelete)
+    }
     
     private static func collectAccessibilityElements(in root: UIView) -> [UIView] {
         var result: [UIView] = []
@@ -131,4 +190,3 @@ final class HorizontalTabsComponentAccessibilityTests: XCTestCase {
         return result
     }
 }
-
