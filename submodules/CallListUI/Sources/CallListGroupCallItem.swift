@@ -444,8 +444,16 @@ class CallListGroupCallItemNode: ItemListRevealOptionsItemNode {
                             strongSelf.accessibilityArea.accessibilityTraits = .button
                             strongSelf.accessibilityArea.accessibilityLabel = titleAttributedString?.string
                             strongSelf.accessibilityArea.frame = CGRect(origin: CGPoint(), size: nodeLayout.contentSize)
-                            
-                            strongSelf.joinButtonNode.accessibilityLabel = item.presentationData.strings.VoiceChat_PanelJoin
+
+                            let joinResolved = CallListGroupCallJoinButtonVoiceOver.resolve(
+                                strings: item.presentationData.strings,
+                                isActive: item.isActive,
+                                isEditing: item.editing
+                            )
+                            strongSelf.joinButtonNode.isAccessibilityElement = joinResolved.isAccessibilityElement
+                            strongSelf.joinButtonNode.accessibilityLabel = joinResolved.label
+                            strongSelf.joinButtonNode.accessibilityHint = joinResolved.hint
+                            strongSelf.joinButtonNode.accessibilityTraits = joinResolved.traits
                         }
                     })
                 } else {
@@ -482,4 +490,3 @@ class CallListGroupCallItemNode: ItemListRevealOptionsItemNode {
         }
     }
 }
-
