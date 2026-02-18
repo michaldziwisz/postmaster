@@ -91,6 +91,45 @@ final class GlassBarButtonComponentAccessibilityTests: XCTestCase {
         XCTAssertTrue(buttonElement.accessibilityTraits.contains(.notEnabled))
     }
     
+    func testBarComponentHostNodePreservesAccessibility() {
+        XCTAssertTrue(Thread.isMainThread)
+        
+        var didActivate = false
+        
+        let buttonComponent = GlassBarButtonComponent(
+            size: CGSize(width: 44.0, height: 44.0),
+            backgroundColor: nil,
+            isDark: false,
+            state: .generic,
+            isEnabled: true,
+            isVisible: true,
+            animateScale: false,
+            component: AnyComponentWithIdentity(
+                id: "content",
+                component: AnyComponent(TestContentComponent())
+            ),
+            action: { _ in
+                didActivate = true
+            },
+            accessibilityLabel: "Close",
+            accessibilityHint: nil
+        )
+        
+        let hostNode = BarComponentHostNode(
+            component: AnyComponentWithIdentity(id: "close", component: AnyComponent(buttonComponent)),
+            size: CGSize(width: 44.0, height: 44.0)
+        )
+        
+        let hostView = hostNode.view
+        let elements = Self.collectAccessibilityElements(in: hostView)
+        XCTAssertEqual(elements.count, 1)
+        
+        let buttonElement = elements[0]
+        XCTAssertEqual(buttonElement.accessibilityLabel, "Close")
+        XCTAssertTrue(buttonElement.accessibilityActivate())
+        XCTAssertTrue(didActivate)
+    }
+    
     private static func collectAccessibilityElements(in root: UIView) -> [UIView] {
         var result: [UIView] = []
         
@@ -124,4 +163,3 @@ private struct TestContentComponent: Component {
         return CGSize(width: 1.0, height: 1.0)
     }
 }
-

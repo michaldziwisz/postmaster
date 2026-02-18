@@ -474,7 +474,9 @@ public func makeAttachmentFileControllerImpl(context: AccountContext, updatedPre
             )),
             action: { _ in
                 dismissImpl?()
-            }
+            },
+            accessibilityLabel: presentationData.strings.Common_Close,
+            accessibilityHint: nil
         )
         let closeButtonComponent = AnyComponentWithIdentity(id: "close", component: AnyComponent(closeButton))
         let closeButtonNode = existingCloseButton.modify { current in
@@ -508,7 +510,9 @@ public func makeAttachmentFileControllerImpl(context: AccountContext, updatedPre
                 }
                 updateTabBarVisibilityImpl?(false)
                 updateIsSearchingImpl?(true)
-            }
+            },
+            accessibilityLabel: presentationData.strings.Common_Search,
+            accessibilityHint: nil
         )
         let searchButtonComponent = state.searching ? nil : AnyComponentWithIdentity(id: "search", component: AnyComponent(searchButton))
         let searchButtonNode: BarComponentHostNode? = !state.searching ? existingSearchButton.modify { current in
