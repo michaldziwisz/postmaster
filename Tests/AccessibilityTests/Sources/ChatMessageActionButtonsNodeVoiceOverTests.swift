@@ -8,6 +8,7 @@ final class ChatMessageActionButtonsNodeVoiceOverTests: XCTestCase {
         let resolved = ChatMessageActionButtonsNodeVoiceOver.resolveButton(
             strings: defaultPresentationStrings,
             title: "  Hello  ",
+            kind: .standard,
             isEnabled: true
         )
         
@@ -21,6 +22,7 @@ final class ChatMessageActionButtonsNodeVoiceOverTests: XCTestCase {
         let resolved = ChatMessageActionButtonsNodeVoiceOver.resolveButton(
             strings: defaultPresentationStrings,
             title: "Test",
+            kind: .standard,
             isEnabled: false
         )
         
@@ -33,10 +35,23 @@ final class ChatMessageActionButtonsNodeVoiceOverTests: XCTestCase {
         let resolved = ChatMessageActionButtonsNodeVoiceOver.resolveButton(
             strings: defaultPresentationStrings,
             title: "   ",
+            kind: .standard,
             isEnabled: true
         )
         
         XCTAssertEqual(resolved.label, defaultPresentationStrings.Common_OK)
     }
+    
+    func testResolveButtonOpenLinkAddsHintAndLinkTrait() {
+        let resolved = ChatMessageActionButtonsNodeVoiceOver.resolveButton(
+            strings: defaultPresentationStrings,
+            title: "Open",
+            kind: .openLink,
+            isEnabled: true
+        )
+        
+        XCTAssertEqual(resolved.hint, defaultPresentationStrings.VoiceOver_Chat_OpenLinkHint)
+        XCTAssertTrue(resolved.traits.contains(.link))
+        XCTAssertTrue(resolved.traits.contains(.button))
+    }
 }
-

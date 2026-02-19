@@ -2,7 +2,7 @@ import Foundation
 import TelegramPresentationData
 import UIKit
 
-public enum ChatMessageActionButtonsNodeVoiceOver {
+public enum ChatButtonKeyboardInputNodeVoiceOver {
     public enum Kind: Equatable {
         case standard
         case openLink
@@ -49,3 +49,4 @@ public enum ChatMessageActionButtonsNodeVoiceOver {
         return isEnabled
     }
 }
+

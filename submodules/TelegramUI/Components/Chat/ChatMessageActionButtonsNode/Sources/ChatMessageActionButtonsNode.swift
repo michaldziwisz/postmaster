@@ -601,7 +601,15 @@ private final class ChatMessageActionButtonNode: ASDisplayNode {
                     let isEnabled = customInfo?.isEnabled ?? true
                     node.isEnabledForVoiceOver = isEnabled
                     
-                    let resolved = ChatMessageActionButtonsNodeVoiceOver.resolveButton(strings: strings, title: title, isEnabled: isEnabled)
+                    let kind: ChatMessageActionButtonsNodeVoiceOver.Kind
+                    switch button.action {
+                    case .url, .urlAuth, .openWebView:
+                        kind = .openLink
+                    default:
+                        kind = .standard
+                    }
+                    
+                    let resolved = ChatMessageActionButtonsNodeVoiceOver.resolveButton(strings: strings, title: title, kind: kind, isEnabled: isEnabled)
                     node.accessibilityArea.accessibilityLabel = resolved.label
                     node.accessibilityArea.accessibilityValue = resolved.value
                     node.accessibilityArea.accessibilityHint = resolved.hint

@@ -68,7 +68,7 @@ private final class ChatButtonKeyboardInputButtonNode: HighlightTrackingButtonNo
         }
     }
     
-    func update(context: AccountContext, size: CGSize, theme: PresentationTheme, wallpaperBackgroundNode: WallpaperBackgroundNode?, button: ReplyMarkupButton, message: EngineMessage) {
+    func update(context: AccountContext, size: CGSize, strings: PresentationStrings, theme: PresentationTheme, wallpaperBackgroundNode: WallpaperBackgroundNode?, button: ReplyMarkupButton, message: EngineMessage) {
         self.button = button
         
         if theme !== self.theme {
@@ -102,7 +102,20 @@ private final class ChatButtonKeyboardInputButtonNode: HighlightTrackingButtonNo
         let title = NSAttributedString(string: button.title, font: Font.regular(16.0), textColor: titleColor, paragraphAlignment: .center)
         
         self.textNode.attributedText = title
-        self.accessibilityLabel = title.string
+        
+        let kind: ChatButtonKeyboardInputNodeVoiceOver.Kind
+        switch button.action {
+        case .url, .urlAuth, .openWebView, .openWebApp:
+            kind = .openLink
+        default:
+            kind = .standard
+        }
+        
+        let resolved = ChatButtonKeyboardInputNodeVoiceOver.resolveButton(strings: strings, title: button.title, kind: kind, isEnabled: self.isEnabled)
+        self.accessibilityLabel = resolved.label
+        self.accessibilityValue = resolved.value
+        self.accessibilityHint = resolved.hint
+        self.accessibilityTraits = resolved.traits
         
         var iconImage: UIImage?
         if let button = self.button {
@@ -325,7 +338,7 @@ public final class ChatButtonKeyboardInputNode: ChatInputNode, UIScrollViewDeleg
                     let buttonFrame = CGRect(origin: CGPoint(x: sideInset + CGFloat(columnIndex) * (buttonWidth + columnSpacing), y: verticalOffset), size: CGSize(width: buttonWidth, height: buttonHeight))
                     buttonNode.frame = buttonFrame
                     buttonNode.tintMaskView.frame = buttonFrame
-                    buttonNode.update(context: self.context, size: buttonFrame.size, theme: interfaceState.theme, wallpaperBackgroundNode: self.controllerInteraction.presentationContext.backgroundNode, button: button, message: EngineMessage(message))
+                    buttonNode.update(context: self.context, size: buttonFrame.size, strings: interfaceState.strings, theme: interfaceState.theme, wallpaperBackgroundNode: self.controllerInteraction.presentationContext.backgroundNode, button: button, message: EngineMessage(message))
                     columnIndex += 1
                 }
                 verticalOffset += buttonHeight + rowSpacing
