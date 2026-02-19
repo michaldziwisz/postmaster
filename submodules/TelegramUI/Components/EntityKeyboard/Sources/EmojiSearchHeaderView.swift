@@ -226,6 +226,20 @@ public final class EmojiSearchHeaderView: UIView, UITextFieldDelegate {
         }
         return super.hitTest(point, with: event)
     }
+
+    override public func accessibilityActivate() -> Bool {
+        guard let params = self.params else {
+            return false
+        }
+        guard self.textField == nil else {
+            return false
+        }
+        guard params.canFocus else {
+            return false
+        }
+        self.activateTextInput()
+        return true
+    }
     
     private func activateTextInput() {
         guard let params = self.params else {
@@ -291,6 +305,14 @@ public final class EmojiSearchHeaderView: UIView, UITextFieldDelegate {
         
         /*self.tintTextView.view?.isHidden = false
         self.textView.view?.isHidden = false*/
+    }
+
+    @objc private func performClearCategoryAccessibilityCustomAction(_ action: UIAccessibilityCustomAction) -> Bool {
+        guard self.currentPresetSearchTerm != nil else {
+            return false
+        }
+        self.clearCategorySearch()
+        return true
     }
     
     var isActive: Bool {
@@ -627,7 +649,52 @@ public final class EmojiSearchHeaderView: UIView, UITextFieldDelegate {
             }
         }
         let _ = hasText
-        
-        
+
+        self.updateVoiceOver(placeholder: text, canFocus: canFocus, isActiveWithText: isActiveWithText, strings: strings)
+    }
+
+    private func updateVoiceOver(placeholder: String, canFocus: Bool, isActiveWithText: Bool, strings: PresentationStrings) {
+        let resolved = EmojiSearchHeaderVoiceOver.resolve(
+            placeholder: placeholder,
+            canFocus: canFocus,
+            isTextInputActive: self.textField != nil,
+            selectedCategoryTitle: self.currentPresetSearchTerm?.title,
+            strings: strings
+        )
+        self.isAccessibilityElement = resolved.isAccessibilityElement
+        self.accessibilityLabel = resolved.label
+        self.accessibilityValue = resolved.value
+        self.accessibilityHint = resolved.hint
+        self.accessibilityTraits = resolved.traits
+        if resolved.customActions.isEmpty {
+            self.accessibilityCustomActions = nil
+        } else {
+            self.accessibilityCustomActions = resolved.customActions.map { action in
+                switch action.kind {
+                case .clearCategory:
+                    return UIAccessibilityCustomAction(name: action.name, target: self, selector: #selector(self.performClearCategoryAccessibilityCustomAction(_:)))
+                }
+            }
+        }
+
+        if let textField = self.textField {
+            textField.placeholder = placeholder
+            textField.accessibilityLabel = placeholder
+            textField.accessibilityTraits.insert(.searchField)
+        }
+
+        self.clearIconButton.isAccessibilityElement = !self.clearIconButton.isHidden
+        self.clearIconButton.accessibilityLabel = strings.VoiceOver_Editing_ClearText
+        self.clearIconButton.accessibilityHint = nil
+        self.clearIconButton.accessibilityTraits = [.button]
+
+        self.cancelButton.isAccessibilityElement = isActiveWithText
+        self.cancelButton.accessibilityLabel = strings.Common_Cancel
+        self.cancelButton.accessibilityHint = nil
+        self.cancelButton.accessibilityTraits = [.button]
+
+        if let statusIconView = self.statusIcon.view {
+            statusIconView.isAccessibilityElement = false
+        }
     }
 }

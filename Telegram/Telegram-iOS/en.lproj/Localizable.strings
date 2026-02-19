@@ -4729,6 +4729,7 @@ Sorry for the inconvenience.";
 "Channel.AdminLog.MessageRank" = "changed custom title:\n%1$@";
 
 "VoiceOver.Editing.ClearText" = "Clear text";
+"VoiceOver.EmojiSearch.ClearCategory" = "Clear category";
 "VoiceOver.Recording.StopAndPreview" = "Stop and preview";
 "VoiceOver.Media.PlaybackRate" = "Playback rate";
 "VoiceOver.Media.PlaybackRateNormal" = "Normal";
