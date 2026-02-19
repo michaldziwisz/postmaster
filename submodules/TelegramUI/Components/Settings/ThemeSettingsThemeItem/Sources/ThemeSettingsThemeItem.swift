@@ -317,18 +317,38 @@ private final class ThemeSettingsThemeItemIconNode : ListViewItemNode {
                     strongSelf.overlayNode.frame = CGRect(origin: CGPoint(x: 9.0, y: 13.0), size: CGSize(width: 100.0, height: 64.0))
                     strongSelf.titleNode.frame = CGRect(origin: CGPoint(x: 0.0, y: 88.0), size: CGSize(width: itemLayout.contentSize.width, height: 16.0))
                     
-                    strongSelf.activateAreaNode.accessibilityLabel = item.title
-                    if item.selected {
-                        strongSelf.activateAreaNode.accessibilityTraits = [.button, .selected]
-                    } else {
-                        strongSelf.activateAreaNode.accessibilityTraits = [.button]
-                    }
-                    
-                    strongSelf.activateAreaNode.frame = CGRect(origin: .zero, size: itemLayout.size)
-                }
-            })
-        }
-    }
+	                    strongSelf.activateAreaNode.accessibilityLabel = item.title
+	                    if item.selected {
+	                        strongSelf.activateAreaNode.accessibilityTraits = [.button, .selected]
+	                    } else {
+	                        strongSelf.activateAreaNode.accessibilityTraits = [.button]
+	                    }
+	                    strongSelf.activateAreaNode.activate = { [weak strongSelf] in
+	                        guard let strongSelf, let item = strongSelf.item else {
+	                            return false
+	                        }
+	                        item.action(item.themeReference)
+	                        return true
+	                    }
+	                    if let contextAction = item.contextAction {
+	                        strongSelf.activateAreaNode.accessibilityCustomActions = [
+	                            UIAccessibilityCustomAction(name: item.context.sharedContext.currentPresentationData.with { $0 }.strings.Common_More, actionHandler: { [weak strongSelf] in
+	                                guard let strongSelf, let item = strongSelf.item else {
+	                                    return false
+	                                }
+	                                contextAction(item.themeReference, strongSelf.containerNode, nil)
+	                                return true
+	                            })
+	                        ]
+	                    } else {
+	                        strongSelf.activateAreaNode.accessibilityCustomActions = nil
+	                    }
+	                    
+	                    strongSelf.activateAreaNode.frame = CGRect(origin: .zero, size: itemLayout.size)
+	                }
+	            })
+	        }
+	    }
     
     func prepareCrossfadeTransition() {
         guard self.snapshotView == nil else {

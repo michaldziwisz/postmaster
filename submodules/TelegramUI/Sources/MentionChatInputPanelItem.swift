@@ -11,15 +11,15 @@ import AvatarNode
 import AccountContext
 import ItemListUI
 
-final class MentionChatInputPanelItem: ListViewItem {
-    fileprivate let context: AccountContext
-    fileprivate let presentationData: ItemListPresentationData
-    fileprivate let revealed: Bool
-    fileprivate let inverted: Bool
-    fileprivate let peer: Peer
-    private let peerSelected: (EnginePeer) -> Void
-    fileprivate let setPeerIdRevealed: (EnginePeer.Id?) -> Void
-    fileprivate let removeRequested: (EnginePeer.Id) -> Void
+	final class MentionChatInputPanelItem: ListViewItem {
+	    fileprivate let context: AccountContext
+	    fileprivate let presentationData: ItemListPresentationData
+	    fileprivate let revealed: Bool
+	    fileprivate let inverted: Bool
+	    fileprivate let peer: Peer
+	    fileprivate let peerSelected: (EnginePeer) -> Void
+	    fileprivate let setPeerIdRevealed: (EnginePeer.Id?) -> Void
+	    fileprivate let removeRequested: (EnginePeer.Id) -> Void
     
     let selectable: Bool = true
     
@@ -215,20 +215,41 @@ final class MentionChatInputPanelItemNode: ListViewItemNode {
                     
                     strongSelf.separatorNode.frame = CGRect(origin: CGPoint(x: leftInset, y: !item.inverted ? (nodeLayout.contentSize.height - UIScreenPixel) : 0.0), size: CGSize(width: params.width - leftInset, height: UIScreenPixel))
                     
-                    strongSelf.highlightedBackgroundNode.frame = CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: params.width, height: nodeLayout.size.height + UIScreenPixel))
-                    
-                    strongSelf.activateAreaNode.accessibilityLabel = title
-                    strongSelf.activateAreaNode.accessibilityValue = username
-                    strongSelf.activateAreaNode.frame = CGRect(origin: .zero, size: nodeLayout.size)
-                    
-                    if let peer = item.peer as? TelegramUser, let _ = peer.botInfo {
-                        strongSelf.setRevealOptions([ItemListRevealOption(key: 0, title: item.presentationData.strings.Common_Delete, icon: .none, color: item.presentationData.theme.list.itemDisclosureActions.destructive.fillColor, textColor: item.presentationData.theme.list.itemDisclosureActions.destructive.foregroundColor)])
-                        strongSelf.setRevealOptionsOpened(item.revealed, animated: animation.isAnimated)
-                    } else {
-                        strongSelf.setRevealOptions([])
-                        strongSelf.setRevealOptionsOpened(false, animated: animation.isAnimated)
-                    }
-                }
+	                    strongSelf.highlightedBackgroundNode.frame = CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: params.width, height: nodeLayout.size.height + UIScreenPixel))
+	                    
+	                    strongSelf.activateAreaNode.accessibilityLabel = title
+	                    strongSelf.activateAreaNode.accessibilityValue = username
+	                    strongSelf.activateAreaNode.activate = { [weak strongSelf] in
+	                        guard let strongSelf, let item = strongSelf.item else {
+	                            return false
+	                        }
+	                        if item.revealed {
+	                            item.setPeerIdRevealed(nil)
+	                        } else {
+	                            item.peerSelected(EnginePeer(item.peer))
+	                        }
+	                        return true
+	                    }
+	                    strongSelf.activateAreaNode.frame = CGRect(origin: .zero, size: nodeLayout.size)
+	                    
+	                    if let peer = item.peer as? TelegramUser, let _ = peer.botInfo {
+	                        strongSelf.activateAreaNode.accessibilityCustomActions = [
+	                            UIAccessibilityCustomAction(name: item.presentationData.strings.Common_Delete, actionHandler: { [weak strongSelf] in
+	                                guard let strongSelf, let item = strongSelf.item else {
+	                                    return false
+	                                }
+	                                item.removeRequested(item.peer.id)
+	                                return true
+	                            })
+	                        ]
+	                        strongSelf.setRevealOptions([ItemListRevealOption(key: 0, title: item.presentationData.strings.Common_Delete, icon: .none, color: item.presentationData.theme.list.itemDisclosureActions.destructive.fillColor, textColor: item.presentationData.theme.list.itemDisclosureActions.destructive.foregroundColor)])
+	                        strongSelf.setRevealOptionsOpened(item.revealed, animated: animation.isAnimated)
+	                    } else {
+	                        strongSelf.activateAreaNode.accessibilityCustomActions = nil
+	                        strongSelf.setRevealOptions([])
+	                        strongSelf.setRevealOptionsOpened(false, animated: animation.isAnimated)
+	                    }
+	                }
             })
         }
     }

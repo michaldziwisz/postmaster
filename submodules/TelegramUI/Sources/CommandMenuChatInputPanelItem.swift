@@ -231,14 +231,30 @@ final class CommandMenuChatInputPanelItemNode: ListViewItemNode {
                     
                     strongSelf.separatorNode.frame = CGRect(origin: CGPoint(x: leftInset, y: nodeLayout.contentSize.height - UIScreenPixel), size: CGSize(width: params.width - leftInset, height: UIScreenPixel))
                     
-                    strongSelf.highlightedBackgroundNode.frame = CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: params.width, height: nodeLayout.size.height + UIScreenPixel))
-                    
-                    strongSelf.activateAreaNode.accessibilityLabel = textString.string
-                    strongSelf.activateAreaNode.accessibilityValue = commandString.string
-                    strongSelf.activateAreaNode.frame = CGRect(origin: .zero, size: nodeLayout.size)
-                    
-                    if !mergedTop {
-                        strongSelf.shadowNode.isHidden = false
+	                    strongSelf.highlightedBackgroundNode.frame = CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: params.width, height: nodeLayout.size.height + UIScreenPixel))
+	                    
+	                    strongSelf.activateAreaNode.accessibilityLabel = textString.string
+	                    strongSelf.activateAreaNode.accessibilityValue = commandString.string
+	                    strongSelf.activateAreaNode.activate = { [weak strongSelf] in
+	                        guard let strongSelf, let item = strongSelf.item else {
+	                            return false
+	                        }
+	                        item.commandSelected(item.command, true)
+	                        return true
+	                    }
+	                    strongSelf.activateAreaNode.accessibilityCustomActions = [
+	                        UIAccessibilityCustomAction(name: item.context.sharedContext.currentPresentationData.with { $0 }.strings.Common_More, actionHandler: { [weak strongSelf] in
+	                            guard let strongSelf, let item = strongSelf.item else {
+	                                return false
+	                            }
+	                            item.commandSelected(item.command, false)
+	                            return true
+	                        })
+	                    ]
+	                    strongSelf.activateAreaNode.frame = CGRect(origin: .zero, size: nodeLayout.size)
+	                    
+	                    if !mergedTop {
+	                        strongSelf.shadowNode.isHidden = false
                         strongSelf.shadowNode.frame = CGRect(origin: CGPoint(x: -shadowBlur, y: 0.0), size: CGSize(width: nodeLayout.size.width + shadowBlur * 2.0, height: backgroundCornerRadius + shadowBlur))
                         strongSelf.clippingNode.frame = CGRect(origin: CGPoint(x: 0.0, y: -shadowBlur), size: CGSize(width: nodeLayout.size.width, height: nodeLayout.size.height + shadowBlur))
                         strongSelf.backgroundNode.cornerRadius = backgroundCornerRadius

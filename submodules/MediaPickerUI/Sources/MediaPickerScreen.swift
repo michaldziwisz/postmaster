@@ -358,12 +358,21 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
             self.gridNode = GridNode()
             self.scrollingArea = SparseItemGridScrollingArea()
             
-            self.cameraWrapperView = UIView()
-            self.cameraWrapperView.clipsToBounds = true
-            
-            self.cameraActivateAreaNode = AccessibilityAreaNode()
-            self.cameraActivateAreaNode.accessibilityLabel = "Camera"
-            self.cameraActivateAreaNode.accessibilityTraits = [.button]
+	            self.cameraWrapperView = UIView()
+	            self.cameraWrapperView.clipsToBounds = true
+	            
+	            self.cameraActivateAreaNode = AccessibilityAreaNode()
+	            self.cameraActivateAreaNode.accessibilityLabel = self.presentationData.strings.Attachment_Camera
+	            self.cameraActivateAreaNode.accessibilityHint = self.presentationData.strings.VoiceOver_Chat_OpenHint
+	            self.cameraActivateAreaNode.accessibilityTraits = [.button]
+	            self.cameraActivateAreaNode.activate = { [weak self] in
+	                guard let self, let cameraView = self.cameraView, !self.openingMedia else {
+	                    return false
+	                }
+	                self.dismissInput()
+	                self.controller?.openCamera?(cameraView)
+	                return true
+	            }
             
             self.topEdgeEffectView = EdgeEffectView()
             self.topEdgeEffectView.isUserInteractionEnabled = false

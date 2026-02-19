@@ -180,15 +180,31 @@ final class CommandChatInputPanelItemNode: ListViewItemNode {
                     
                     strongSelf.separatorNode.frame = CGRect(origin: CGPoint(x: leftInset, y: nodeLayout.contentSize.height - UIScreenPixel), size: CGSize(width: params.width - leftInset, height: UIScreenPixel))
                     
-                    strongSelf.highlightedBackgroundNode.frame = CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: params.width, height: nodeLayout.size.height + UIScreenPixel))
-                
-                    strongSelf.activateAreaNode.accessibilityLabel = "\(peerName), \(command)"
-                    strongSelf.activateAreaNode.accessibilityValue = item.command.command.description
-                    strongSelf.activateAreaNode.frame = CGRect(origin: .zero, size: nodeLayout.size)
-                }
-            })
-        }
-    }
+	                    strongSelf.highlightedBackgroundNode.frame = CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: params.width, height: nodeLayout.size.height + UIScreenPixel))
+	                
+	                    strongSelf.activateAreaNode.accessibilityLabel = "\(peerName), \(command)"
+	                    strongSelf.activateAreaNode.accessibilityValue = item.command.command.description
+	                    strongSelf.activateAreaNode.activate = { [weak strongSelf] in
+	                        guard let strongSelf, let item = strongSelf.item else {
+	                            return false
+	                        }
+	                        item.commandSelected(item.command, true)
+	                        return true
+	                    }
+	                    strongSelf.activateAreaNode.accessibilityCustomActions = [
+	                        UIAccessibilityCustomAction(name: item.presentationData.strings.Common_More, actionHandler: { [weak strongSelf] in
+	                            guard let strongSelf, let item = strongSelf.item else {
+	                                return false
+	                            }
+	                            item.commandSelected(item.command, false)
+	                            return true
+	                        })
+	                    ]
+	                    strongSelf.activateAreaNode.frame = CGRect(origin: .zero, size: nodeLayout.size)
+	                }
+	            })
+	        }
+	    }
     
     override func setHighlighted(_ highlighted: Bool, at point: CGPoint, animated: Bool) {
         super.setHighlighted(highlighted, at: point, animated: animated)

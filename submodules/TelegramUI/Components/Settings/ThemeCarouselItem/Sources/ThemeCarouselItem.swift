@@ -482,18 +482,40 @@ private final class ThemeCarouselThemeItemIconNode: ListViewItemNode {
                         animatedStickerNode.updateLayout(size: emojiFrame.size)
                     }
                     
-                    let presentationData = item.context.sharedContext.currentPresentationData.with { $0 }
-                    strongSelf.activateAreaNode.accessibilityLabel = item.themeReference?.emoticon.flatMap { presentationData.strings.Appearance_VoiceOver_Theme($0).string }
-                    if item.selected {
-                        strongSelf.activateAreaNode.accessibilityTraits = [.button, .selected]
-                    } else {
-                        strongSelf.activateAreaNode.accessibilityTraits = [.button]
-                    }
-                    
-                    strongSelf.activateAreaNode.frame = CGRect(origin: .zero, size: itemLayout.size)
-                }
-            })
-        }
+	                    let presentationData = item.context.sharedContext.currentPresentationData.with { $0 }
+	                    strongSelf.activateAreaNode.accessibilityValue = nil
+	                    let strings = presentationData.strings
+	                    strongSelf.activateAreaNode.accessibilityLabel = ThemeCarouselItemVoiceOver.resolveLabel(strings: strings, themeReference: item.themeReference)
+	                    if item.selected {
+	                        strongSelf.activateAreaNode.accessibilityTraits = [.button, .selected]
+	                    } else {
+	                        strongSelf.activateAreaNode.accessibilityTraits = [.button]
+	                    }
+	                    strongSelf.activateAreaNode.activate = { [weak strongSelf] in
+	                        guard let strongSelf, let item = strongSelf.item else {
+	                            return false
+	                        }
+	                        item.action(item.themeReference)
+	                        return true
+	                    }
+	                    if let themeReference = item.themeReference, let contextAction = item.contextAction {
+	                        strongSelf.activateAreaNode.accessibilityCustomActions = [
+	                            UIAccessibilityCustomAction(name: strings.Common_More, actionHandler: { [weak strongSelf] in
+	                                guard let strongSelf else {
+	                                    return false
+	                                }
+	                                contextAction(themeReference, strongSelf.containerNode, nil)
+	                                return true
+	                            })
+	                        ]
+	                    } else {
+	                        strongSelf.activateAreaNode.accessibilityCustomActions = nil
+	                    }
+	                    
+	                    strongSelf.activateAreaNode.frame = CGRect(origin: .zero, size: itemLayout.size)
+	                }
+	            })
+	        }
     }
     
     func prepareCrossfadeTransition() {

@@ -11,19 +11,19 @@ import ItemListUI
 import AvatarNode
 import AccountContext
 
-final class HashtagChatInputPanelItem: ListViewItem {
-    fileprivate let context: AccountContext
-    fileprivate let presentationData: ItemListPresentationData
-    fileprivate let peer: EnginePeer?
-    fileprivate let title: String
-    fileprivate let text: String?
-    fileprivate let badge: String?
-    fileprivate let hashtag: String
-    fileprivate let revealed: Bool
-    fileprivate let isAdditionalRecent: Bool
-    fileprivate let setHashtagRevealed: (String?) -> Void
-    private let hashtagSelected: (String) -> Void
-    fileprivate let removeRequested: (String) -> Void
+	final class HashtagChatInputPanelItem: ListViewItem {
+	    fileprivate let context: AccountContext
+	    fileprivate let presentationData: ItemListPresentationData
+	    fileprivate let peer: EnginePeer?
+	    fileprivate let title: String
+	    fileprivate let text: String?
+	    fileprivate let badge: String?
+	    fileprivate let hashtag: String
+	    fileprivate let revealed: Bool
+	    fileprivate let isAdditionalRecent: Bool
+	    fileprivate let setHashtagRevealed: (String?) -> Void
+	    fileprivate let hashtagSelected: (String) -> Void
+	    fileprivate let removeRequested: (String) -> Void
     
     let selectable: Bool = true
     
@@ -267,14 +267,41 @@ final class HashtagChatInputPanelItemNode: ListViewItemNode {
                     
                     strongSelf.separatorNode.frame = CGRect(origin: CGPoint(x: leftInset + textLeftInset, y: nodeLayout.contentSize.height - UIScreenPixel), size: CGSize(width: params.width - leftInset - textLeftInset, height: UIScreenPixel))
                     
-                    strongSelf.highlightedBackgroundNode.frame = CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: params.width, height: nodeLayout.size.height + UIScreenPixel))
-                    
-                    strongSelf.activateAreaNode.accessibilityLabel = item.title
-                    strongSelf.activateAreaNode.frame = CGRect(origin: .zero, size: nodeLayout.size)
-                    
-                    strongSelf.setRevealOptions([ItemListRevealOption(key: 0, title: item.presentationData.strings.Common_Delete, icon: .none, color: item.presentationData.theme.list.itemDisclosureActions.destructive.fillColor, textColor: item.presentationData.theme.list.itemDisclosureActions.destructive.foregroundColor)])
-                    strongSelf.setRevealOptionsOpened(item.revealed, animated: animation.isAnimated)
-                }
+	                    strongSelf.highlightedBackgroundNode.frame = CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: params.width, height: nodeLayout.size.height + UIScreenPixel))
+	                    
+	                    strongSelf.activateAreaNode.accessibilityLabel = item.title
+	                    let accessibilityValue = [item.text, item.badge].compactMap { value in
+	                        guard let value, !value.isEmpty else {
+	                            return nil
+	                        }
+	                        return value
+	                    }.joined(separator: ", ")
+	                    strongSelf.activateAreaNode.accessibilityValue = accessibilityValue.isEmpty ? nil : accessibilityValue
+	                    strongSelf.activateAreaNode.activate = { [weak strongSelf] in
+	                        guard let strongSelf, let item = strongSelf.item else {
+	                            return false
+	                        }
+	                        if item.revealed {
+	                            item.setHashtagRevealed(nil)
+	                        } else {
+	                            item.hashtagSelected(item.hashtag + " ")
+	                        }
+	                        return true
+	                    }
+	                    strongSelf.activateAreaNode.accessibilityCustomActions = [
+	                        UIAccessibilityCustomAction(name: item.presentationData.strings.Common_Delete, actionHandler: { [weak strongSelf] in
+	                            guard let strongSelf, let item = strongSelf.item else {
+	                                return false
+	                            }
+	                            item.removeRequested(item.hashtag)
+	                            return true
+	                        })
+	                    ]
+	                    strongSelf.activateAreaNode.frame = CGRect(origin: .zero, size: nodeLayout.size)
+	                    
+	                    strongSelf.setRevealOptions([ItemListRevealOption(key: 0, title: item.presentationData.strings.Common_Delete, icon: .none, color: item.presentationData.theme.list.itemDisclosureActions.destructive.fillColor, textColor: item.presentationData.theme.list.itemDisclosureActions.destructive.foregroundColor)])
+	                    strongSelf.setRevealOptionsOpened(item.revealed, animated: animation.isAnimated)
+	                }
             })
         }
     }
