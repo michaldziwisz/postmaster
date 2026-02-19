@@ -31,8 +31,10 @@ private final class ChatMessageActionUrlAuthAlertContentNode: AlertContentNode {
     private let textNode: ASTextNode
     private let authorizeCheckNode: InteractiveCheckNode
     private let authorizeLabelNode: ASTextNode
+    private let authorizeAccessibilityNode: AccessibilityAreaNode
     private let allowWriteCheckNode: InteractiveCheckNode
     private let allowWriteLabelNode: ASTextNode
+    private let allowWriteAccessibilityNode: AccessibilityAreaNode
     
     private let actionNodesSeparator: ASDisplayNode
     private let actionNodes: [TextAlertContentActionNode]
@@ -53,12 +55,14 @@ private final class ChatMessageActionUrlAuthAlertContentNode: AlertContentNode {
             if !self.authorize && self.allowWriteAccess {
                 self.allowWriteAccess = false
             }
+            self.updateVoiceOverAccessibility()
         }
     }
     
     var allowWriteAccess: Bool = true {
         didSet {
             self.allowWriteCheckNode.setSelected(self.allowWriteAccess, animated: true)
+            self.updateVoiceOverAccessibility()
         }
     }
     
@@ -72,21 +76,39 @@ private final class ChatMessageActionUrlAuthAlertContentNode: AlertContentNode {
         
         self.titleNode = ASTextNode()
         self.titleNode.maximumNumberOfLines = 2
+        self.titleNode.isAccessibilityElement = true
+        self.titleNode.accessibilityTraits = [.header]
         
         self.textNode = ASTextNode()
         self.textNode.maximumNumberOfLines = 0
+        self.textNode.isAccessibilityElement = true
+        self.textNode.accessibilityTraits = [.staticText]
         
         self.authorizeCheckNode = InteractiveCheckNode(theme: CheckNodeTheme(backgroundColor: theme.accentColor, strokeColor: theme.contrastColor, borderColor: theme.controlBorderColor, overlayBorder: false, hasInset: false, hasShadow: false))
         self.authorizeCheckNode.setSelected(true, animated: false)
+        self.authorizeCheckNode.isAccessibilityElement = false
         self.authorizeLabelNode = ASTextNode()
         self.authorizeLabelNode.maximumNumberOfLines = 4
         self.authorizeLabelNode.isUserInteractionEnabled = true
+        self.authorizeLabelNode.isAccessibilityElement = false
+        self.authorizeAccessibilityNode = AccessibilityAreaNode()
+        self.authorizeAccessibilityNode.activate = { [weak self] in
+            self?.toggleAuthorize()
+            return true
+        }
         
         self.allowWriteCheckNode = InteractiveCheckNode(theme: CheckNodeTheme(backgroundColor: theme.accentColor, strokeColor: theme.contrastColor, borderColor: theme.controlBorderColor, overlayBorder: false, hasInset: false, hasShadow: false))
         self.allowWriteCheckNode.setSelected(true, animated: false)
+        self.allowWriteCheckNode.isAccessibilityElement = false
         self.allowWriteLabelNode = ASTextNode()
         self.allowWriteLabelNode.maximumNumberOfLines = 4
         self.allowWriteLabelNode.isUserInteractionEnabled = true
+        self.allowWriteLabelNode.isAccessibilityElement = false
+        self.allowWriteAccessibilityNode = AccessibilityAreaNode()
+        self.allowWriteAccessibilityNode.activate = { [weak self] in
+            self?.toggleAllowWrite()
+            return true
+        }
         
         self.actionNodesSeparator = ASDisplayNode()
         self.actionNodesSeparator.isLayerBacked = true
@@ -111,10 +133,12 @@ private final class ChatMessageActionUrlAuthAlertContentNode: AlertContentNode {
         self.addSubnode(self.textNode)
         self.addSubnode(self.authorizeCheckNode)
         self.addSubnode(self.authorizeLabelNode)
+        self.addSubnode(self.authorizeAccessibilityNode)
         
         if requestWriteAccess {
             self.addSubnode(self.allowWriteCheckNode)
             self.addSubnode(self.allowWriteLabelNode)
+            self.addSubnode(self.allowWriteAccessibilityNode)
         }
         
         self.addSubnode(self.actionNodesSeparator)
@@ -149,10 +173,18 @@ private final class ChatMessageActionUrlAuthAlertContentNode: AlertContentNode {
     }
     
     @objc private func authorizeTap(_ gestureRecognizer: UITapGestureRecognizer) {
-         self.authorize = !self.authorize
+         self.toggleAuthorize()
     }
     
     @objc private func allowWriteTap(_ gestureRecognizer: UITapGestureRecognizer) {
+        self.toggleAllowWrite()
+    }
+    
+    private func toggleAuthorize() {
+        self.authorize = !self.authorize
+    }
+    
+    private func toggleAllowWrite() {
         if self.allowWriteCheckNode.isUserInteractionEnabled {
             self.allowWriteAccess = !self.allowWriteAccess
         }
@@ -165,6 +197,9 @@ private final class ChatMessageActionUrlAuthAlertContentNode: AlertContentNode {
         self.authorizeLabelNode.attributedText = formattedText(strings.Conversation_OpenBotLinkLogin(self.domain, self.displayName).string, color: theme.primaryColor)
         self.allowWriteLabelNode.attributedText = formattedText(strings.Conversation_OpenBotLinkAllowMessages(EnginePeer(self.bot).displayTitle(strings: self.strings, displayOrder: self.nameDisplayOrder)).string, color: theme.primaryColor)
         
+        self.titleNode.accessibilityLabel = self.titleNode.attributedText?.string
+        self.textNode.accessibilityLabel = self.textNode.attributedText?.string
+        
         self.actionNodesSeparator.backgroundColor = theme.separatorColor
         for actionNode in self.actionNodes {
             actionNode.updateTheme(theme)
@@ -176,6 +211,8 @@ private final class ChatMessageActionUrlAuthAlertContentNode: AlertContentNode {
         if let size = self.validLayout {
             _ = self.updateLayout(size: size, transition: .immediate)
         }
+        
+        self.updateVoiceOverAccessibility()
     }
     
     override func updateLayout(size: CGSize, transition: ContainedViewLayoutTransition) -> CGSize {
@@ -203,6 +240,12 @@ private final class ChatMessageActionUrlAuthAlertContentNode: AlertContentNode {
         let authorizeSize = self.authorizeLabelNode.measure(condensedSize)
         transition.updateFrame(node: self.authorizeLabelNode, frame: CGRect(origin: CGPoint(x: 46.0, y: origin.y), size: authorizeSize))
         transition.updateFrame(node: self.authorizeCheckNode, frame: CGRect(origin: CGPoint(x: 12.0, y: origin.y - 2.0), size: checkSize))
+
+        var authorizeFrame = self.authorizeCheckNode.frame.union(self.authorizeLabelNode.frame)
+        authorizeFrame = authorizeFrame.insetBy(dx: 0.0, dy: -6.0)
+        authorizeFrame.origin.x = 0.0
+        authorizeFrame.size.width = size.width
+        self.authorizeAccessibilityNode.frame = authorizeFrame
         origin.y += authorizeSize.height
         entriesHeight += authorizeSize.height
         
@@ -213,6 +256,12 @@ private final class ChatMessageActionUrlAuthAlertContentNode: AlertContentNode {
             let allowWriteSize = self.allowWriteLabelNode.measure(condensedSize)
             transition.updateFrame(node: self.allowWriteLabelNode, frame: CGRect(origin: CGPoint(x: 46.0, y: origin.y), size: allowWriteSize))
             transition.updateFrame(node: self.allowWriteCheckNode, frame: CGRect(origin: CGPoint(x: 12.0, y: origin.y - 2.0), size: checkSize))
+
+            var allowWriteFrame = self.allowWriteCheckNode.frame.union(self.allowWriteLabelNode.frame)
+            allowWriteFrame = allowWriteFrame.insetBy(dx: 0.0, dy: -6.0)
+            allowWriteFrame.origin.x = 0.0
+            allowWriteFrame.size.width = size.width
+            self.allowWriteAccessibilityNode.frame = allowWriteFrame
             origin.y += allowWriteSize.height
             entriesHeight += allowWriteSize.height
         }
@@ -298,6 +347,41 @@ private final class ChatMessageActionUrlAuthAlertContentNode: AlertContentNode {
         }
         
         return resultSize
+    }
+    
+    private func updateVoiceOverAccessibility() {
+        let authorizeResolved = ChatMessageActionUrlAuthVoiceOver.resolveAuthorizeToggle(
+            strings: self.strings,
+            labelText: self.authorizeLabelNode.attributedText?.string ?? "",
+            isOn: self.authorize,
+            isEnabled: true
+        )
+        self.authorizeAccessibilityNode.isAccessibilityElement = !authorizeResolved.label.isEmpty
+        self.authorizeAccessibilityNode.accessibilityLabel = authorizeResolved.label
+        self.authorizeAccessibilityNode.accessibilityValue = authorizeResolved.value
+        self.authorizeAccessibilityNode.accessibilityHint = authorizeResolved.hint
+        self.authorizeAccessibilityNode.accessibilityTraits = authorizeResolved.traits
+        
+        if self.allowWriteLabelNode.supernode != nil {
+            let isEnabled = self.allowWriteCheckNode.isUserInteractionEnabled
+            let allowWriteResolved = ChatMessageActionUrlAuthVoiceOver.resolveAllowWriteToggle(
+                strings: self.strings,
+                labelText: self.allowWriteLabelNode.attributedText?.string ?? "",
+                isOn: self.allowWriteAccess,
+                isEnabled: isEnabled
+            )
+            self.allowWriteAccessibilityNode.isAccessibilityElement = !allowWriteResolved.label.isEmpty
+            self.allowWriteAccessibilityNode.accessibilityLabel = allowWriteResolved.label
+            self.allowWriteAccessibilityNode.accessibilityValue = allowWriteResolved.value
+            self.allowWriteAccessibilityNode.accessibilityHint = allowWriteResolved.hint
+            self.allowWriteAccessibilityNode.accessibilityTraits = allowWriteResolved.traits
+        } else {
+            self.allowWriteAccessibilityNode.isAccessibilityElement = false
+            self.allowWriteAccessibilityNode.accessibilityLabel = nil
+            self.allowWriteAccessibilityNode.accessibilityValue = nil
+            self.allowWriteAccessibilityNode.accessibilityHint = nil
+            self.allowWriteAccessibilityNode.accessibilityTraits = []
+        }
     }
 }
 
