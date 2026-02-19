@@ -104,6 +104,7 @@ final class ChatPremiumRequiredInputPanelNode: ChatInputPanelNode {
         let buttonTitle: String = params.interfaceState.strings.Chat_MessagingRestrictedPlaceholder(peerTitle).string
         let buttonSubtitle: String = params.interfaceState.strings.Chat_MessagingRestrictedPlaceholderAction
         
+        var subtitleText: String?
         var buttonContents: [AnyComponentWithIdentity<Empty>] = []
         buttonContents.append(AnyComponentWithIdentity(id: 0, component: AnyComponent(MultilineTextComponent(
             text: .plain(NSAttributedString(string: buttonTitle, font: Font.regular(13.0), textColor: params.interfaceState.theme.rootController.navigationBar.secondaryTextColor))
@@ -111,6 +112,7 @@ final class ChatPremiumRequiredInputPanelNode: ChatInputPanelNode {
         if let context = self.context {
             let premiumConfiguration = PremiumConfiguration.with(appConfiguration: context.currentAppConfiguration.with { $0 })
             if !premiumConfiguration.isPremiumDisabled {
+                subtitleText = buttonSubtitle
                 buttonContents.append(AnyComponentWithIdentity(id: 1, component: AnyComponent(MultilineTextComponent(
                     text: .plain(NSAttributedString(string: buttonSubtitle, font: Font.regular(13.0), textColor: params.interfaceState.theme.rootController.navigationBar.accentTextColor))
                 ))))
@@ -139,6 +141,19 @@ final class ChatPremiumRequiredInputPanelNode: ChatInputPanelNode {
                 self.view.addSubview(buttonView)
             }
             transition.setFrame(view: buttonView, frame: CGRect(origin: CGPoint(x: floorToScreenPixels((params.width - buttonSize.width) / 2.0), y: 0.0), size: buttonSize))
+            
+            let accessibility = ChatPremiumRequiredInputPanelVoiceOver.resolve(
+                strings: params.interfaceState.strings,
+                title: buttonTitle,
+                subtitle: subtitleText,
+                isEnabled: (buttonView as? UIControl)?.isEnabled ?? true
+            )
+            buttonView.isAccessibilityElement = !accessibility.label.isEmpty
+            buttonView.accessibilityLabel = accessibility.label
+            buttonView.accessibilityValue = accessibility.value
+            buttonView.accessibilityHint = accessibility.hint
+            buttonView.accessibilityTraits = accessibility.traits
+            buttonView.accessibilityElementsHidden = true
         }
 
         return height
