@@ -558,11 +558,9 @@ class ItemListStickerPackItemNode: ItemListRevealOptionsItemNode {
                     strongSelf.activateArea.frame = CGRect(origin: CGPoint(x: params.leftInset, y: 0.0), size: CGSize(width: params.width - params.leftInset - params.rightInset, height: layout.contentSize.height))
                     strongSelf.activateArea.accessibilityLabel = titleAttributedString?.string ?? ""
                     strongSelf.activateArea.accessibilityValue = statusAttributedString?.string ?? ""
-                    if item.enabled {
-                        strongSelf.activateArea.accessibilityTraits = []
-                    } else {
-                        strongSelf.activateArea.accessibilityTraits = .notEnabled
-                    }
+                    let resolved = ItemListRowVoiceOver.resolve(strings: item.presentationData.strings, kind: .open, isEnabled: item.enabled)
+                    strongSelf.activateArea.accessibilityHint = resolved.hint
+                    strongSelf.activateArea.accessibilityTraits = resolved.traits
                     
                     if fileUpdated {
                         strongSelf.currentThumbnailItem = thumbnailItem
