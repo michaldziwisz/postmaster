@@ -248,6 +248,7 @@ private final class ChatInfoTitlePanelPeerNearbyInfoNode: ASDisplayNode {
     
     private let labelNode: ImmediateTextNode
     private let filledBackgroundNode: LinkHighlightingNode
+    private let activateAreaNode: AccessibilityAreaNode
     
     private let openPeersNearby: () -> Void
     
@@ -257,13 +258,21 @@ private final class ChatInfoTitlePanelPeerNearbyInfoNode: ASDisplayNode {
         self.labelNode = ImmediateTextNode()
         self.labelNode.maximumNumberOfLines = 1
         self.labelNode.textAlignment = .center
+        self.labelNode.isAccessibilityElement = false
         
         self.filledBackgroundNode = LinkHighlightingNode(color: .clear)
+        
+        self.activateAreaNode = AccessibilityAreaNode()
+        self.activateAreaNode.activate = { [weak self] in
+            self?.openPeersNearby()
+            return true
+        }
         
         super.init()
         
         self.addSubnode(self.filledBackgroundNode)
         self.addSubnode(self.labelNode)
+        self.addSubnode(self.activateAreaNode)
     }
     
     override func didLoad() {
@@ -334,7 +343,19 @@ private final class ChatInfoTitlePanelPeerNearbyInfoNode: ASDisplayNode {
         self.labelNode.frame = labelFrame
         self.filledBackgroundNode.frame = labelFrame.offsetBy(dx: 0.0, dy: -11.0)
         
-        return topInset + backgroundSize.height + bottomInset
+        let resultHeight = topInset + backgroundSize.height + bottomInset
+        
+        let accessibility = ChatPeerNearbyInfoVoiceOver.resolve(
+            strings: strings,
+            label: stringAndRanges.string,
+            isEnabled: true
+        )
+        self.activateAreaNode.frame = CGRect(origin: .zero, size: CGSize(width: width, height: resultHeight))
+        self.activateAreaNode.accessibilityLabel = accessibility.label
+        self.activateAreaNode.accessibilityHint = accessibility.hint
+        self.activateAreaNode.accessibilityTraits = accessibility.traits
+        
+        return resultHeight
     }
 }
 
