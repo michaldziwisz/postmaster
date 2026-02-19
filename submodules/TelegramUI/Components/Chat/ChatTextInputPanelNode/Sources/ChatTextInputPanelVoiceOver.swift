@@ -155,3 +155,25 @@ public enum ChatTextInputPanelRecordMoreButtonVoiceOver {
         return Resolved(label: strings.VoiceOver_Chat_RecordModeVoiceMessage, hint: nil, traits: traits)
     }
 }
+
+public enum ChatTextInputPanelTextViewVoiceOver {
+    public struct Resolved: Equatable {
+        public let label: String
+        public let hint: String?
+        
+        public init(label: String, hint: String?) {
+            self.label = label
+            self.hint = hint
+        }
+    }
+    
+    public static func resolve(placeholder: String, placeholderHasStar: Bool) -> Resolved {
+        let label: String
+        if placeholderHasStar {
+            label = placeholder.replacingOccurrences(of: "#", with: "⭐️")
+        } else {
+            label = placeholder
+        }
+        return Resolved(label: label, hint: nil)
+    }
+}

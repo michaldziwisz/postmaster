@@ -1185,7 +1185,14 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         textInputNode.view.addGestureRecognizer(recognizer)
         self.touchDownGestureRecognizer = recognizer
         
-        textInputNode.textView.accessibilityHint = self.textPlaceholderNode.attributedText?.string
+        if let placeholder = self.textPlaceholderNode.attributedText?.string {
+            let resolved = ChatTextInputPanelTextViewVoiceOver.resolve(
+                placeholder: placeholder,
+                placeholderHasStar: placeholder.contains("#")
+            )
+            textInputNode.textView.accessibilityLabel = resolved.label
+            textInputNode.textView.accessibilityHint = resolved.hint
+        }
     }
 
     override public var accessibilityElements: [Any]? {
@@ -3135,7 +3142,12 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             self.textPlaceholderNode.attributedText = attributedPlaceholder
             self.textPlaceholderNode.view.setMonochromaticEffect(tintColor: placeholderColor)
             
-            self.textInputNode?.textView.accessibilityHint = currentPlaceholder
+            let resolved = ChatTextInputPanelTextViewVoiceOver.resolve(
+                placeholder: currentPlaceholder,
+                placeholderHasStar: placeholderHasStar
+            )
+            self.textInputNode?.textView.accessibilityLabel = resolved.label
+            self.textInputNode?.textView.accessibilityHint = resolved.hint
             
             let placeholderSize = self.textPlaceholderNode.updateLayout(CGSize(width: textPlaceholderMaxWidth, height: CGFloat.greatestFiniteMagnitude))
             
