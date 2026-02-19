@@ -84,6 +84,11 @@ final class GroupHeaderActionButton: UIButton {
     }
     
     func update(theme: PresentationTheme, title: String, compact: Bool) -> CGSize {
+        let voiceOver = GroupHeaderButtonsVoiceOver.resolve(title: title)
+        self.isAccessibilityElement = true
+        self.accessibilityLabel = voiceOver.label
+        self.accessibilityTraits = voiceOver.traits
+
         let textConstrainedWidth: CGFloat = 100.0
         
         let needsVibrancy = !theme.overallDarkAppearance && compact
