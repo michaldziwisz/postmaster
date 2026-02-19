@@ -26,6 +26,7 @@ final class ChatMessageReportInputPanelNode: ChatInputPanelNode {
         didSet {
             if oldValue != self.selectedMessages {
                 self.reportButton.isEnabled = self.selectedMessages.count != 0
+                self.updateReportButtonVoiceOver()
             }
         }
     }
@@ -37,7 +38,6 @@ final class ChatMessageReportInputPanelNode: ChatInputPanelNode {
         
         self.reportButton = HighlightableButtonNode(pointerStyle: .default)
         self.reportButton.isAccessibilityElement = true
-        self.reportButton.accessibilityLabel = strings.VoiceOver_MessageContextReport
         
         self.separatorNode = ASDisplayNode()
         self.separatorNode.backgroundColor = theme.chat.inputPanel.panelSeparatorColor
@@ -48,6 +48,8 @@ final class ChatMessageReportInputPanelNode: ChatInputPanelNode {
         self.addSubnode(self.separatorNode)
                 
         self.reportButton.addTarget(self, action: #selector(self.reportButtonPressed), forControlEvents: .touchUpInside)
+        
+        self.updateReportButtonVoiceOver()
     }
     
     func updateThemeAndStrings(theme: PresentationTheme, strings: PresentationStrings) {
@@ -57,6 +59,8 @@ final class ChatMessageReportInputPanelNode: ChatInputPanelNode {
             
             self.reportButton.setAttributedTitle(NSAttributedString(string: self.reportButton.attributedTitle(for: [])?.string ?? "", font: Font.regular(17.0), textColor: theme.chat.inputPanel.panelControlAccentColor), for: [])
             self.reportButton.setAttributedTitle(NSAttributedString(string: self.reportButton.attributedTitle(for: [])?.string ?? "", font: Font.regular(17.0), textColor: theme.chat.inputPanel.panelControlDisabledColor), for: .disabled)
+            
+            self.updateReportButtonVoiceOver()
         }
     }
     
@@ -88,6 +92,7 @@ final class ChatMessageReportInputPanelNode: ChatInputPanelNode {
                 self.reportButton.setAttributedTitle(NSAttributedString(string: self.reportButton.attributedTitle(for: [])?.string ?? "", font: Font.regular(17.0), textColor: self.theme.chat.inputPanel.panelControlDisabledColor), for: .disabled)
             }
             self.reportButton.isEnabled = self.selectedMessages.count != 0
+            self.updateReportButtonVoiceOver()
         }
         
         let buttonSize = self.reportButton.measure(CGSize(width: width - leftInset - rightInset - 80.0, height: 100.0))
@@ -101,5 +106,12 @@ final class ChatMessageReportInputPanelNode: ChatInputPanelNode {
     
     override func minimalHeight(interfaceState: ChatPresentationInterfaceState, metrics: LayoutMetrics) -> CGFloat {
         return defaultHeight(metrics: metrics)
+    }
+    
+    private func updateReportButtonVoiceOver() {
+        let resolved = ChatMessageReportInputPanelVoiceOver.resolveReportButton(strings: self.strings, isEnabled: self.reportButton.isEnabled)
+        self.reportButton.accessibilityLabel = resolved.label
+        self.reportButton.accessibilityHint = resolved.hint
+        self.reportButton.accessibilityTraits = resolved.traits
     }
 }
