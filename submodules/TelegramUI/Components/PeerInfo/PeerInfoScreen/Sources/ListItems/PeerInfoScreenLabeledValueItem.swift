@@ -517,20 +517,38 @@ private final class PeerInfoScreenLabeledValueItemNode: PeerInfoScreenItemNode {
         
         if let icon = item.icon {
             let iconImage: UIImage?
+            let iconKind: PeerInfoScreenLabeledValueIconButtonVoiceOver.IconKind
             switch icon {
             case .qrCode:
                 iconImage = UIImage(bundleImageName: "Settings/QrIcon")
+                iconKind = .qrCode
             case .premiumGift:
                 iconImage = UIImage(bundleImageName: "Premium/Gift")
+                iconKind = .premiumGift
             }
             self.iconNode.image = generateTintedImage(image: iconImage, color: presentationData.theme.list.itemAccentColor)
             self.iconNode.isHidden = false
             self.iconButtonNode.isHidden = false
-            self.iconButtonNode.accessibilityLabel = presentationData.strings.InviteLink_QRCode_Share
+            
+            if item.iconAction != nil {
+                let resolved = PeerInfoScreenLabeledValueIconButtonVoiceOver.resolve(strings: presentationData.strings, icon: iconKind)
+                self.iconButtonNode.isAccessibilityElement = true
+                self.iconButtonNode.accessibilityLabel = resolved.label
+                self.iconButtonNode.accessibilityHint = resolved.hint
+                self.iconButtonNode.accessibilityTraits = resolved.traits
+            } else {
+                self.iconButtonNode.isAccessibilityElement = false
+                self.iconButtonNode.accessibilityLabel = nil
+                self.iconButtonNode.accessibilityHint = nil
+                self.iconButtonNode.accessibilityTraits = []
+            }
         } else {
             self.iconNode.isHidden = true
             self.iconButtonNode.isHidden = true
+            self.iconButtonNode.isAccessibilityElement = false
             self.iconButtonNode.accessibilityLabel = nil
+            self.iconButtonNode.accessibilityHint = nil
+            self.iconButtonNode.accessibilityTraits = []
         }
         
         let additionalSideInset: CGFloat = !self.iconNode.isHidden ? 32.0 : 0.0
@@ -638,6 +656,12 @@ private final class PeerInfoScreenLabeledValueItemNode: PeerInfoScreenItemNode {
             self.expandNode.isHidden = true
             self.expandButonNode.isHidden = true
         }
+        
+        let expandResolved = PeerInfoScreenLabeledValueExpandButtonVoiceOver.resolve(strings: presentationData.strings, rowLabel: item.label)
+        self.expandButonNode.isAccessibilityElement = !self.expandButonNode.isHidden
+        self.expandButonNode.accessibilityLabel = expandResolved.label
+        self.expandButonNode.accessibilityHint = expandResolved.hint
+        self.expandButonNode.accessibilityTraits = expandResolved.traits
         
         var topOffset = 15.0
         var height = topOffset * 2.0
