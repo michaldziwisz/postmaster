@@ -55,6 +55,7 @@ private final class VisualMediaItemNode: ASDisplayNode {
     private var statusNode: RadialStatusNode
     private let mediaBadgeNode: ChatMessageInteractiveMediaBadge
     private var selectionNode: GridMessageSelectionNode?
+    private let activateArea: AccessibilityAreaNode
     
     private let fetchStatusDisposable = MetaDisposable()
     private let fetchDisposable = MetaDisposable()
@@ -62,6 +63,7 @@ private final class VisualMediaItemNode: ASDisplayNode {
     
     private var item: (VisualMediaItem, Media?, CGSize, CGSize?)?
     private var theme: PresentationTheme?
+    private var strings: PresentationStrings?
     
     private var hasVisibility: Bool = false
     
@@ -80,11 +82,27 @@ private final class VisualMediaItemNode: ASDisplayNode {
         self.mediaBadgeNode = ChatMessageInteractiveMediaBadge()
         self.mediaBadgeNode.frame = CGRect(origin: CGPoint(x: 6.0, y: 6.0), size: CGSize(width: 50.0, height: 50.0))
         
+        self.activateArea = AccessibilityAreaNode()
+        
         super.init()
         
         self.addSubnode(self.containerNode)
         self.containerNode.addSubnode(self.imageNode)
         self.containerNode.addSubnode(self.mediaBadgeNode)
+        self.addSubnode(self.activateArea)
+        
+        self.activateArea.activate = { [weak self] in
+            guard let self, let messageId = self.item?.0.message.id else {
+                return false
+            }
+            if let selectedMessageIds = self.interaction.selectedMessageIds {
+                self.interaction.toggleSelection(messageId, !selectedMessageIds.contains(messageId))
+                return true
+            }
+            
+            self.primaryActivate()
+            return true
+        }
         
         self.containerNode.activated = { [weak self] gesture, _ in
             guard let strongSelf = self, let item = strongSelf.item else {
@@ -117,32 +135,40 @@ private final class VisualMediaItemNode: ASDisplayNode {
         if case .ended = recognizer.state {
             if let (gesture, _) = recognizer.lastRecognizedGestureAndLocation {
                 if case .tap = gesture {
-                    if let (item, _, _, _) = self.item {
-                        var media: Media?
-                        for value in item.message.media {
-                            if let image = value as? TelegramMediaImage {
-                                media = image
-                                break
-                            } else if let file = value as? TelegramMediaFile {
-                                media = file
-                                break
-                            }
-                        }
-                        
-                        if let media = media {
-                            if let file = media as? TelegramMediaFile {
-                                if isMediaStreamable(message: item.message, media: file) {
-                                    self.interaction.openMessage(item.message)
-                                } else {
-                                    self.progressPressed()
-                                }
-                            } else {
-                                self.interaction.openMessage(item.message)
-                            }
-                        }
-                    }
+                    self.primaryActivate()
                 }
             }
+        }
+    }
+    
+    private func primaryActivate() {
+        guard let (item, _, _, _) = self.item else {
+            return
+        }
+        
+        var media: Media?
+        for value in item.message.media {
+            if let image = value as? TelegramMediaImage {
+                media = image
+                break
+            } else if let file = value as? TelegramMediaFile {
+                media = file
+                break
+            }
+        }
+        
+        guard let media else {
+            return
+        }
+        
+        if let file = media as? TelegramMediaFile {
+            if isMediaStreamable(message: item.message, media: file) {
+                self.interaction.openMessage(item.message)
+            } else {
+                self.progressPressed()
+            }
+        } else {
+            self.interaction.openMessage(item.message)
         }
     }
     
@@ -178,10 +204,11 @@ private final class VisualMediaItemNode: ASDisplayNode {
         self.containerNode.cancelGesture()
     }
     
-    func update(size: CGSize, item: VisualMediaItem, theme: PresentationTheme, synchronousLoad: Bool) {
-        if item === self.item?.0 && size == self.item?.2 {
+    func update(size: CGSize, item: VisualMediaItem, theme: PresentationTheme, strings: PresentationStrings, synchronousLoad: Bool) {
+        if item === self.item?.0 && size == self.item?.2 && theme === self.theme && strings === self.strings {
             return
         }
+        self.strings = strings
         self.theme = theme
         var media: Media?
         for value in item.message.media {
@@ -310,6 +337,7 @@ private final class VisualMediaItemNode: ASDisplayNode {
         self.mediaBadgeNode.frame = CGRect(origin: CGPoint(x: size.width - 3.0, y: size.height - 18.0 - 3.0), size: CGSize(width: 50.0, height: 50.0))
         
         self.selectionNode?.frame = CGRect(origin: CGPoint(), size: size)
+        self.activateArea.frame = CGRect(origin: CGPoint(), size: size)
         
         if let (item, media, _, mediaDimensions) = self.item {
             self.item = (item, media, size, mediaDimensions)
@@ -328,6 +356,7 @@ private final class VisualMediaItemNode: ASDisplayNode {
             }
             
             self.updateSelectionState(animated: false)
+            self.updateAccessibility()
         }
     }
     
@@ -380,6 +409,45 @@ private final class VisualMediaItemNode: ASDisplayNode {
                 }
             }
         }
+        
+        self.updateAccessibility()
+    }
+    
+    private func updateAccessibility() {
+        guard let strings = self.strings, let (item, media, _, _) = self.item else {
+            return
+        }
+        
+        let kind: PeerInfoVisualMediaItemVoiceOver.Kind
+        if let _ = media as? TelegramMediaImage {
+            kind = .photo
+        } else if let file = media as? TelegramMediaFile {
+            if file.isAnimated {
+                kind = .gif
+            } else if file.isVideo {
+                let duration = file.duration.flatMap { stringForDuration(Int32($0)) }
+                kind = .video(duration: duration)
+            } else {
+                kind = .file
+            }
+        } else {
+            kind = .file
+        }
+        
+        let isSelectionMode = self.interaction.selectedMessageIds != nil
+        let isSelected = self.interaction.selectedMessageIds?.contains(item.message.id) ?? false
+        
+        let resolved = PeerInfoVisualMediaItemVoiceOver.resolve(
+            strings: strings,
+            kind: kind,
+            isSelectionMode: isSelectionMode,
+            isSelected: isSelected
+        )
+        
+        self.activateArea.accessibilityLabel = resolved.label
+        self.activateArea.accessibilityValue = resolved.value
+        self.activateArea.accessibilityHint = resolved.hint
+        self.activateArea.accessibilityTraits = resolved.traits
     }
     
     func transitionNode() -> (ASDisplayNode, CGRect, () -> (UIView?, UIView?))? {
@@ -1014,7 +1082,7 @@ final class PeerInfoGifPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScrollViewDe
                 if itemFrame.maxY <= visibleHeight {
                     itemSynchronousLoad = synchronousLoad
                 }
-                itemNode.update(size: itemFrame.size, item: self.mediaItems[i], theme: theme, synchronousLoad: itemSynchronousLoad)
+                itemNode.update(size: itemFrame.size, item: self.mediaItems[i], theme: theme, strings: strings, synchronousLoad: itemSynchronousLoad)
                 itemNode.updateIsVisible(itemFrame.intersects(activeRect))
             }
         }
