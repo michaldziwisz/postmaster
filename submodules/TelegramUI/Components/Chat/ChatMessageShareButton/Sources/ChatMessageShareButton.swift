@@ -143,6 +143,32 @@ public class ChatMessageShareButton: ASDisplayNode {
             isExpand = true
         }
         
+        let voiceOverMode: ChatMessageShareButtonVoiceOver.Mode
+        if isSummarize {
+            voiceOverMode = .summary(isExpanded: isExpand)
+        } else if message.adAttribute != nil {
+            voiceOverMode = .ad(hasMore: hasMore)
+        } else if case let .customChatContents(contents) = subject, case .hashTagSearch = contents.kind {
+            voiceOverMode = .navigate
+        } else if isNavigate {
+            voiceOverMode = .navigate
+        } else if case .pinnedMessages = subject {
+            voiceOverMode = .navigate
+        } else if isReplies {
+            voiceOverMode = .comments(count: replyCount)
+        } else if message.id.peerId.isRepliesOrSavedMessages(accountPeerId: account.peerId) {
+            voiceOverMode = .navigate
+        } else {
+            voiceOverMode = .share
+        }
+        
+        let voiceOver = ChatMessageShareButtonVoiceOver.resolve(strings: presentationData.strings, mode: voiceOverMode)
+        self.topButton.isAccessibilityElement = true
+        self.topButton.accessibilityLabel = voiceOver.top.label
+        self.topButton.accessibilityValue = voiceOver.top.value
+        self.topButton.accessibilityHint = voiceOver.top.hint
+        self.topButton.accessibilityTraits = voiceOver.top.traits
+        
         if self.theme !== presentationData.theme.theme || self.isReplies != isReplies || self.hasMore != hasMore || self.isExpand != isExpand {
             self.theme = presentationData.theme.theme
             self.isReplies = isReplies
@@ -243,6 +269,22 @@ public class ChatMessageShareButton: ASDisplayNode {
                 self.bottomIconNode = nil
                 self.separatorNode?.removeFromSupernode()
                 self.separatorNode = nil
+            }
+        }
+        
+        if let bottomButton = self.bottomButton {
+            if let bottom = voiceOver.bottom {
+                bottomButton.isAccessibilityElement = true
+                bottomButton.accessibilityLabel = bottom.label
+                bottomButton.accessibilityValue = bottom.value
+                bottomButton.accessibilityHint = bottom.hint
+                bottomButton.accessibilityTraits = bottom.traits
+            } else {
+                bottomButton.isAccessibilityElement = false
+                bottomButton.accessibilityLabel = nil
+                bottomButton.accessibilityValue = nil
+                bottomButton.accessibilityHint = nil
+                bottomButton.accessibilityTraits = []
             }
         }
         var size = CGSize(width: 30.0, height: 30.0)
