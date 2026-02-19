@@ -31,6 +31,17 @@ final class ChatMessageActionSheetController: ViewController {
         self.displayNode = ChatMessageActionSheetControllerNode(theme: self.theme, actions: self.actions, dismissed: self.dismissed, associatedController: self.associatedController)
         self.displayNodeDidLoad()
     }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        
+        self.view.accessibilityViewIsModal = true
+    }
+
+    override func accessibilityPerformEscape() -> Bool {
+        self.dismissed()
+        return true
+    }
     
     override func dismiss(completion: (() -> Void)? = nil) {
         self.presentingViewController?.dismiss(animated: false, completion: nil)

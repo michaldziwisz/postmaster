@@ -87,27 +87,40 @@ final class ChatMessageActionSheetControllerNode: ViewControllerTracingNode {
         
         self.sideDimNode = ASDisplayNode()
         self.sideDimNode.backgroundColor = UIColor(white: 0.0, alpha: 0.5)
+        self.sideDimNode.isAccessibilityElement = false
         
         self.sideInputDimNode = ASDisplayNode()
         self.sideInputDimNode.backgroundColor = UIColor(white: 0.0, alpha: 0.5)
+        self.sideInputDimNode.isAccessibilityElement = false
         
         self.inputDimNode = ASDisplayNode()
         self.inputDimNode.backgroundColor = UIColor(white: 0.0, alpha: 0.5)
+        self.inputDimNode.isAccessibilityElement = false
         
         self.itemsShadowNode = ASImageNode()
         self.itemsShadowNode.isLayerBacked = true
         self.itemsShadowNode.displayWithoutProcessing = true
         self.itemsShadowNode.displaysAsynchronously = false
         self.itemsShadowNode.image = generateShadowImage(theme: theme)
+        self.itemsShadowNode.isAccessibilityElement = false
         
         self.itemsContainerNode = ASDisplayNode()
         self.itemsContainerNode.backgroundColor = theme.actionSheet.opaqueItemBackgroundColor
         self.itemsContainerNode.cornerRadius = 16.0
         self.itemsContainerNode.clipsToBounds = true
+        self.itemsContainerNode.isAccessibilityElement = false
         
         self.actionNodes = actions.map { action in
             let node = MessageActionButtonNode(theme: theme)
             node.setAttributedTitle(NSAttributedString(string: action.title, font: Font.regular(20.0), textColor: action.color == .destructive ? theme.actionSheet.destructiveActionTextColor : theme.actionSheet.controlAccentColor), for: [])
+            
+            let accessibility = ChatMessageActionSheetVoiceOver.resolveActionButton(title: action.title, isEnabled: true)
+            node.isAccessibilityElement = true
+            node.accessibilityLabel = accessibility.label
+            node.accessibilityHint = accessibility.hint
+            node.accessibilityTraits = accessibility.traits
+            node.accessibilityElementsHidden = true
+            
             return node
         }
         
