@@ -24,6 +24,15 @@ final class ChatToastAlertPanelNode: ChatTitleAccessoryPanelNode {
             if self.text != oldValue {
                 self.titleNode.attributedText = NSAttributedString(string: text, font: Font.regular(14.0), textColor: self.textColor)
                 self.setNeedsLayout()
+                
+                if UIAccessibility.isVoiceOverRunning {
+                    let announcement = ChatToastAlertPanelVoiceOver.resolve(text: text).label
+                    if !announcement.isEmpty {
+                        DispatchQueue.main.async {
+                            UIAccessibility.post(notification: .announcement, argument: announcement as NSString)
+                        }
+                    }
+                }
             }
         }
     }
@@ -44,6 +53,7 @@ final class ChatToastAlertPanelNode: ChatTitleAccessoryPanelNode {
 
         self.addSubnode(self.titleNode)
         self.addSubnode(self.separatorNode)
+        self.addSubnode(self.activateAreaNode)
     }
     
     override func updateLayout(width: CGFloat, leftInset: CGFloat, rightInset: CGFloat, transition: ContainedViewLayoutTransition, interfaceState: ChatPresentationInterfaceState) -> LayoutResult {
@@ -58,7 +68,9 @@ final class ChatToastAlertPanelNode: ChatTitleAccessoryPanelNode {
         self.titleNode.frame = CGRect(origin: CGPoint(x: floor((width - titleSize.width) / 2.0), y: floor((panelHeight - titleSize.height) / 2.0)), size: titleSize)
         
         self.activateAreaNode.frame = CGRect(origin: .zero, size: CGSize(width: width, height: panelHeight))
-        self.activateAreaNode.accessibilityLabel = self.titleNode.attributedText?.string ?? ""
+        let resolved = ChatToastAlertPanelVoiceOver.resolve(text: self.titleNode.attributedText?.string ?? "")
+        self.activateAreaNode.accessibilityLabel = resolved.label
+        self.activateAreaNode.accessibilityTraits = resolved.traits
         
         return LayoutResult(backgroundHeight: panelHeight, insetHeight: panelHeight, hitTestSlop: 0.0)
     }
