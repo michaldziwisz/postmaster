@@ -348,6 +348,18 @@ final class ChatTagSearchInputPanelNode: ChatInputPanelNode {
                 listModeButtonTransition.setPosition(view: buttonView, position: CGPoint(x: listModeFrame.minX + listModeFrame.width * buttonView.layer.anchorPoint.x, y: listModeFrame.minY + listModeFrame.height * buttonView.layer.anchorPoint.y))
                 listModeButtonTransition.setBounds(view: buttonView, bounds: CGRect(origin: CGPoint(), size: listModeFrame.size))
                 transition.setAlpha(view: buttonView, alpha: 1.0)
+                
+                let accessibility = ChatTagSearchInputPanelVoiceOver.resolveListModeButton(
+                    strings: params.interfaceState.strings,
+                    isDisplayingAsList: params.interfaceState.displayHistoryFilterAsList,
+                    isEnabled: true
+                )
+                buttonView.isAccessibilityElement = true
+                buttonView.accessibilityLabel = accessibility.label
+                buttonView.accessibilityValue = accessibility.value
+                buttonView.accessibilityHint = accessibility.hint
+                buttonView.accessibilityTraits = accessibility.traits
+                buttonView.accessibilityElementsHidden = true
             }
         } else {
             if let listModeButton = self.listModeButton {
@@ -400,6 +412,14 @@ final class ChatTagSearchInputPanelNode: ChatInputPanelNode {
                     }
                 }
                 transition.setFrame(view: calendarButtonView, frame: calendarButtonFrame)
+                
+                let accessibility = ChatTagSearchInputPanelVoiceOver.resolveCalendarButton(strings: params.interfaceState.strings, isEnabled: true)
+                calendarButtonView.isAccessibilityElement = true
+                calendarButtonView.accessibilityLabel = accessibility.label
+                calendarButtonView.accessibilityValue = accessibility.value
+                calendarButtonView.accessibilityHint = accessibility.hint
+                calendarButtonView.accessibilityTraits = accessibility.traits
+                calendarButtonView.accessibilityElementsHidden = true
             }
             nextLeftX += calendarButtonSize.width + 0.0
         } else if let calendarButtonView = self.calendarButton.view {
@@ -461,6 +481,14 @@ final class ChatTagSearchInputPanelNode: ChatInputPanelNode {
                 if animateIn {
                     transition.animateScale(view: buttonView, from: 0.001, to: 1.0)
                 }
+                
+                let accessibility = ChatTagSearchInputPanelVoiceOver.resolveMembersButton(strings: params.interfaceState.strings, isEnabled: true)
+                buttonView.isAccessibilityElement = true
+                buttonView.accessibilityLabel = accessibility.label
+                buttonView.accessibilityValue = accessibility.value
+                buttonView.accessibilityHint = accessibility.hint
+                buttonView.accessibilityTraits = accessibility.traits
+                buttonView.accessibilityElementsHidden = true
             }
             nextLeftX += buttonSize.width + 0.0
         } else {
@@ -476,6 +504,21 @@ final class ChatTagSearchInputPanelNode: ChatInputPanelNode {
         }
         
         if !resultsTextString.isEmpty {
+            let resultsTextAccessibilityLabel = resultsTextString.map { item -> String in
+                switch item.content {
+                case let .text(text):
+                    return text
+                case let .number(value, minDigits):
+                    var string = String(value)
+                    while string.count < minDigits {
+                        string.insert("0", at: string.startIndex)
+                    }
+                    return string
+                case .icon:
+                    return ""
+                }
+            }.joined()
+            
             var resultsTextTransition = transition
             let resultsText: ComponentView<Empty>
             if let current = self.resultsText {
@@ -522,6 +565,19 @@ final class ChatTagSearchInputPanelNode: ChatInputPanelNode {
                 }
                 resultsTextTransition.setFrame(view: resultsTextView, frame: resultsTextFrame)
                 transition.setAlpha(view: resultsTextView, alpha: 1.0)
+                
+                let isToggleEnabled = params.interfaceState.displayHistoryFilterAsList && canChangeListMode
+                let accessibility = ChatTagSearchInputPanelVoiceOver.resolveResultsText(
+                    text: resultsTextAccessibilityLabel,
+                    isToggleEnabled: isToggleEnabled,
+                    strings: params.interfaceState.strings
+                )
+                resultsTextView.isAccessibilityElement = true
+                resultsTextView.accessibilityLabel = accessibility.label
+                resultsTextView.accessibilityValue = accessibility.value
+                resultsTextView.accessibilityHint = accessibility.hint
+                resultsTextView.accessibilityTraits = accessibility.traits
+                resultsTextView.accessibilityElementsHidden = true
             }
             nextLeftX += -3.0 + resultsTextSize.width
         } else {
