@@ -877,6 +877,36 @@ public struct ChatListItemVoiceOver {
         
         return Resolved(isAccessibilityElement: true, traits: traits)
     }
+
+    public enum CustomActionKind: Equatable {
+        case openStories
+        case openWebApp
+    }
+
+    public struct CustomAction: Equatable {
+        public let kind: CustomActionKind
+        public let name: String
+
+        public init(kind: CustomActionKind, name: String) {
+            self.kind = kind
+            self.name = name
+        }
+    }
+
+    public static func resolveCustomActions(strings: PresentationStrings, hasStories: Bool, hasWebApp: Bool, isEditing: Bool) -> [CustomAction] {
+        if isEditing {
+            return []
+        }
+
+        var actions: [CustomAction] = []
+        if hasStories {
+            actions.append(CustomAction(kind: .openStories, name: strings.VoiceOver_ChatList_OpenStories))
+        }
+        if hasWebApp {
+            actions.append(CustomAction(kind: .openWebApp, name: strings.ChatList_InlineButtonOpenApp))
+        }
+        return actions
+    }
 }
 
 private let separatorHeight = 1.0 / UIScreen.main.scale
@@ -3515,6 +3545,17 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
             if case .none = badgeContent, case .none = mentionBadgeContent, case let .chat(itemPeer) = contentPeer, case let .user(user) = itemPeer.chatMainPeer, let botInfo = user.botInfo, botInfo.flags.contains(.hasWebApp) {
                 actionButtonTitleNodeLayoutAndApply = makeActionButtonTitleNodeLayout(TextNodeLayoutArguments(attributedString: NSAttributedString(string: item.presentationData.strings.ChatList_InlineButtonOpenApp, font: Font.semibold(floor(item.presentationData.fontSize.itemListBaseFontSize * 15.0 / 17.0)), textColor: theme.unreadBadgeActiveTextColor), backgroundColor: nil, maximumNumberOfLines: 1, truncationType: .end, constrainedSize: CGSize(width: rawContentWidth, height: CGFloat.greatestFiniteMagnitude), alignment: .natural, cutout: nil, insets: UIEdgeInsets()))
             }
+            let hasWebAppActionButton = actionButtonTitleNodeLayoutAndApply != nil
+
+            let hasStories: Bool
+            switch item.content {
+            case let .peer(peerData):
+                hasStories = (peerData.storyState?.stats.totalCount ?? 0) != 0
+            case let .groupReference(groupReferenceData):
+                hasStories = (groupReferenceData.storyState?.stats.totalCount ?? 0) != 0
+            case .loading:
+                hasStories = false
+            }
             
             var badgeSize: CGFloat = 0.0
             if !badgeLayout.width.isZero {
@@ -5167,13 +5208,25 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                         strongSelf.view.accessibilityLabel = strongSelf.accessibilityLabel
                         strongSelf.view.accessibilityValue = strongSelf.accessibilityValue
                         
-                        if !customActions.isEmpty {
-                            strongSelf.view.accessibilityCustomActions = customActions.map({ action -> UIAccessibilityCustomAction in
-                                return ChatListItemAccessibilityCustomAction(name: action.name, target: strongSelf, selector: #selector(strongSelf.performLocalAccessibilityCustomAction(_:)), key: action.key)
-                            })
-                        } else {
-                            strongSelf.view.accessibilityCustomActions = nil
-                        }
+                        let extraCustomActions = ChatListItemVoiceOver.resolveCustomActions(
+                            strings: item.presentationData.strings,
+                            hasStories: hasStories,
+                            hasWebApp: hasWebAppActionButton,
+                            isEditing: item.editing
+                        )
+                        var accessibilityCustomActions: [UIAccessibilityCustomAction] = []
+                        accessibilityCustomActions.append(contentsOf: extraCustomActions.map { action in
+                            switch action.kind {
+                            case .openStories:
+                                return UIAccessibilityCustomAction(name: action.name, target: strongSelf, selector: #selector(strongSelf.performOpenStoriesAccessibilityCustomAction(_:)))
+                            case .openWebApp:
+                                return UIAccessibilityCustomAction(name: action.name, target: strongSelf, selector: #selector(strongSelf.performOpenWebAppAccessibilityCustomAction(_:)))
+                            }
+                        })
+                        accessibilityCustomActions.append(contentsOf: customActions.map({ action -> UIAccessibilityCustomAction in
+                            return ChatListItemAccessibilityCustomAction(name: action.name, target: strongSelf, selector: #selector(strongSelf.performLocalAccessibilityCustomAction(_:)), key: action.key)
+                        }))
+                        strongSelf.view.accessibilityCustomActions = accessibilityCustomActions.isEmpty ? nil : accessibilityCustomActions
                     } else {
                         strongSelf.view.accessibilityLabel = nil
                         strongSelf.view.accessibilityValue = nil
@@ -5505,6 +5558,42 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
             return true
         }
         return false
+    }
+
+    @objc private func performOpenWebAppAccessibilityCustomAction(_ action: UIAccessibilityCustomAction) -> Bool {
+        guard let item else {
+            return false
+        }
+        guard case let .peer(peerData) = item.content else {
+            return false
+        }
+        guard case let .user(user) = peerData.peer.peer, let botInfo = user.botInfo, botInfo.flags.contains(.hasWebApp) else {
+            return false
+        }
+        item.interaction.openWebApp(user)
+        return true
+    }
+
+    @objc private func performOpenStoriesAccessibilityCustomAction(_ action: UIAccessibilityCustomAction) -> Bool {
+        guard let item else {
+            return false
+        }
+        switch item.content {
+        case .loading:
+            return false
+        case let .peer(peerData):
+            guard (peerData.storyState?.stats.totalCount ?? 0) != 0 else {
+                return false
+            }
+            item.interaction.openStories(.peer(peerData.peer.peerId), self)
+            return true
+        case let .groupReference(groupReferenceData):
+            guard (groupReferenceData.storyState?.stats.totalCount ?? 0) != 0 else {
+                return false
+            }
+            item.interaction.openStories(.archive, self)
+            return true
+        }
     }
     
     override public func snapshotForReordering() -> UIView? {
