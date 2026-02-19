@@ -99,6 +99,8 @@ public final class ReactionIconView: PortalSourceView {
     
     private var disposable: Disposable?
     
+    public var fileDidUpdate: ((TelegramMediaFile?) -> Void)?
+    
     public var iconFrame: CGRect? {
         if let animationLayer = self.animationLayer {
             return animationLayer.frame
@@ -143,6 +145,7 @@ public final class ReactionIconView: PortalSourceView {
         if self.fileId != fileId {
             self.fileId = fileId
             self.file = file
+            self.fileDidUpdate?(file)
             
             self.animationLayer?.removeFromSuperlayer()
             self.animationLayer = nil
@@ -161,6 +164,7 @@ public final class ReactionIconView: PortalSourceView {
                         return
                     }
                     strongSelf.file = files[fileId]
+                    strongSelf.fileDidUpdate?(strongSelf.file)
                     strongSelf.reloadFile()
                 }).strict()
             }
@@ -326,6 +330,7 @@ public final class ReactionIconView: PortalSourceView {
         self.context = nil
         self.fileId = nil
         self.file = nil
+        self.fileDidUpdate?(nil)
         self.animationCache = nil
         self.animationRenderer = nil
         self.placeholderColor = nil
@@ -334,6 +339,22 @@ public final class ReactionIconView: PortalSourceView {
         self.reaction = nil
         
         self.isAnimationHidden = false
+    }
+    
+    public func currentCustomEmojiAlt() -> String? {
+        guard let file = self.file else {
+            return nil
+        }
+        for attribute in file.attributes {
+            if case let .CustomEmoji(_, _, alt, _) = attribute {
+                let trimmed = alt.trimmingCharacters(in: .whitespacesAndNewlines)
+                if trimmed.isEmpty || trimmed == "." {
+                    return nil
+                }
+                return trimmed
+            }
+        }
+        return nil
     }
 }
 
@@ -1023,6 +1044,9 @@ public final class ReactionButtonAsyncNode: ContextControllerSourceView {
         
         self.iconView = ReactionIconView()
         self.iconView?.isUserInteractionEnabled = false
+        self.iconView?.fileDidUpdate = { [weak self] _ in
+            self?.updateAccessibility()
+        }
         
         super.init(frame: frame)
         
@@ -1085,10 +1109,13 @@ public final class ReactionButtonAsyncNode: ContextControllerSourceView {
     }
     
     func reset() {
-        self.iconView?.reset()
         self.layout = nil
+        self.iconView?.reset()
         
         self.buttonNode.reset()
+        self.buttonNode.accessibilityLabel = nil
+        self.buttonNode.accessibilityValue = nil
+        self.buttonNode.accessibilityHint = nil
     }
     
     @objc private func pressed() {
@@ -1298,6 +1325,32 @@ public final class ReactionButtonAsyncNode: ContextControllerSourceView {
         }
         
         self.layout = layout
+        self.updateAccessibility()
+    }
+    
+    private func updateAccessibility() {
+        guard let layout = self.layout else {
+            return
+        }
+        
+        let component = layout.spec.component
+        let strings = component.context.sharedContext.currentPresentationData.with { $0 }.strings
+        
+        let resolved = ReactionButtonListComponentVoiceOver.resolveReactionButton(
+            strings: strings,
+            reaction: component.reaction.value,
+            tagTitle: component.isTag ? component.reaction.title : nil,
+            customAlt: self.iconView?.currentCustomEmojiAlt(),
+            count: component.count,
+            isSelected: component.chosenOrder != nil,
+            isEnabled: self.buttonNode.isUserInteractionEnabled && !self.ignoreButtonTap
+        )
+        
+        self.buttonNode.isAccessibilityElement = true
+        self.buttonNode.accessibilityLabel = resolved.label
+        self.buttonNode.accessibilityValue = resolved.value
+        self.buttonNode.accessibilityHint = resolved.hint
+        self.buttonNode.accessibilityTraits = resolved.traits
     }
     
     public static func asyncLayout(_ item: ReactionNodePool.Item?) -> (ReactionButtonComponent) -> (size: CGSize, apply: (_ animation: ListViewItemUpdateAnimation, _ arguments: ReactionButtonsAsyncLayoutContainer.Arguments) -> ReactionNodePool.Item) {

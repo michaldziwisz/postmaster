@@ -36,6 +36,7 @@ swift_library(
         "//submodules/ContactsPeerItem",
         "//submodules/ContactListUI",
         "//submodules/ComposePollUI",
+        "//submodules/Components/ReactionButtonListComponent",
         "//submodules/HorizontalPeerItem",
         "//submodules/CountrySelectionUI",
         "//submodules/ListMessageItem",
