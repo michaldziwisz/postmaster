@@ -158,6 +158,7 @@ public class ItemListPermanentInviteLinkItemNode: ListViewItemNode, ItemListItem
     private var justCreatedCallLeftSeparatorLayer: SimpleLayer?
     private var justCreatedCallRightSeparatorLayer: SimpleLayer?
     private var justCreatedCallSeparatorText: ComponentView<Empty>?
+    private var justCreatedCallAccessibilityArea: AccessibilityAreaNode?
     
     private let activateArea: AccessibilityAreaNode
     
@@ -209,6 +210,8 @@ public class ItemListPermanentInviteLinkItemNode: ListViewItemNode, ItemListItem
         self.invitedPeersNode = TextNode()
                 
         self.activateArea = AccessibilityAreaNode()
+        self.activateArea.isAccessibilityElement = false
+        self.activateArea.accessibilityElementsHidden = true
         
         super.init(layerBacked: false)
         
@@ -359,6 +362,7 @@ public class ItemListPermanentInviteLinkItemNode: ListViewItemNode, ItemListItem
             let (invitedPeersLayout, invitedPeersApply) = makeInvitedPeersLayout(TextNodeLayoutArguments(attributedString: NSAttributedString(string: subtitle, font: titleFont, textColor: subtitleColor), backgroundColor: nil, maximumNumberOfLines: 1, truncationType: .end, constrainedSize: CGSize(width: params.width - params.rightInset - 20.0 - leftInset - rightInset, height: CGFloat.greatestFiniteMagnitude), alignment: .natural, cutout: nil, insets: UIEdgeInsets()))
             
             var justCreatedCallTextNodeLayout: (TextNodeLayout, (TextNodeWithEntities.Arguments?) -> TextNodeWithEntities?)?
+            var justCreatedCallTextAccessibilityLabel: String?
             if item.isCall {
                 let chevronImage = generateTintedImage(image: UIImage(bundleImageName: "Contact List/SubtitleArrow"), color: item.presentationData.theme.list.itemAccentColor)
 
@@ -378,6 +382,7 @@ public class ItemListPermanentInviteLinkItemNode: ListViewItemNode, ItemListItem
                 if let range = justCreatedCallTextAttributedString.string.range(of: ">"), let chevronImage {
                     justCreatedCallTextAttributedString.addAttribute(.attachment, value: chevronImage, range: NSRange(range, in: justCreatedCallTextAttributedString.string))
                 }
+                justCreatedCallTextAccessibilityLabel = justCreatedCallTextAttributedString.string.replacingOccurrences(of: ">", with: "")
 
                 justCreatedCallTextNodeLayout = makeJustCreatedCallTextNodeLayout(TextNodeLayoutArguments(
                     attributedString: justCreatedCallTextAttributedString,
@@ -443,9 +448,37 @@ public class ItemListPermanentInviteLinkItemNode: ListViewItemNode, ItemListItem
                     strongSelf.avatarsContent = avatarsContent
                     
                     strongSelf.activateArea.frame = CGRect(origin: CGPoint(x: params.leftInset, y: 0.0), size: CGSize(width: params.width - params.leftInset - params.rightInset, height: layout.contentSize.height))
-//                    strongSelf.activateArea.accessibilityLabel = item.title
-//                    strongSelf.activateArea.accessibilityValue = item.label
-                    strongSelf.activateArea.accessibilityTraits = []
+                    
+                    let hasInvite = item.invite != nil
+                    let linkText = item.invite?.link?.replacingOccurrences(of: "https://", with: "") ?? item.presentationData.strings.Channel_NotificationLoading
+                    
+                    strongSelf.fieldButtonNode.isAccessibilityElement = true
+                    strongSelf.fieldButtonNode.accessibilityLabel = linkText
+                    strongSelf.fieldButtonNode.accessibilityHint = hasInvite ? item.presentationData.strings.InviteLink_ContextCopy : nil
+                    var fieldTraits: UIAccessibilityTraits = [.button]
+                    if !hasInvite {
+                        fieldTraits.insert(.notEnabled)
+                    }
+                    strongSelf.fieldButtonNode.accessibilityTraits = fieldTraits
+                    
+                    strongSelf.addressButtonNode.isAccessibilityElement = true
+                    strongSelf.addressButtonNode.accessibilityLabel = item.presentationData.strings.Common_More
+                    strongSelf.addressButtonNode.accessibilityHint = hasInvite ? item.presentationData.strings.VoiceOver_Chat_OpenHint : nil
+                    var addressButtonTraits: UIAccessibilityTraits = [.button]
+                    if !hasInvite {
+                        addressButtonTraits.insert(.notEnabled)
+                    }
+                    strongSelf.addressButtonNode.accessibilityTraits = addressButtonTraits
+                    
+                    let canViewImporters = item.viewAction != nil && !item.peers.isEmpty && hasInvite
+                    strongSelf.avatarsButtonNode.isAccessibilityElement = item.displayImporters && item.invite != nil
+                    strongSelf.avatarsButtonNode.accessibilityLabel = subtitle
+                    strongSelf.avatarsButtonNode.accessibilityHint = canViewImporters ? item.presentationData.strings.VoiceOver_Chat_OpenHint : nil
+                    var avatarsButtonTraits: UIAccessibilityTraits = [.button]
+                    if !canViewImporters {
+                        avatarsButtonTraits.insert(.notEnabled)
+                    }
+                    strongSelf.avatarsButtonNode.accessibilityTraits = avatarsButtonTraits
                     
                     if let _ = updatedTheme {
                         strongSelf.topStripeNode.backgroundColor = itemSeparatorColor
@@ -610,6 +643,31 @@ public class ItemListPermanentInviteLinkItemNode: ListViewItemNode, ItemListItem
                             
                             let justCreatedCallTextNodeFrame = CGRect(origin: CGPoint(x: floorToScreenPixels((params.width - justCreatedCallTextNodeLayout.0.size.width) / 2.0), y: shareButtonNode.frame.maxY + justCreatedCallTextSpacing), size: CGSize(width: justCreatedCallTextNodeLayout.0.size.width, height: justCreatedCallTextNodeLayout.0.size.height))
                             justCreatedCallTextNode.textNode.frame = justCreatedCallTextNodeFrame
+                            
+                            if let justCreatedCallTextAccessibilityLabel {
+                                let accessibilityArea: AccessibilityAreaNode
+                                if let current = strongSelf.justCreatedCallAccessibilityArea {
+                                    accessibilityArea = current
+                                } else {
+                                    accessibilityArea = AccessibilityAreaNode()
+                                    strongSelf.justCreatedCallAccessibilityArea = accessibilityArea
+                                    strongSelf.addSubnode(accessibilityArea)
+                                }
+                                accessibilityArea.frame = justCreatedCallTextNodeFrame
+                                accessibilityArea.accessibilityLabel = justCreatedCallTextAccessibilityLabel
+                                accessibilityArea.accessibilityHint = item.presentationData.strings.VoiceOver_Chat_OpenHint
+                                accessibilityArea.accessibilityTraits = [.button]
+                                accessibilityArea.activate = { [weak strongSelf] in
+                                    guard let strongSelf, let item = strongSelf.item else {
+                                        return false
+                                    }
+                                    item.openCallAction?()
+                                    return true
+                                }
+                            } else if let accessibilityArea = strongSelf.justCreatedCallAccessibilityArea {
+                                strongSelf.justCreatedCallAccessibilityArea = nil
+                                accessibilityArea.removeFromSupernode()
+                            }
 
                             let justCreatedCallSeparatorText: ComponentView<Empty>
                             if let current = strongSelf.justCreatedCallSeparatorText {
@@ -665,6 +723,9 @@ public class ItemListPermanentInviteLinkItemNode: ListViewItemNode, ItemListItem
                     } else if let justCreatedCallTextNode = strongSelf.justCreatedCallTextNode {
                         strongSelf.justCreatedCallTextNode = nil
                         justCreatedCallTextNode.textNode.removeFromSupernode()
+                        
+                        strongSelf.justCreatedCallAccessibilityArea?.removeFromSupernode()
+                        strongSelf.justCreatedCallAccessibilityArea = nil
 
                         strongSelf.justCreatedCallLeftSeparatorLayer?.removeFromSuperlayer()
                         strongSelf.justCreatedCallLeftSeparatorLayer = nil
@@ -703,10 +764,12 @@ public class ItemListPermanentInviteLinkItemNode: ListViewItemNode, ItemListItem
                     strongSelf.addressButtonIconNode.alpha = item.invite != nil ? 1.0 : 0.0
                     
                     
+                    strongSelf.copyButtonNode?.isEnabled = item.invite != nil
                     strongSelf.copyButtonNode?.isUserInteractionEnabled = item.invite != nil
                     strongSelf.copyButtonNode?.alpha = item.invite != nil ? 1.0 : 0.4
                     strongSelf.copyButtonNode?.isHidden = !item.displayButton || !effectiveSeparateButtons
                     
+                    strongSelf.shareButtonNode?.isEnabled = item.invite != nil
                     strongSelf.shareButtonNode?.isUserInteractionEnabled = item.invite != nil
                     strongSelf.shareButtonNode?.alpha = item.invite != nil ? 1.0 : 0.4
                     strongSelf.shareButtonNode?.isHidden = !item.displayButton

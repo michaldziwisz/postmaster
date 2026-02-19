@@ -202,6 +202,8 @@ public class ItemListFolderInviteLinkItemNode: ListViewItemNode, ItemListItemNod
         self.invitedPeersNode = TextNode()
                 
         self.activateArea = AccessibilityAreaNode()
+        self.activateArea.isAccessibilityElement = false
+        self.activateArea.accessibilityElementsHidden = true
         
         super.init(layerBacked: false)
         
@@ -374,9 +376,37 @@ public class ItemListFolderInviteLinkItemNode: ListViewItemNode, ItemListItemNod
                     strongSelf.avatarsContent = avatarsContent
                     
                     strongSelf.activateArea.frame = CGRect(origin: CGPoint(x: params.leftInset, y: 0.0), size: CGSize(width: params.width - params.leftInset - params.rightInset, height: layout.contentSize.height))
-//                    strongSelf.activateArea.accessibilityLabel = item.title
-//                    strongSelf.activateArea.accessibilityValue = item.label
-                    strongSelf.activateArea.accessibilityTraits = []
+                    
+                    let hasInvite = item.invite != nil
+                    let linkText = item.invite?.link.replacingOccurrences(of: "https://", with: "") ?? item.presentationData.strings.Channel_NotificationLoading
+                    
+                    strongSelf.fieldButtonNode.isAccessibilityElement = true
+                    strongSelf.fieldButtonNode.accessibilityLabel = linkText
+                    strongSelf.fieldButtonNode.accessibilityHint = hasInvite ? item.presentationData.strings.InviteLink_ContextCopy : nil
+                    var fieldTraits: UIAccessibilityTraits = [.button]
+                    if !hasInvite {
+                        fieldTraits.insert(.notEnabled)
+                    }
+                    strongSelf.fieldButtonNode.accessibilityTraits = fieldTraits
+                    
+                    strongSelf.addressButtonNode.isAccessibilityElement = true
+                    strongSelf.addressButtonNode.accessibilityLabel = item.presentationData.strings.Common_More
+                    strongSelf.addressButtonNode.accessibilityHint = hasInvite ? item.presentationData.strings.VoiceOver_Chat_OpenHint : nil
+                    var addressButtonTraits: UIAccessibilityTraits = [.button]
+                    if !hasInvite {
+                        addressButtonTraits.insert(.notEnabled)
+                    }
+                    strongSelf.addressButtonNode.accessibilityTraits = addressButtonTraits
+                    
+                    let canViewImporters = item.viewAction != nil && !item.peers.isEmpty && hasInvite
+                    strongSelf.avatarsButtonNode.isAccessibilityElement = item.displayImporters && item.invite != nil
+                    strongSelf.avatarsButtonNode.accessibilityLabel = subtitle
+                    strongSelf.avatarsButtonNode.accessibilityHint = canViewImporters ? item.presentationData.strings.VoiceOver_Chat_OpenHint : nil
+                    var avatarsButtonTraits: UIAccessibilityTraits = [.button]
+                    if !canViewImporters {
+                        avatarsButtonTraits.insert(.notEnabled)
+                    }
+                    strongSelf.avatarsButtonNode.accessibilityTraits = avatarsButtonTraits
                     
                     if let _ = updatedTheme {
                         strongSelf.topStripeNode.backgroundColor = itemSeparatorColor
@@ -544,9 +574,13 @@ public class ItemListFolderInviteLinkItemNode: ListViewItemNode, ItemListItemNod
                     strongSelf.fieldButtonNode.isUserInteractionEnabled = item.invite != nil
                     strongSelf.addressButtonIconNode.alpha = item.invite != nil ? 1.0 : 0.0
                     
+                    strongSelf.shareButtonNode?.isEnabled = item.enableButton
                     strongSelf.shareButtonNode?.isUserInteractionEnabled = item.enableButton
                     strongSelf.shareButtonNode?.alpha = item.enableButton ? 1.0 : 0.4
                     strongSelf.shareButtonNode?.isHidden = !item.displayButton
+                    strongSelf.secondaryButtonNode?.isEnabled = item.enableButton
+                    strongSelf.secondaryButtonNode?.isUserInteractionEnabled = item.enableButton
+                    strongSelf.secondaryButtonNode?.alpha = item.enableButton ? 1.0 : 0.4
                     strongSelf.avatarsButtonNode.isHidden = !item.displayImporters
                     strongSelf.avatarsNode.isHidden = !item.displayImporters || item.invite == nil
                     strongSelf.invitedPeersNode.isHidden = !item.displayImporters || item.invite == nil
