@@ -145,6 +145,7 @@ final class MonetizationBalanceItemNode: ListViewItemNode, ItemListItemNode {
         self.addSubnode(self.iconNode)
         self.addSubnode(self.balanceTextNode)
         self.addSubnode(self.valueTextNode)
+        self.addSubnode(self.activateArea)
     }
     
     func asyncLayout() -> (_ item: MonetizationBalanceItem, _ params: ListViewItemLayoutParams, _ insets: ItemListNeighbors) -> (ListViewItemNodeLayout, () -> Void) {
@@ -232,7 +233,9 @@ final class MonetizationBalanceItemNode: ListViewItemNode, ItemListItemNode {
                     let _ = valueApply()
                     
                     strongSelf.activateArea.frame = CGRect(origin: CGPoint(x: params.leftInset, y: 0.0), size: CGSize(width: params.width - params.leftInset - params.rightInset, height: layout.contentSize.height))
-                    strongSelf.activateArea.accessibilityTraits = []
+                    strongSelf.activateArea.accessibilityLabel = amountString.string
+                    strongSelf.activateArea.accessibilityValue = value.isEmpty ? nil : value
+                    strongSelf.activateArea.accessibilityTraits = [.staticText]
                     
                     if let _ = updatedTheme {
                         strongSelf.topStripeNode.backgroundColor = itemSeparatorColor

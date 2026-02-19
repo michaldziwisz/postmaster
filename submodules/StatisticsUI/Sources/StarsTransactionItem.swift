@@ -70,11 +70,15 @@ final class StarsTransactionItem: ListViewItem, ItemListItem {
         }
     }
     
-    var selectable: Bool = true
+    var selectable: Bool {
+        return !self.transaction.flags.contains(.isLocal)
+    }
     
     public func selected(listView: ListView) {
         listView.clearHighlightAnimated(true)
-        self.action()
+        if !self.transaction.flags.contains(.isLocal) {
+            self.action()
+        }
     }
 }
 
@@ -114,6 +118,8 @@ final class StarsTransactionItemNode: ListViewItemNode, ItemListItemNode {
         self.activateArea = AccessibilityAreaNode()
         
         super.init(layerBacked: false)
+        
+        self.addSubnode(self.activateArea)
     }
     
     func asyncLayout() -> (_ item: StarsTransactionItem, _ params: ListViewItemLayoutParams, _ insets: ItemListNeighbors) -> (ListViewItemNodeLayout, () -> Void) {
@@ -155,7 +161,6 @@ final class StarsTransactionItemNode: ListViewItemNode, ItemListItemNode {
                     strongSelf.item = item
                         
                     strongSelf.activateArea.frame = CGRect(origin: CGPoint(x: params.leftInset, y: 0.0), size: CGSize(width: params.width - params.leftInset - params.rightInset, height: layout.contentSize.height))
-                    strongSelf.activateArea.accessibilityTraits = []
                     
                     if let _ = updatedTheme {
                         strongSelf.topStripeNode.backgroundColor = itemSeparatorColor
@@ -294,6 +299,30 @@ final class StarsTransactionItemNode: ListViewItemNode, ItemListItemNode {
                     } else if item.transaction.flags.contains(.isFailed) {
                         itemDate += " – \(item.presentationData.strings.Monetization_Transaction_Failed)"
                         itemDateColor = item.presentationData.theme.list.itemDestructiveColor
+                    }
+                    
+                    let isEnabled = !item.transaction.flags.contains(.isLocal)
+                    let accessibilityResolved = ItemListRowVoiceOver.resolve(strings: item.presentationData.strings, kind: isEnabled ? .open : .staticText, isEnabled: isEnabled)
+                    
+                    strongSelf.activateArea.accessibilityLabel = itemTitle
+                    var accessibilityValueParts: [String] = []
+                    if let itemSubtitle {
+                        accessibilityValueParts.append(itemSubtitle)
+                    }
+                    accessibilityValueParts.append(itemDate)
+                    accessibilityValueParts.append(formattedLabel)
+                    strongSelf.activateArea.accessibilityValue = accessibilityValueParts.joined(separator: ", ")
+                    strongSelf.activateArea.accessibilityHint = accessibilityResolved.hint
+                    strongSelf.activateArea.accessibilityTraits = accessibilityResolved.traits
+                    strongSelf.activateArea.activate = { [weak strongSelf] in
+                        guard let strongSelf, let item = strongSelf.item else {
+                            return false
+                        }
+                        if item.transaction.flags.contains(.isLocal) {
+                            return false
+                        }
+                        item.action()
+                        return true
                     }
                     
                     var titleComponents: [AnyComponentWithIdentity<Empty>] = []
