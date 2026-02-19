@@ -487,7 +487,16 @@ private final class ChatMessagePollOptionNode: ASDisplayNode {
     
     @objc private func buttonPressed() {
         if let radioNode = self.radioNode, let isChecked = radioNode.isChecked {
-            radioNode.updateIsChecked(!isChecked, animated: true)
+            let updatedValue = !isChecked
+            radioNode.updateIsChecked(updatedValue, animated: true)
+            
+            var traits = self.buttonNode.accessibilityTraits
+            if updatedValue {
+                traits.insert(.selected)
+            } else {
+                traits.remove(.selected)
+            }
+            self.buttonNode.accessibilityTraits = traits
             self.selectionUpdated?()
         } else {
             self.pressed?()
@@ -634,8 +643,6 @@ private final class ChatMessagePollOptionNode: ASDisplayNode {
                     node.theme = presentationData.theme.theme
                     
                     node.highlightedBackgroundNode.backgroundColor = incoming ? presentationData.theme.theme.chat.message.incoming.polls.highlight : presentationData.theme.theme.chat.message.outgoing.polls.highlight
-                    
-                    node.buttonNode.accessibilityLabel = option.text
                     
                     if animated {
                         if let titleNode = node.titleNode, let cachedLayout = titleNode.textNode.cachedLayout {
@@ -788,15 +795,50 @@ private final class ChatMessagePollOptionNode: ASDisplayNode {
                                 node.resultBarIconNode.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.2)
                             }
                         }
-                        
-                        node.buttonNode.isAccessibilityElement = shouldHaveRadioNode
-                        
                         let previousResultBarWidth = minBarWidth + floor((width - leftInset - rightInset - minBarWidth) * (currentResult?.normalized ?? 0.0))
                         let previousFrame = CGRect(origin: CGPoint(x: leftInset, y: contentHeight - 6.0 - 1.0), size: CGSize(width: previousResultBarWidth, height: 6.0))
                         
                         node.resultBarNode.layer.animateSpring(from: NSValue(cgPoint: previousFrame.center), to: NSValue(cgPoint: node.resultBarNode.frame.center), keyPath: "position", duration: 0.6, damping: 110.0)
                         node.resultBarNode.layer.animateSpring(from: NSValue(cgRect: CGRect(origin: CGPoint(), size: previousFrame.size)), to: NSValue(cgRect: CGRect(origin: CGPoint(), size: node.resultBarNode.frame.size)), keyPath: "bounds", duration: 0.6, damping: 110.0)
                     }
+                    
+                    let kind: ChatMessagePollBubbleContentNodeVoiceOver.Kind
+                    switch poll.kind {
+                    case .poll:
+                        kind = .poll
+                    case .quiz:
+                        kind = .quiz
+                    }
+                    
+                    let isToggleOption = shouldHaveRadioNode && isSelectable
+                    let isSelected: Bool
+                    if isToggleOption, let value = node.radioNode?.isChecked {
+                        isSelected = value
+                    } else {
+                        isSelected = selection?.isSelected ?? false
+                    }
+                    
+                    let resolvedResult: ChatMessagePollBubbleContentNodeVoiceOver.OptionResult?
+                    if let optionResult = optionResult {
+                        resolvedResult = ChatMessagePollBubbleContentNodeVoiceOver.OptionResult(percent: optionResult.percent, count: optionResult.count)
+                    } else {
+                        resolvedResult = nil
+                    }
+                    
+                    let resolved = ChatMessagePollBubbleContentNodeVoiceOver.resolveOption(
+                        strings: presentationData.strings,
+                        kind: kind,
+                        optionText: optionText,
+                        isMultipleAnswers: isToggleOption,
+                        isSelected: isSelected,
+                        result: resolvedResult,
+                        isEnabled: !inProgress
+                    )
+                    node.buttonNode.isAccessibilityElement = true
+                    node.buttonNode.accessibilityLabel = resolved.label
+                    node.buttonNode.accessibilityValue = resolved.value
+                    node.buttonNode.accessibilityHint = resolved.hint
+                    node.buttonNode.accessibilityTraits = resolved.traits
                     
                     return node
                 })
@@ -901,6 +943,7 @@ public class ChatMessagePollBubbleContentNode: ChatMessageBubbleContentNode {
         self.typeNode.displaysAsynchronously = false
         
         self.avatarsNode = MergedAvatarsNode()
+        self.avatarsNode.accessibilityElementsHidden = true
         
         self.votersNode = TextNode()
         self.votersNode.isUserInteractionEnabled = false
@@ -1601,6 +1644,13 @@ public class ChatMessagePollBubbleContentNode: ChatMessageBubbleContentNode {
                                 timerTransition.updateAlpha(node: strongSelf.solutionButtonNode, alpha: 0.0)
                             }
                             
+                            let solutionResolved = ChatMessagePollBubbleContentNodeVoiceOver.resolveSolutionButton(strings: item.presentationData.strings, isEnabled: strongSelf.solutionButtonNode.isUserInteractionEnabled)
+                            strongSelf.solutionButtonNode.isAccessibilityElement = !strongSelf.solutionButtonNode.alpha.isZero && !strongSelf.solutionButtonNode.iconNode.alpha.isZero
+                            strongSelf.solutionButtonNode.accessibilityLabel = solutionResolved.label
+                            strongSelf.solutionButtonNode.accessibilityValue = solutionResolved.value
+                            strongSelf.solutionButtonNode.accessibilityHint = solutionResolved.hint
+                            strongSelf.solutionButtonNode.accessibilityTraits = solutionResolved.traits
+                            
                             let avatarsFrame = CGRect(origin: CGPoint(x: typeFrame.maxX + 6.0, y: typeFrame.minY + floor((typeFrame.height - MergedAvatarsNode.defaultMergedImageSize) / 2.0)), size: CGSize(width: MergedAvatarsNode.defaultMergedImageSize + MergedAvatarsNode.defaultMergedImageSpacing * 2.0, height: MergedAvatarsNode.defaultMergedImageSize))
                             strongSelf.avatarsNode.frame = avatarsFrame
                             strongSelf.avatarsNode.updateLayout(size: avatarsFrame.size)
@@ -1794,6 +1844,27 @@ public class ChatMessagePollBubbleContentNode: ChatMessageBubbleContentNode {
         }
         
         self.avatarsNode.isUserInteractionEnabled = !self.buttonViewResultsTextNode.isHidden
+        
+        if !self.buttonNode.isHidden {
+            let action: ChatMessagePollBubbleContentNodeVoiceOver.Action
+            if !self.buttonViewResultsTextNode.isHidden {
+                action = .viewResults
+            } else {
+                action = .submitVote
+            }
+            
+            let resolved = ChatMessagePollBubbleContentNodeVoiceOver.resolveActionButton(strings: item.presentationData.strings, action: action, isEnabled: self.buttonNode.isUserInteractionEnabled)
+            self.buttonNode.isAccessibilityElement = true
+            self.buttonNode.accessibilityLabel = resolved.label
+            self.buttonNode.accessibilityValue = resolved.value
+            self.buttonNode.accessibilityHint = resolved.hint
+            self.buttonNode.accessibilityTraits = resolved.traits
+        } else {
+            self.buttonNode.isAccessibilityElement = false
+            self.buttonNode.accessibilityLabel = nil
+            self.buttonNode.accessibilityValue = nil
+            self.buttonNode.accessibilityHint = nil
+        }
     }
     
     override public func animateInsertion(_ currentTimestamp: Double, duration: Double) {
@@ -1908,6 +1979,8 @@ public class ChatMessagePollBubbleContentNode: ChatMessageBubbleContentNode {
             transition.updateAlpha(node: self.solutionButtonNode.iconNode, alpha: displaySolutionButton ? 1.0 : 0.0)
             transition.updateSublayerTransformScale(node: self.solutionButtonNode, scale: displaySolutionButton ? 1.0 : 0.1)
         }
+        
+        self.solutionButtonNode.isAccessibilityElement = displaySolutionButton && !self.solutionButtonNode.alpha.isZero && !self.solutionButtonNode.iconNode.alpha.isZero
     }
     
     override public func reactionTargetView(value: MessageReaction.Reaction) -> UIView? {
