@@ -226,34 +226,34 @@ public final class ChatMessageSelectionInputPanelNode: ChatInputPanelNode {
         self.deleteButton = GlassButtonView()
         self.deleteButton.icon = "Chat/Input/Accessory Panels/MessageSelectionTrash"
         self.deleteButton.isEnabled = false
-        self.deleteButton.isAccessibilityElement = true
-        self.deleteButton.accessibilityLabel = strings.VoiceOver_MessageContextDelete
+        self.deleteButton.isAccessibilityElement = false
+        self.deleteButton.button.isAccessibilityElement = true
         
         self.reportButton = GlassButtonView()
         self.reportButton.icon = "Chat/Input/Accessory Panels/MessageSelectionReport"
         self.reportButton.isEnabled = false
-        self.reportButton.isAccessibilityElement = true
-        self.reportButton.accessibilityLabel = strings.VoiceOver_MessageContextReport
+        self.reportButton.isAccessibilityElement = false
+        self.reportButton.button.isAccessibilityElement = true
         
         self.forwardButton = GlassButtonView()
         self.forwardButton.icon = "Chat/Input/Accessory Panels/MessageSelectionForward"
-        self.forwardButton.isAccessibilityElement = true
-        self.forwardButton.accessibilityLabel = strings.VoiceOver_MessageContextForward
+        self.forwardButton.isAccessibilityElement = false
+        self.forwardButton.button.isAccessibilityElement = true
         
         self.shareButton = GlassButtonView()
         self.shareButton.icon = "Chat/Input/Accessory Panels/MessageSelectionAction"
-        self.shareButton.isAccessibilityElement = true
-        self.shareButton.accessibilityLabel = strings.VoiceOver_MessageContextShare
+        self.shareButton.isAccessibilityElement = false
+        self.shareButton.button.isAccessibilityElement = true
         
         self.tagButton = GlassButtonView()
         self.tagButton.icon = "Chat/Input/Accessory Panels/TagIcon"
-        self.tagButton.isAccessibilityElement = true
-        self.tagButton.accessibilityLabel = strings.VoiceOver_MessageSelectionButtonTag
+        self.tagButton.isAccessibilityElement = false
+        self.tagButton.button.isAccessibilityElement = true
         
         self.tagEditButton = GlassButtonView()
         self.tagEditButton.icon = "Chat/Input/Accessory Panels/TagEditIcon"
-        self.tagEditButton.isAccessibilityElement = true
-        self.tagEditButton.accessibilityLabel = strings.VoiceOver_MessageSelectionButtonTag
+        self.tagEditButton.isAccessibilityElement = false
+        self.tagEditButton.button.isAccessibilityElement = true
         
         self.reactionOverlayContainer = ChatMessageSelectionInputPanelNodeViewForOverlayContent()
         
@@ -271,12 +271,50 @@ public final class ChatMessageSelectionInputPanelNode: ChatInputPanelNode {
         self.forwardButton.isImplicitlyDisabled = true
         self.shareButton.isImplicitlyDisabled = true
         
+        self.updateVoiceOverAccessibility(strings: strings)
+        
         self.deleteButton.button.addTarget(self, action: #selector(self.deleteButtonPressed), for: .touchUpInside)
         self.reportButton.button.addTarget(self, action: #selector(self.reportButtonPressed), for: .touchUpInside)
         self.forwardButton.button.addTarget(self, action: #selector(self.forwardButtonPressed), for: .touchUpInside)
         self.shareButton.button.addTarget(self, action: #selector(self.shareButtonPressed), for: .touchUpInside)
         self.tagButton.button.addTarget(self, action: #selector(self.tagButtonPressed), for: .touchUpInside)
         self.tagEditButton.button.addTarget(self, action: #selector(self.tagButtonPressed), for: .touchUpInside)
+    }
+
+    private func updateVoiceOverAccessibility(strings: PresentationStrings) {
+        self.applyVoiceOverAccessibility(
+            resolved: ChatMessageSelectionInputPanelVoiceOver.resolveDeleteButton(strings: strings, isEnabled: self.deleteButton.button.isEnabled),
+            to: self.deleteButton
+        )
+        self.applyVoiceOverAccessibility(
+            resolved: ChatMessageSelectionInputPanelVoiceOver.resolveReportButton(strings: strings, isEnabled: self.reportButton.button.isEnabled),
+            to: self.reportButton
+        )
+        self.applyVoiceOverAccessibility(
+            resolved: ChatMessageSelectionInputPanelVoiceOver.resolveForwardButton(strings: strings, isEnabled: self.forwardButton.button.isEnabled),
+            to: self.forwardButton
+        )
+        self.applyVoiceOverAccessibility(
+            resolved: ChatMessageSelectionInputPanelVoiceOver.resolveShareButton(strings: strings, isEnabled: self.shareButton.button.isEnabled),
+            to: self.shareButton
+        )
+        self.applyVoiceOverAccessibility(
+            resolved: ChatMessageSelectionInputPanelVoiceOver.resolveTagButton(strings: strings, isEnabled: self.tagButton.button.isEnabled),
+            to: self.tagButton
+        )
+        self.applyVoiceOverAccessibility(
+            resolved: ChatMessageSelectionInputPanelVoiceOver.resolveTagButton(strings: strings, isEnabled: self.tagEditButton.button.isEnabled),
+            to: self.tagEditButton
+        )
+    }
+    
+    private func applyVoiceOverAccessibility(resolved: ChatMessageSelectionInputPanelVoiceOver.Resolved, to buttonView: GlassButtonView) {
+        let isElement = !buttonView.isHidden
+        buttonView.isAccessibilityElement = false
+        buttonView.button.isAccessibilityElement = isElement
+        buttonView.button.accessibilityLabel = isElement ? resolved.label : nil
+        buttonView.button.accessibilityHint = isElement ? resolved.hint : nil
+        buttonView.button.accessibilityTraits = isElement ? resolved.traits : []
     }
     
     deinit {
@@ -529,6 +567,8 @@ public final class ChatMessageSelectionInputPanelNode: ChatInputPanelNode {
                 self.deleteButton.isHidden = false
             }
         }
+        
+        self.updateVoiceOverAccessibility(strings: interfaceState.strings)
         
         var width = width
         if additionalSideInsets.right > 0.0 {
