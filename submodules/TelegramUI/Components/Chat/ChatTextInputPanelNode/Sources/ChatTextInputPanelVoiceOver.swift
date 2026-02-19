@@ -66,6 +66,39 @@ public enum ChatTextInputPanelBoostToUnrestrictButtonVoiceOver {
             self.hint = hint
             self.traits = traits
         }
+    }
+    
+    public static func resolve(
+        strings: PresentationStrings,
+        slowmodeState: ChatSlowmodeState?,
+        nowTimestamp: Int32,
+        isEnabled: Bool
+    ) -> Resolved {
+        var traits: UIAccessibilityTraits = [.button, .updatesFrequently]
+        if !isEnabled {
+            traits.insert(.notEnabled)
+        }
+        
+        let value: String?
+        if let slowmodeState {
+            switch slowmodeState.variant {
+            case .pendingMessages:
+                value = strings.Chat_SlowmodeTooltipPending
+            case let .timestamp(untilTimestamp):
+                let seconds = max(Int32(0), untilTimestamp - nowTimestamp)
+                value = strings.Chat_SlowmodeTooltip(stringForDuration(seconds)).string
+            }
+        } else {
+            value = nil
+        }
+        
+        return Resolved(
+            label: strings.Conversation_BoostToUnrestrictText,
+            value: value,
+            hint: nil,
+            traits: traits
+        )
+    }
 }
 
 public enum ChatTextInputPanelViewOnceButtonVoiceOver {
@@ -120,38 +153,5 @@ public enum ChatTextInputPanelRecordMoreButtonVoiceOver {
             traits.insert(.notEnabled)
         }
         return Resolved(label: strings.VoiceOver_Chat_RecordModeVoiceMessage, hint: nil, traits: traits)
-    }
-}
-
-    public static func resolve(
-        strings: PresentationStrings,
-        slowmodeState: ChatSlowmodeState?,
-        nowTimestamp: Int32,
-        isEnabled: Bool
-    ) -> Resolved {
-        var traits: UIAccessibilityTraits = [.button, .updatesFrequently]
-        if !isEnabled {
-            traits.insert(.notEnabled)
-        }
-        
-        let value: String?
-        if let slowmodeState {
-            switch slowmodeState.variant {
-            case .pendingMessages:
-                value = strings.Chat_SlowmodeTooltipPending
-            case let .timestamp(untilTimestamp):
-                let seconds = max(Int32(0), untilTimestamp - nowTimestamp)
-                value = strings.Chat_SlowmodeTooltip(stringForDuration(seconds)).string
-            }
-        } else {
-            value = nil
-        }
-        
-        return Resolved(
-            label: strings.Conversation_BoostToUnrestrictText,
-            value: value,
-            hint: nil,
-            traits: traits
-        )
     }
 }
