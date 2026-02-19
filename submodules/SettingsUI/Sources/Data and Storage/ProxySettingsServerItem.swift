@@ -291,6 +291,7 @@ private final class ProxySettingsServerItemNode: ItemListRevealOptionsItemNode {
                     } else {
                         strongSelf.activateArea.accessibilityValue = ""
                     }
+                    strongSelf.activateArea.accessibilityTraits = [.button]
                     
                     if let updateInfoIconImage = updateInfoIconImage {
                         strongSelf.infoIconNode.image = updateInfoIconImage

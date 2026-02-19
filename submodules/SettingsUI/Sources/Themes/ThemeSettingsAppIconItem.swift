@@ -138,7 +138,7 @@ private final class ThemeSettingsAppIconNode : ASDisplayNode {
         self.addSubnode(self.activateAreaNode)
     }
     
-    func setup(theme: PresentationTheme, icon: UIImage, title: NSAttributedString, locked: Bool, color: UIColor, bordered: Bool, selected: Bool, action: @escaping () -> Void) {
+    func setup(strings: PresentationStrings, theme: PresentationTheme, icon: UIImage, title: NSAttributedString, locked: Bool, color: UIColor, bordered: Bool, selected: Bool, action: @escaping () -> Void) {
         self.locked = locked
         self.iconNode.image = icon
         self.textNode.attributedText = title
@@ -149,10 +149,20 @@ private final class ThemeSettingsAppIconNode : ASDisplayNode {
         }
         
         self.activateAreaNode.accessibilityLabel = title.string
-        if locked {
-            self.activateAreaNode.accessibilityTraits = [.button, .notEnabled]
-        } else {
-            self.activateAreaNode.accessibilityTraits = [.button]
+        self.activateAreaNode.accessibilityValue = locked ? strings.Premium_Title : nil
+        
+        var accessibilityTraits: UIAccessibilityTraits = [.button]
+        if selected {
+            accessibilityTraits.insert(.selected)
+        }
+        self.activateAreaNode.accessibilityTraits = accessibilityTraits
+        
+        self.activateAreaNode.activate = { [weak self] in
+            guard let self, let action = self.action else {
+                return false
+            }
+            action()
+            return true
         }
         
         self.setNeedsLayout()
@@ -406,7 +416,7 @@ class ThemeSettingsAppIconItemNode: ListViewItemNode, ItemListItemNode {
                                     name = icon.name
                             }
                         
-                            imageNode.setup(theme: item.theme, icon: image, title: NSAttributedString(string: name, font: selected ? selectedTextFont : textFont, textColor: selected  ? item.theme.list.itemAccentColor : item.theme.list.itemPrimaryTextColor, paragraphAlignment: .center), locked: !item.isPremium && icon.isPremium, color: item.theme.list.itemPrimaryTextColor, bordered: bordered, selected: selected, action: {
+                            imageNode.setup(strings: item.strings, theme: item.theme, icon: image, title: NSAttributedString(string: name, font: selected ? selectedTextFont : textFont, textColor: selected  ? item.theme.list.itemAccentColor : item.theme.list.itemPrimaryTextColor, paragraphAlignment: .center), locked: !item.isPremium && icon.isPremium, color: item.theme.list.itemPrimaryTextColor, bordered: bordered, selected: selected, action: {
                                 item.updated(icon)
                             })
                         }
@@ -428,4 +438,3 @@ class ThemeSettingsAppIconItemNode: ListViewItemNode, ItemListItemNode {
         self.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.15, removeOnCompletion: false)
     }
 }
-

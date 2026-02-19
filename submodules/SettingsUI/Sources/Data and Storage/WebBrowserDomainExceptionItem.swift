@@ -209,6 +209,21 @@ final class WebBrowserDomainExceptionItemNode: ItemListRevealOptionsItemNode, It
                     strongSelf.activateArea.frame = CGRect(origin: CGPoint(x: params.leftInset, y: 0.0), size: CGSize(width: params.width - params.leftInset - params.rightInset, height: layout.contentSize.height))
                     strongSelf.activateArea.accessibilityLabel = item.title
                     strongSelf.activateArea.accessibilityValue = item.label
+                    strongSelf.activateArea.accessibilityTraits = [.staticText]
+                    
+                    if item.deleted != nil {
+                        strongSelf.activateArea.accessibilityCustomActions = [
+                            UIAccessibilityCustomAction(name: item.presentationData.strings.Common_Delete, actionHandler: { [weak self] _ in
+                                guard let self, let item = self.item else {
+                                    return false
+                                }
+                                item.deleted?()
+                                return true
+                            })
+                        ]
+                    } else {
+                        strongSelf.activateArea.accessibilityCustomActions = nil
+                    }
                     
                     if let _ = updatedTheme {
                         strongSelf.topStripeNode.backgroundColor = itemSeparatorColor
