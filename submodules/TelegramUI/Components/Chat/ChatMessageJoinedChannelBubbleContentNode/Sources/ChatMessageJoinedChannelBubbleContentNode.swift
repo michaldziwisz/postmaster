@@ -59,6 +59,7 @@ public class ChatMessageJoinedChannelBubbleContentNode: ChatMessageBubbleContent
     private var backgroundNode: WallpaperBubbleBackgroundNode?
     private let backgroundMaskNode: ASImageNode
     private var linkHighlightingNode: LinkHighlightingNode?
+    private let toggleAccessibilityArea: AccessibilityAreaNode
     
     private let panelNode: ASDisplayNode
     private let panelBackgroundNode: MessageBackgroundNode
@@ -81,6 +82,7 @@ public class ChatMessageJoinedChannelBubbleContentNode: ChatMessageBubbleContent
         self.labelNode.displaysAsynchronously = false
 
         self.backgroundMaskNode = ASImageNode()
+        self.toggleAccessibilityArea = AccessibilityAreaNode()
         
         self.panelNode = ASDisplayNode()
         self.panelBackgroundNode = MessageBackgroundNode()
@@ -98,6 +100,7 @@ public class ChatMessageJoinedChannelBubbleContentNode: ChatMessageBubbleContent
         super.init()
 
         self.addSubnode(self.labelNode)
+        self.addSubnode(self.toggleAccessibilityArea)
         
         self.panelNode.anchorPoint = CGPoint(x: 0.5, y: -0.1)
         
@@ -121,6 +124,11 @@ public class ChatMessageJoinedChannelBubbleContentNode: ChatMessageBubbleContent
             }
         }
         self.closeButtonNode.addTarget(self, action: #selector(self.closeButtonPressed), forControlEvents: .touchUpInside)
+        
+        self.toggleAccessibilityArea.activate = { [weak self] in
+            self?.pressed()
+            return true
+        }
     }
     
     required public init?(coder aDecoder: NSCoder) {
@@ -266,6 +274,13 @@ public class ChatMessageJoinedChannelBubbleContentNode: ChatMessageBubbleContent
                                 strongSelf.closeButtonNode.frame = closeFrame.insetBy(dx: -4.0, dy: -4.0)
                             }
                             
+                            let closeResolved = ChatMessageJoinedChannelBubbleContentNodeVoiceOver.resolveCloseButton(strings: item.presentationData.strings, isEnabled: true)
+                            strongSelf.closeButtonNode.isAccessibilityElement = true
+                            strongSelf.closeButtonNode.accessibilityLabel = closeResolved.label
+                            strongSelf.closeButtonNode.accessibilityValue = closeResolved.value
+                            strongSelf.closeButtonNode.accessibilityHint = closeResolved.hint
+                            strongSelf.closeButtonNode.accessibilityTraits = closeResolved.traits
+                            
                             if isExpanded {
                                 animation.animator.updateAlpha(layer: strongSelf.panelNode.layer, alpha: 1.0, completion: nil)
                                 animation.animator.updateScale(layer: strongSelf.panelNode.layer, scale: 1.0, completion: nil)
@@ -273,6 +288,7 @@ public class ChatMessageJoinedChannelBubbleContentNode: ChatMessageBubbleContent
                                 animation.animator.updateAlpha(layer: strongSelf.panelNode.layer, alpha: 0.0, completion: nil)
                                 animation.animator.updateScale(layer: strongSelf.panelNode.layer, scale: 0.1, completion: nil)
                             }
+                            strongSelf.panelNode.accessibilityElementsHidden = !isExpanded
                             
                             let baseBackgroundFrame = labelFrame.offsetBy(dx: 0.0, dy: -11.0)
                             if let (offset, image) = backgroundMaskImage {
@@ -297,14 +313,23 @@ public class ChatMessageJoinedChannelBubbleContentNode: ChatMessageBubbleContent
                                     }
                                 }
 
-                                if let backgroundNode = strongSelf.backgroundNode {
-                                    backgroundNode.frame = CGRect(origin: CGPoint(x: baseBackgroundFrame.minX + offset.x, y: baseBackgroundFrame.minY + offset.y), size: image.size)
-                                }
+                                let backgroundFrame = CGRect(origin: CGPoint(x: baseBackgroundFrame.minX + offset.x, y: baseBackgroundFrame.minY + offset.y), size: image.size)
+                                strongSelf.toggleAccessibilityArea.frame = backgroundFrame
+                                strongSelf.backgroundNode?.frame = backgroundFrame
                                 strongSelf.backgroundMaskNode.image = image
                                 strongSelf.backgroundMaskNode.frame = CGRect(origin: CGPoint(), size: image.size)
 
                                 strongSelf.cachedMaskBackgroundImage = (offset, image, labelRects)
+                            } else {
+                                strongSelf.toggleAccessibilityArea.frame = baseBackgroundFrame
                             }
+                            
+                            let toggleResolved = ChatMessageJoinedChannelBubbleContentNodeVoiceOver.resolveToggle(strings: item.presentationData.strings, isExpanded: isExpanded, isEnabled: true)
+                            strongSelf.toggleAccessibilityArea.isAccessibilityElement = !isExpanded
+                            strongSelf.toggleAccessibilityArea.accessibilityLabel = toggleResolved.label
+                            strongSelf.toggleAccessibilityArea.accessibilityValue = toggleResolved.value
+                            strongSelf.toggleAccessibilityArea.accessibilityHint = toggleResolved.hint
+                            strongSelf.toggleAccessibilityArea.accessibilityTraits = toggleResolved.traits
                             if let (rect, size) = strongSelf.absoluteRect {
                                 strongSelf.updateAbsoluteRect(rect, within: size)
                             }
@@ -773,6 +798,7 @@ private final class ChannelItemComponent: Component {
                 } else {
                     mergedAvatarsNode = MergedAvatarsNode()
                     mergedAvatarsNode.isUserInteractionEnabled = false
+                    mergedAvatarsNode.accessibilityElementsHidden = true
                     self.contextContainer.insertSubview(mergedAvatarsNode.view, aboveSubview: self.avatarNode.view)
                     self.mergedAvatarsNode = mergedAvatarsNode
                 }
@@ -871,6 +897,13 @@ private final class ChannelItemComponent: Component {
             let bounds = CGRect(origin: .zero, size: itemSize)
             self.contextContainer.frame = bounds
             self.containerButton.frame = bounds
+            
+            let accessibility = ChatMessageJoinedChannelBubbleContentNodeVoiceOver.resolveChannelItem(title: component.title, subtitle: component.subtitle, isEnabled: true)
+            self.containerButton.isAccessibilityElement = true
+            self.containerButton.accessibilityLabel = accessibility.label
+            self.containerButton.accessibilityValue = accessibility.value
+            self.containerButton.accessibilityHint = accessibility.hint
+            self.containerButton.accessibilityTraits = accessibility.traits
             
             return itemSize
         }
