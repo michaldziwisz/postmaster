@@ -2368,6 +2368,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                 transition: ComponentTransition(starReactionButtonTransition),
                 component: AnyComponent(StarReactionButtonComponent(
                     theme: interfaceState.theme,
+                    strings: interfaceState.strings,
                     count: count,
                     isFilled: isFilled,
                     action: action,

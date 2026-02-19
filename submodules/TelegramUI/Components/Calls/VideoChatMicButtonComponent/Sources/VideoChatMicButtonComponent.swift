@@ -420,6 +420,16 @@ public final class VideoChatMicButtonComponent: Component {
             }
             self.isEnabled = isEnabled
             
+            let accessibility = VideoChatMicButtonComponentVoiceOver.resolve(
+                strings: component.strings,
+                content: component.content,
+                isCompact: component.isCompact
+            )
+            self.isAccessibilityElement = true
+            self.accessibilityLabel = accessibility.label
+            self.accessibilityHint = accessibility.hint
+            self.accessibilityTraits = accessibility.traits
+            
             if component.isCompact {
                 titleText = titleText.lowercased()
             }

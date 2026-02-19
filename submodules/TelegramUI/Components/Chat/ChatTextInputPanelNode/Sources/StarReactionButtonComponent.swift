@@ -111,6 +111,7 @@ final class StarReactionButtonBadgeComponent: Component {
 
 final class StarReactionButtonComponent: Component {
     let theme: PresentationTheme
+    let strings: PresentationStrings
     let count: Int
     let isFilled: Bool
     let action: (UIView) -> Void
@@ -118,12 +119,14 @@ final class StarReactionButtonComponent: Component {
     
     init(
         theme: PresentationTheme,
+        strings: PresentationStrings,
         count: Int,
         isFilled: Bool,
         action: @escaping (UIView) -> Void,
         longPressAction: ((UIView) -> Void)?
     ) {
         self.theme = theme
+        self.strings = strings
         self.count = count
         self.isFilled = isFilled
         self.action = action
@@ -132,6 +135,9 @@ final class StarReactionButtonComponent: Component {
     
     static func ==(lhs: StarReactionButtonComponent, rhs: StarReactionButtonComponent) -> Bool {
         if lhs.theme !== rhs.theme {
+            return false
+        }
+        if lhs.strings !== rhs.strings {
             return false
         }
         if lhs.count != rhs.count {
@@ -206,6 +212,8 @@ final class StarReactionButtonComponent: Component {
             }
             self.longTapRecognizer = longTapRecognizer
             self.backgroundView.contentView.addGestureRecognizer(longTapRecognizer)
+            
+            self.isAccessibilityElement = true
         }
         
         required init?(coder: NSCoder) {
@@ -232,12 +240,44 @@ final class StarReactionButtonComponent: Component {
             }
         }
         
+        override func accessibilityActivate() -> Bool {
+            guard let component = self.component else {
+                return false
+            }
+            component.action(self)
+            return true
+        }
+        
         func update(component: StarReactionButtonComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
             let previousComponent = self.component
             self.component = component
             self.state = state
             
             let size = CGSize(width: 40.0, height: 40.0)
+            
+            let accessibility = StarReactionButtonComponentVoiceOver.resolve(
+                strings: component.strings,
+                count: component.count,
+                isFilled: component.isFilled,
+                isEnabled: true
+            )
+            self.accessibilityLabel = accessibility.label
+            self.accessibilityValue = accessibility.value
+            self.accessibilityHint = accessibility.hint
+            self.accessibilityTraits = accessibility.traits
+            if component.longPressAction != nil {
+                self.accessibilityCustomActions = [
+                    UIAccessibilityCustomAction(name: component.strings.Common_More, actionHandler: { [weak self] _ in
+                        guard let self, let component = self.component else {
+                            return false
+                        }
+                        component.longPressAction?(self)
+                        return true
+                    })
+                ]
+            } else {
+                self.accessibilityCustomActions = nil
+            }
             
             if self.iconView.image == nil {
                 self.iconView.image = UIImage(bundleImageName: "Premium/Stars/ButtonStar")?.withRenderingMode(.alwaysTemplate)
