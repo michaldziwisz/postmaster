@@ -92,6 +92,7 @@ private final class ChatMessageActionButtonNode: ASDisplayNode {
     var longTapRecognizer: UILongPressGestureRecognizer?
     
     private let accessibilityArea: AccessibilityAreaNode
+    private var isEnabledForVoiceOver: Bool = true
     
     private var progressDisposable: Disposable?
     
@@ -104,7 +105,13 @@ private final class ChatMessageActionButtonNode: ASDisplayNode {
         self.addSubnode(self.accessibilityArea)
         
         self.accessibilityArea.activate = { [weak self] in
-            self?.buttonPressed()
+            guard let self else {
+                return false
+            }
+            guard ChatMessageActionButtonsNodeVoiceOver.shouldActivate(isEnabled: self.isEnabledForVoiceOver) else {
+                return false
+            }
+            self.buttonPressed()
             return true
         }
     }
@@ -156,6 +163,9 @@ private final class ChatMessageActionButtonNode: ASDisplayNode {
     }
     
     @objc func buttonPressed() {
+        guard self.isEnabledForVoiceOver else {
+            return
+        }
         if let button = self.button, let pressed = self.pressed {
             let progressPromise = Promise<Bool>()
             pressed(button, progressPromise)
@@ -205,6 +215,9 @@ private final class ChatMessageActionButtonNode: ASDisplayNode {
     }
     
     @objc func longTapGesture(_ recognizer: UILongPressGestureRecognizer) {
+        guard self.isEnabledForVoiceOver else {
+            return
+        }
         if let button = self.button, let longTapped = self.longTapped, recognizer.state == .began {
             longTapped(button)
         }
@@ -585,11 +598,17 @@ private final class ChatMessageActionButtonNode: ASDisplayNode {
                         node.updateAbsoluteRect(rect, within: size)
                     }
                     
-                    node.accessibilityArea.accessibilityLabel = title
+                    let isEnabled = customInfo?.isEnabled ?? true
+                    node.isEnabledForVoiceOver = isEnabled
+                    
+                    let resolved = ChatMessageActionButtonsNodeVoiceOver.resolveButton(strings: strings, title: title, isEnabled: isEnabled)
+                    node.accessibilityArea.accessibilityLabel = resolved.label
+                    node.accessibilityArea.accessibilityValue = resolved.value
+                    node.accessibilityArea.accessibilityHint = resolved.hint
+                    node.accessibilityArea.accessibilityTraits = resolved.traits
                     node.accessibilityArea.frame = CGRect(origin: CGPoint(), size: CGSize(width: width, height: 42.0))
                     
                     if let buttonView = node.buttonView {
-                        let isEnabled = customInfo?.isEnabled ?? true
                         if buttonView.isEnabled != isEnabled {
                             buttonView.isEnabled = isEnabled
                             
