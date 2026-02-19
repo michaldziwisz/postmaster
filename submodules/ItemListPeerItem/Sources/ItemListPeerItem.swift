@@ -900,6 +900,14 @@ public class ItemListPeerItemNode: ItemListRevealOptionsItemNode, ItemListItemNo
         }
     }
     
+    override public func accessibilityActivate() -> Bool {
+        guard let (item, _, _, _) = self.layoutParams, self.canBeSelected else {
+            return false
+        }
+        item.action?()
+        return item.action != nil
+    }
+    
     public func asyncLayout() -> (_ item: ItemListPeerItem, _ params: ListViewItemLayoutParams, _ neighbors: ItemListNeighbors, _ headerAtTop: Bool) -> (ListViewItemNodeLayout, (Bool, Bool) -> Void) {
         let makeTitleLayout = TextNode.asyncLayout(self.titleNode)
         let makeStatusLayout = TextNode.asyncLayout(self.statusNode)
@@ -1853,7 +1861,15 @@ public class ItemListPeerItemNode: ItemListRevealOptionsItemNode, ItemListItemNo
                     
                     strongSelf.updateLayout(size: layout.contentSize, leftInset: params.leftInset, rightInset: params.rightInset)
                     
-                    strongSelf.setRevealOptions((left: [], right: peerRevealOptions))
+                    let options: (left: [ItemListRevealOption], right: [ItemListRevealOption]) = (left: [], right: peerRevealOptions)
+                    strongSelf.setRevealOptions(options)
+                    strongSelf.accessibilityCustomActions = peerRevealOptions.isEmpty ? nil : ItemListRevealOptionsVoiceOver.resolveCustomActions(options: options, perform: { [weak strongSelf] option in
+                        guard let strongSelf else {
+                            return false
+                        }
+                        strongSelf.revealOptionSelected(option, animated: true)
+                        return true
+                    })
                     if let revealed = item.editing.revealed {
                         strongSelf.setRevealOptionsOpened(revealed, animated: animated)
                     }

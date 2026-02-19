@@ -13,7 +13,7 @@ class FormEditableBlockItemNode<Item: FormControllerItem>: ASDisplayNode, FormCo
     let backgroundNode: ASDisplayNode
     private let topSeparatorNode: ASDisplayNode
     private let bottomSeparatorNode: ASDisplayNode
-    private let selectionButtonNode: HighlightTrackingButtonNode
+    let selectionButtonNode: HighlightTrackingButtonNode
     
     private var leftRevealNode: ItemListRevealOptionsNode?
     private var rightRevealNode: ItemListRevealOptionsNode?
@@ -473,4 +473,3 @@ class FormEditableBlockItemNode<Item: FormControllerItem>: ASDisplayNode, FormCo
         }
     }
 }
-

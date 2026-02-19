@@ -103,6 +103,7 @@ class SettingsSearchRecentItemNode: ItemListRevealOptionsItemNode {
     private let highlightedBackgroundNode: ASDisplayNode
     private let titleNode: TextNode
     private let subtitleNode: TextNode
+    private let activateArea: AccessibilityAreaNode
     
     private var item: SettingsSearchRecentItem?
     private var layoutParams: ListViewItemLayoutParams?
@@ -127,12 +128,15 @@ class SettingsSearchRecentItemNode: ItemListRevealOptionsItemNode {
         self.subtitleNode.contentMode = .left
         self.subtitleNode.contentsScale = UIScreenScale
         
+        self.activateArea = AccessibilityAreaNode()
+        
         super.init(layerBacked: false, rotated: false, seeThrough: false)
         
         self.addSubnode(self.backgroundNode)
         self.addSubnode(self.separatorNode)
         self.addSubnode(self.titleNode)
         self.addSubnode(self.subtitleNode)
+        self.addSubnode(self.activateArea)
     }
     
     override func layoutForParams(_ params: ListViewItemLayoutParams, item: ListViewItem, previousItem: ListViewItem?, nextItem: ListViewItem?) {
@@ -229,12 +233,42 @@ class SettingsSearchRecentItemNode: ItemListRevealOptionsItemNode {
                         
                         strongSelf.updateLayout(size: nodeLayout.contentSize, leftInset: params.leftInset, rightInset: params.rightInset)
                         
-                        var revealOptions: [ItemListRevealOption] = []
-                        if item.isFaq {
-                        } else {
-                            revealOptions.append(ItemListRevealOption(key: RevealOptionKey.delete.rawValue, title: item.strings.Common_Delete, icon: .none, color: item.theme.list.itemDisclosureActions.destructive.fillColor, textColor: item.theme.list.itemDisclosureActions.destructive.foregroundColor))
+                        strongSelf.activateArea.frame = CGRect(origin: CGPoint(x: params.leftInset, y: 0.0), size: CGSize(width: nodeLayout.contentSize.width - params.leftInset - params.rightInset, height: nodeLayout.contentSize.height))
+                        strongSelf.activateArea.accessibilityLabel = item.title
+                        strongSelf.activateArea.accessibilityValue = subtitle.isEmpty ? nil : subtitle
+                        let resolved = ItemListRowVoiceOver.resolve(strings: item.strings, kind: .open, isEnabled: true)
+                        strongSelf.activateArea.accessibilityHint = resolved.hint
+                        strongSelf.activateArea.accessibilityTraits = resolved.traits
+                        strongSelf.activateArea.activate = { [weak strongSelf] in
+                            guard let strongSelf, let item = strongSelf.item else {
+                                return false
+                            }
+                            item.action()
+                            return true
                         }
-                        strongSelf.setRevealOptions((left: [], right: revealOptions))
+                        
+                        let options: (left: [ItemListRevealOption], right: [ItemListRevealOption])
+                        if item.isFaq {
+                            options = (left: [], right: [])
+                        } else {
+                            options = (left: [], right: [
+                                ItemListRevealOption(
+                                    key: RevealOptionKey.delete.rawValue,
+                                    title: item.strings.Common_Delete,
+                                    icon: .none,
+                                    color: item.theme.list.itemDisclosureActions.destructive.fillColor,
+                                    textColor: item.theme.list.itemDisclosureActions.destructive.foregroundColor
+                                )
+                            ])
+                        }
+                        strongSelf.setRevealOptions(options)
+                        strongSelf.activateArea.accessibilityCustomActions = options.right.isEmpty ? nil : ItemListRevealOptionsVoiceOver.resolveCustomActions(options: options, perform: { [weak strongSelf] option in
+                            guard let strongSelf else {
+                                return false
+                            }
+                            strongSelf.revealOptionSelected(option, animated: true)
+                            return true
+                        })
                     }
                 })
             })

@@ -185,7 +185,10 @@ public class ItemListCheckboxItemNode: ItemListRevealOptionsItemNode {
         self.addSubnode(self.activateArea)
         
         self.activateArea.activate = { [weak self] in
-            self?.item?.action()
+            guard let self, let item = self.item, item.enabled else {
+                return false
+            }
+            item.action()
             return true
         }
     }
@@ -386,9 +389,26 @@ public class ItemListCheckboxItemNode: ItemListRevealOptionsItemNode {
                     strongSelf.updateLayout(size: layout.contentSize, leftInset: params.leftInset, rightInset: params.rightInset)
                     
                     if item.deleteAction != nil {
-                        strongSelf.setRevealOptions((left: [], right: [ItemListRevealOption(key: 0, title: item.presentationData.strings.Common_Delete, icon: .none, color: item.presentationData.theme.list.itemDisclosureActions.destructive.fillColor, textColor: item.presentationData.theme.list.itemDisclosureActions.destructive.foregroundColor)]))
+                        let options: (left: [ItemListRevealOption], right: [ItemListRevealOption]) = (left: [], right: [
+                            ItemListRevealOption(
+                                key: 0,
+                                title: item.presentationData.strings.Common_Delete,
+                                icon: .none,
+                                color: item.presentationData.theme.list.itemDisclosureActions.destructive.fillColor,
+                                textColor: item.presentationData.theme.list.itemDisclosureActions.destructive.foregroundColor
+                            )
+                        ])
+                        strongSelf.setRevealOptions(options)
+                        strongSelf.activateArea.accessibilityCustomActions = ItemListRevealOptionsVoiceOver.resolveCustomActions(options: options, perform: { [weak strongSelf] option in
+                            guard let strongSelf else {
+                                return false
+                            }
+                            strongSelf.revealOptionSelected(option, animated: true)
+                            return true
+                        })
                     } else {
                         strongSelf.setRevealOptions((left: [], right: []))
+                        strongSelf.activateArea.accessibilityCustomActions = nil
                     }
                 }
             })

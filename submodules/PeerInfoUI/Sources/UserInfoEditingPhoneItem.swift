@@ -284,7 +284,25 @@ class UserInfoEditingPhoneItemNode: ItemListRevealOptionsItemNode, ItemListItemN
                     
                     strongSelf.updateLayout(size: layout.contentSize, leftInset: params.leftInset, rightInset: params.rightInset)
                     
-                    strongSelf.setRevealOptions((left: [], right: [ItemListRevealOption(key: 0, title: item.presentationData.strings.Common_Delete, icon: .none, color: item.presentationData.theme.list.itemDisclosureActions.destructive.fillColor, textColor: item.presentationData.theme.list.itemDisclosureActions.destructive.foregroundColor)]))
+                    let options: (left: [ItemListRevealOption], right: [ItemListRevealOption]) = (left: [], right: [
+                        ItemListRevealOption(
+                            key: 0,
+                            title: item.presentationData.strings.Common_Delete,
+                            icon: .none,
+                            color: item.presentationData.theme.list.itemDisclosureActions.destructive.fillColor,
+                            textColor: item.presentationData.theme.list.itemDisclosureActions.destructive.foregroundColor
+                        )
+                    ])
+                    strongSelf.setRevealOptions(options)
+                    if let textField = strongSelf.phoneNode.numberField?.textField {
+                        textField.accessibilityCustomActions = ItemListRevealOptionsVoiceOver.resolveCustomActions(options: options, perform: { [weak strongSelf] option in
+                            guard let strongSelf else {
+                                return false
+                            }
+                            strongSelf.revealOptionSelected(option, animated: true)
+                            return true
+                        })
+                    }
                 }
             })
         }

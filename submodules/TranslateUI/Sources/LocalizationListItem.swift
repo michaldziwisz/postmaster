@@ -266,7 +266,17 @@ class LocalizationListItemNode: ItemListRevealOptionsItemNode {
                     
                     strongSelf.activateArea.frame = CGRect(origin: CGPoint(x: params.leftInset, y: 0.0), size: CGSize(width: params.width - params.leftInset - params.rightInset, height: layout.contentSize.height))
                     strongSelf.activateArea.accessibilityLabel = item.title
-                    strongSelf.activateArea.accessibilityValue = item.subtitle
+                    let isEnabled = item.enabled && !item.loading && !item.editing.editing
+                    let resolved = ItemListSelectableOptionVoiceOver.resolve(value: item.subtitle, isSelected: item.checked, isEnabled: isEnabled)
+                    strongSelf.activateArea.accessibilityValue = resolved.value
+                    strongSelf.activateArea.accessibilityTraits = resolved.traits
+                    strongSelf.activateArea.activate = { [weak strongSelf] in
+                        guard let strongSelf, let item = strongSelf.item, item.enabled && !item.loading && !item.editing.editing else {
+                            return false
+                        }
+                        item.action()
+                        return true
+                    }
                     
                     let revealOffset = strongSelf.revealOffset
                     
@@ -383,9 +393,26 @@ class LocalizationListItemNode: ItemListRevealOptionsItemNode {
                     strongSelf.updateLayout(size: layout.contentSize, leftInset: params.leftInset, rightInset: params.rightInset)
                     
                     if item.editing.editable, item.removeItem != nil {
-                        strongSelf.setRevealOptions((left: [], right: [ItemListRevealOption(key: 0, title: item.presentationData.strings.Common_Delete, icon: .none, color: item.presentationData.theme.list.itemDisclosureActions.destructive.fillColor, textColor: item.presentationData.theme.list.itemDisclosureActions.destructive.foregroundColor)]))
+                        let options: (left: [ItemListRevealOption], right: [ItemListRevealOption]) = (left: [], right: [
+                            ItemListRevealOption(
+                                key: 0,
+                                title: item.presentationData.strings.Common_Delete,
+                                icon: .none,
+                                color: item.presentationData.theme.list.itemDisclosureActions.destructive.fillColor,
+                                textColor: item.presentationData.theme.list.itemDisclosureActions.destructive.foregroundColor
+                            )
+                        ])
+                        strongSelf.setRevealOptions(options)
+                        strongSelf.activateArea.accessibilityCustomActions = ItemListRevealOptionsVoiceOver.resolveCustomActions(options: options, perform: { [weak strongSelf] option in
+                            guard let strongSelf else {
+                                return false
+                            }
+                            strongSelf.revealOptionSelected(option, animated: true)
+                            return true
+                        })
                     } else {
                         strongSelf.setRevealOptions((left: [], right: []))
+                        strongSelf.activateArea.accessibilityCustomActions = nil
                     }
                     strongSelf.setRevealOptionsOpened(item.editing.revealed, animated: animated)
                     

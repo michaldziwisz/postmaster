@@ -75,6 +75,7 @@ class WebSearchRecentQueryItemNode: ItemListRevealOptionsItemNode {
     private let separatorNode: ASDisplayNode
     private let highlightedBackgroundNode: ASDisplayNode
     private var textNode: TextNode?
+    private let activateArea: AccessibilityAreaNode
     
     private var item: WebSearchRecentQueryItem?
     private var layoutParams: ListViewItemLayoutParams?
@@ -89,10 +90,13 @@ class WebSearchRecentQueryItemNode: ItemListRevealOptionsItemNode {
         self.highlightedBackgroundNode = ASDisplayNode()
         self.highlightedBackgroundNode.isLayerBacked = true
         
+        self.activateArea = AccessibilityAreaNode()
+        
         super.init(layerBacked: false, rotated: false, seeThrough: false)
         
         self.addSubnode(self.backgroundNode)
         self.addSubnode(self.separatorNode)
+        self.addSubnode(self.activateArea)
     }
     
     override func layoutForParams(_ params: ListViewItemLayoutParams, item: ListViewItem, previousItem: ListViewItem?, nextItem: ListViewItem?) {
@@ -181,9 +185,39 @@ class WebSearchRecentQueryItemNode: ItemListRevealOptionsItemNode {
                         strongSelf.separatorNode.frame = CGRect(origin: CGPoint(x: leftInset, y: nodeLayout.contentSize.height - separatorHeight), size: CGSize(width: nodeLayout.size.width, height: separatorHeight))
                         strongSelf.separatorNode.isHidden = last
                         
-                        strongSelf.updateLayout(size: nodeLayout.contentSize, leftInset: params.leftInset, rightInset: params.rightInset)
+                    strongSelf.updateLayout(size: nodeLayout.contentSize, leftInset: params.leftInset, rightInset: params.rightInset)
+                    
+                        strongSelf.activateArea.frame = CGRect(origin: CGPoint(x: params.leftInset, y: 0.0), size: CGSize(width: nodeLayout.contentSize.width - params.leftInset - params.rightInset, height: nodeLayout.contentSize.height))
+                        strongSelf.activateArea.accessibilityLabel = item.query
+                        strongSelf.activateArea.accessibilityValue = nil
+                        let resolved = ItemListRowVoiceOver.resolve(strings: item.strings, kind: .open, isEnabled: true)
+                        strongSelf.activateArea.accessibilityHint = resolved.hint
+                        strongSelf.activateArea.accessibilityTraits = resolved.traits
+                        strongSelf.activateArea.activate = { [weak strongSelf] in
+                            guard let strongSelf, let item = strongSelf.item else {
+                                return false
+                            }
+                            item.tapped(item.query)
+                            return true
+                        }
                         
-                        strongSelf.setRevealOptions((left: [], right: [ItemListRevealOption(key: RevealOptionKey.delete.rawValue, title: item.strings.Common_Delete, icon: .none, color: item.theme.list.itemDisclosureActions.destructive.fillColor, textColor: item.theme.list.itemDisclosureActions.destructive.foregroundColor)]))
+                        let options: (left: [ItemListRevealOption], right: [ItemListRevealOption]) = (left: [], right: [
+                            ItemListRevealOption(
+                                key: RevealOptionKey.delete.rawValue,
+                                title: item.strings.Common_Delete,
+                                icon: .none,
+                                color: item.theme.list.itemDisclosureActions.destructive.fillColor,
+                                textColor: item.theme.list.itemDisclosureActions.destructive.foregroundColor
+                            )
+                        ])
+                        strongSelf.setRevealOptions(options)
+                        strongSelf.activateArea.accessibilityCustomActions = ItemListRevealOptionsVoiceOver.resolveCustomActions(options: options, perform: { [weak strongSelf] option in
+                            guard let strongSelf else {
+                                return false
+                            }
+                            strongSelf.revealOptionSelected(option, animated: true)
+                            return true
+                        })
                     }
                 })
             })

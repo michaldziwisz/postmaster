@@ -238,7 +238,10 @@ final class ChatListFilterPresetListItemNode: ItemListRevealOptionsItemNode {
         self.addSubnode(self.activateArea)
         
         self.activateArea.activate = { [weak self] in
-            self?.item?.action()
+            guard let self, let item = self.item, self.canBeSelected, !item.isAllChats else {
+                return false
+            }
+            item.action()
             return true
         }
     }
@@ -332,7 +335,9 @@ final class ChatListFilterPresetListItemNode: ItemListRevealOptionsItemNode {
                     let accessibility = ChatListFilterPresetListItemVoiceOver.resolve(title: titleAttributedString.string, subtitle: item.label, isDisabled: item.isDisabled)
                     strongSelf.activateArea.accessibilityLabel = accessibility.label
                     strongSelf.activateArea.accessibilityValue = accessibility.value
-                    strongSelf.activateArea.accessibilityTraits = accessibility.traits
+                    let resolved = ItemListRowVoiceOver.resolve(strings: item.presentationData.strings, kind: .open, isEnabled: !item.isAllChats)
+                    strongSelf.activateArea.accessibilityHint = resolved.hint
+                    strongSelf.activateArea.accessibilityTraits = resolved.traits
                     
                     if let _ = updatedTheme {
                         strongSelf.topStripeNode.backgroundColor = item.presentationData.theme.list.itemBlocksSeparatorColor
@@ -530,7 +535,19 @@ final class ChatListFilterPresetListItemNode: ItemListRevealOptionsItemNode {
                     
                     strongSelf.updateLayout(size: layout.contentSize, leftInset: params.leftInset, rightInset: params.rightInset)
                     
-                    strongSelf.setRevealOptions((left: [], right: peerRevealOptions))
+                    let options: (left: [ItemListRevealOption], right: [ItemListRevealOption]) = (left: [], right: peerRevealOptions)
+                    strongSelf.setRevealOptions(options)
+                    if peerRevealOptions.isEmpty {
+                        strongSelf.activateArea.accessibilityCustomActions = nil
+                    } else {
+                        strongSelf.activateArea.accessibilityCustomActions = ItemListRevealOptionsVoiceOver.resolveCustomActions(options: options, perform: { [weak strongSelf] option in
+                            guard let strongSelf else {
+                                return false
+                            }
+                            strongSelf.revealOptionSelected(option, animated: true)
+                            return true
+                        })
+                    }
                     strongSelf.setRevealOptionsOpened(item.editing.revealed, animated: animated)
                 }
             })

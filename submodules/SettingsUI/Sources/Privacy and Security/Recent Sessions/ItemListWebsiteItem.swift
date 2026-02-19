@@ -321,6 +321,13 @@ class ItemListWebsiteItemNode: ItemListRevealOptionsItemNode {
                     let resolved = ItemListRowVoiceOver.resolve(strings: item.presentationData.strings, kind: .open, isEnabled: item.enabled)
                     strongSelf.activateArea.accessibilityHint = resolved.hint
                     strongSelf.activateArea.accessibilityTraits = resolved.traits
+                    strongSelf.activateArea.activate = { [weak strongSelf] in
+                        guard let strongSelf, let (item, _, _) = strongSelf.layoutParams, item.enabled else {
+                            return false
+                        }
+                        item.action?()
+                        return item.action != nil
+                    }
                     
                     if let _ = updatedTheme {
                         strongSelf.topStripeNode.backgroundColor = item.presentationData.theme.list.itemBlocksSeparatorColor
@@ -449,7 +456,15 @@ class ItemListWebsiteItemNode: ItemListRevealOptionsItemNode {
                     
                     strongSelf.updateLayout(size: layout.contentSize, leftInset: params.leftInset, rightInset: params.rightInset)
                     
-                    strongSelf.setRevealOptions((left: [], right: peerRevealOptions))
+                    let options: (left: [ItemListRevealOption], right: [ItemListRevealOption]) = (left: [], right: peerRevealOptions)
+                    strongSelf.setRevealOptions(options)
+                    strongSelf.activateArea.accessibilityCustomActions = ItemListRevealOptionsVoiceOver.resolveCustomActions(options: options, perform: { [weak strongSelf] option in
+                        guard let strongSelf else {
+                            return false
+                        }
+                        strongSelf.revealOptionSelected(option, animated: true)
+                        return true
+                    })
                     strongSelf.setRevealOptionsOpened(item.revealed, animated: animated)
                 }
             })

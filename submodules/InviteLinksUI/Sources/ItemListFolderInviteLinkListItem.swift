@@ -363,6 +363,9 @@ public class ItemListFolderInviteLinkListItemNode: ItemListRevealOptionsItemNode
                                         
                     strongSelf.accessibilityLabel = titleAttributedString.string
                     strongSelf.accessibilityValue = subtitleAttributedString.string
+                    let resolved = ItemListRowVoiceOver.resolve(strings: item.presentationData.strings, kind: .open, isEnabled: item.invite != nil && item.tapAction != nil)
+                    strongSelf.accessibilityHint = resolved.hint
+                    strongSelf.accessibilityTraits = resolved.traits
                     
                     strongSelf.containerNode.frame = CGRect(origin: CGPoint(), size: layout.contentSize)
                     strongSelf.contextSourceNode.frame = CGRect(origin: CGPoint(), size: layout.contentSize)
@@ -520,11 +523,28 @@ public class ItemListFolderInviteLinkListItemNode: ItemListRevealOptionsItemNode
                     
                     strongSelf.updateLayout(size: layout.contentSize, leftInset: params.leftInset, rightInset: params.rightInset)
                     
-                    if item.removeAction != nil {
-                        strongSelf.setRevealOptions((left: [], right: [ItemListRevealOption(key: 0, title: item.presentationData.strings.ChatListFilter_LinkActionDelete, icon: .none, color: item.presentationData.theme.list.itemDisclosureActions.destructive.fillColor, textColor: item.presentationData.theme.list.itemDisclosureActions.destructive.foregroundColor)]))
+                    let options: (left: [ItemListRevealOption], right: [ItemListRevealOption])
+                    if item.invite != nil, item.removeAction != nil {
+                        options = (left: [], right: [
+                            ItemListRevealOption(
+                                key: 0,
+                                title: item.presentationData.strings.ChatListFilter_LinkActionDelete,
+                                icon: .none,
+                                color: item.presentationData.theme.list.itemDisclosureActions.destructive.fillColor,
+                                textColor: item.presentationData.theme.list.itemDisclosureActions.destructive.foregroundColor
+                            )
+                        ])
                     } else {
-                        strongSelf.setRevealOptions((left: [], right: []))
+                        options = (left: [], right: [])
                     }
+                    strongSelf.setRevealOptions(options)
+                    strongSelf.accessibilityCustomActions = options.right.isEmpty ? nil : ItemListRevealOptionsVoiceOver.resolveCustomActions(options: options, perform: { [weak strongSelf] option in
+                        guard let strongSelf else {
+                            return false
+                        }
+                        strongSelf.revealOptionSelected(option, animated: true)
+                        return true
+                    })
                 }
             })
         }
@@ -589,6 +609,14 @@ public class ItemListFolderInviteLinkListItemNode: ItemListRevealOptionsItemNode
         super.updateRevealOffset(offset: offset, transition: transition)
         
         transition.updateSublayerTransformOffset(layer: self.offsetContainerNode.layer, offset: CGPoint(x: offset + (self.contextSourceNode.isExtractedToContextPreview ? 12.0 : 0.0), y: 0.0))
+    }
+    
+    override public func accessibilityActivate() -> Bool {
+        guard let item = self.layoutParams?.0, let invite = item.invite else {
+            return false
+        }
+        item.tapAction?(invite)
+        return item.tapAction != nil
     }
     
     override public func revealOptionSelected(_ option: ItemListRevealOption, animated: Bool) {

@@ -198,7 +198,10 @@ private final class ProxySettingsServerItemNode: ItemListRevealOptionsItemNode {
         self.infoButtonNode.addTarget(self, action: #selector(self.infoButtonPressed), forControlEvents: .touchUpInside)
         
         self.activateArea.activate = { [weak self] in
-            self?.item?.action()
+            guard let self, let item = self.item, self.canBeSelected else {
+                return false
+            }
+            item.action()
             return true
         }
     }
@@ -437,7 +440,19 @@ private final class ProxySettingsServerItemNode: ItemListRevealOptionsItemNode {
                     
                     strongSelf.updateLayout(size: layout.contentSize, leftInset: params.leftInset, rightInset: params.rightInset)
                     
-                    strongSelf.setRevealOptions((left: [], right: peerRevealOptions))
+                    let options: (left: [ItemListRevealOption], right: [ItemListRevealOption]) = (left: [], right: peerRevealOptions)
+                    strongSelf.setRevealOptions(options)
+                    if peerRevealOptions.isEmpty {
+                        strongSelf.activateArea.accessibilityCustomActions = nil
+                    } else {
+                        strongSelf.activateArea.accessibilityCustomActions = ItemListRevealOptionsVoiceOver.resolveCustomActions(options: options, perform: { [weak strongSelf] option in
+                            guard let strongSelf else {
+                                return false
+                            }
+                            strongSelf.revealOptionSelected(option, animated: true)
+                            return true
+                        })
+                    }
                     strongSelf.setRevealOptionsOpened(item.editing.revealed, animated: animated)
                 }
             })

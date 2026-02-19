@@ -561,6 +561,13 @@ class ItemListStickerPackItemNode: ItemListRevealOptionsItemNode {
                     let resolved = ItemListRowVoiceOver.resolve(strings: item.presentationData.strings, kind: .open, isEnabled: item.enabled)
                     strongSelf.activateArea.accessibilityHint = resolved.hint
                     strongSelf.activateArea.accessibilityTraits = resolved.traits
+                    strongSelf.activateArea.activate = { [weak strongSelf] in
+                        guard let strongSelf, let (item, _, _) = strongSelf.layoutParams, strongSelf.canBeSelected else {
+                            return false
+                        }
+                        item.action?()
+                        return item.action != nil
+                    }
                     
                     if fileUpdated {
                         strongSelf.currentThumbnailItem = thumbnailItem
@@ -880,7 +887,15 @@ class ItemListStickerPackItemNode: ItemListRevealOptionsItemNode {
                     
                     strongSelf.updateLayout(size: layout.contentSize, leftInset: params.leftInset, rightInset: params.rightInset)
                     
-                    strongSelf.setRevealOptions((left: [], right: packRevealOptions))
+                    let options: (left: [ItemListRevealOption], right: [ItemListRevealOption]) = (left: [], right: packRevealOptions)
+                    strongSelf.setRevealOptions(options)
+                    strongSelf.activateArea.accessibilityCustomActions = packRevealOptions.isEmpty ? nil : ItemListRevealOptionsVoiceOver.resolveCustomActions(options: options, perform: { [weak strongSelf] option in
+                        guard let strongSelf else {
+                            return false
+                        }
+                        strongSelf.revealOptionSelected(option, animated: true)
+                        return true
+                    })
                     strongSelf.setRevealOptionsOpened(item.editing.revealed, animated: animated)
                     
                     if let updatedFetchSignal = updatedFetchSignal {

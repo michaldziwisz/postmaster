@@ -114,6 +114,12 @@ final class SecureIdValueFormFileItemNode: FormEditableBlockItemNode<SecureIdVal
         
         self.placeholderNode.image = item.placeholder
         
+        self.selectionButtonNode.isAccessibilityElement = true
+        self.selectionButtonNode.accessibilityLabel = item.title
+        let resolved = ItemListRowVoiceOver.resolve(strings: strings, kind: .open, isEnabled: true)
+        self.selectionButtonNode.accessibilityHint = resolved.hint
+        self.selectionButtonNode.accessibilityTraits = resolved.traits
+        
         var progress: CGFloat?
         if let document = item.document {
             switch document {
@@ -126,13 +132,30 @@ final class SecureIdValueFormFileItemNode: FormEditableBlockItemNode<SecureIdVal
             }
             self.imageNode.isHidden = false
             self.placeholderNode.isHidden = true
-            
-            self.setRevealOptions((left: [], right: [ItemListRevealOption(key: RevealOptionKey.delete.rawValue, title: strings.Common_Delete, icon: .none, color: theme.list.itemDisclosureActions.destructive.fillColor, textColor: theme.list.itemDisclosureActions.destructive.foregroundColor)]))
+                        
+            let options: (left: [ItemListRevealOption], right: [ItemListRevealOption]) = (left: [], right: [
+                ItemListRevealOption(
+                    key: RevealOptionKey.delete.rawValue,
+                    title: strings.Common_Delete,
+                    icon: .none,
+                    color: theme.list.itemDisclosureActions.destructive.fillColor,
+                    textColor: theme.list.itemDisclosureActions.destructive.foregroundColor
+                )
+            ])
+            self.setRevealOptions(options)
+            self.selectionButtonNode.accessibilityCustomActions = ItemListRevealOptionsVoiceOver.resolveCustomActions(options: options, perform: { [weak self] option in
+                guard let self else {
+                    return false
+                }
+                self.revealOptionSelected(option, animated: true)
+                return true
+            })
         } else {
             self.imageNode.isHidden = true
             self.placeholderNode.isHidden = false
             
             self.setRevealOptions((left: [], right: []))
+            self.selectionButtonNode.accessibilityCustomActions = nil
         }
         
         let progressState: RadialStatusNodeState
@@ -172,6 +195,8 @@ final class SecureIdValueFormFileItemNode: FormEditableBlockItemNode<SecureIdVal
                 self.labelNode.maximumNumberOfLines = 1
                 if let document = item.document {
                     self.labelNode.attributedText = NSAttributedString(string: stringForFullDate(timestamp: document.timestamp, strings: strings, dateTimeFormat: dateTimeFormat), font: labelFont, textColor: theme.list.itemSecondaryTextColor)
+                } else {
+                    self.labelNode.attributedText = NSAttributedString(string: "", font: labelFont, textColor: theme.list.itemSecondaryTextColor)
                 }
             case let .error(text):
                 self.labelNode.maximumNumberOfLines = 40
@@ -181,6 +206,7 @@ final class SecureIdValueFormFileItemNode: FormEditableBlockItemNode<SecureIdVal
                 self.labelNode.attributedText = NSAttributedString(string: text, font: labelFont, textColor: theme.list.itemSecondaryTextColor)
         }
         let labelSize = self.labelNode.updateLayout(CGSize(width: width - leftInset - 16.0, height: CGFloat.greatestFiniteMagnitude))
+        self.selectionButtonNode.accessibilityValue = self.labelNode.attributedText?.string
         
         return (FormControllerItemPreLayout(aligningInset: 0.0), { params in
             transition.updateFrame(node: self.titleNode, frame: CGRect(origin: CGPoint(x: leftInset + revealOffset, y: 14.0), size: titleSize))
