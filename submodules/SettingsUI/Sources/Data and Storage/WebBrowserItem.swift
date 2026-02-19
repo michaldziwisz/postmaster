@@ -200,11 +200,9 @@ private final class WebBrowserItemNode: ListViewItemNode {
                     strongSelf.item = item
                     
                     strongSelf.activateArea.accessibilityLabel = item.title
-                    if item.checked {
-                        strongSelf.activateArea.accessibilityValue = "Selected"
-                    } else {
-                        strongSelf.activateArea.accessibilityValue = ""
-                    }
+                    let resolved = ItemListSelectableOptionVoiceOver.resolve(value: nil, isSelected: item.checked, isEnabled: true)
+                    strongSelf.activateArea.accessibilityValue = resolved.value
+                    strongSelf.activateArea.accessibilityTraits = resolved.traits
                     
                     strongSelf.activateArea.frame = CGRect(origin: CGPoint(x: params.leftInset, y: 0.0), size: CGSize(width: params.width - params.leftInset - params.rightInset, height: layout.contentSize.height))
                     

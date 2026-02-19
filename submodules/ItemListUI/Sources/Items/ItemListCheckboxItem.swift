@@ -284,16 +284,13 @@ public class ItemListCheckboxItemNode: ItemListRevealOptionsItemNode {
                     strongSelf.contentContainerNode.frame = CGRect(origin: CGPoint(x: strongSelf.contentContainerNode.frame.minX, y: 0.0), size: CGSize(width: params.width, height: layout.contentSize.height))
                     
                     strongSelf.activateArea.accessibilityLabel = item.title
-                    if item.checked {
-                        strongSelf.activateArea.accessibilityValue = "Selected"
-                    } else {
-                        strongSelf.activateArea.accessibilityValue = ""
-                    }
-                    if item.enabled {
-                        strongSelf.activateArea.accessibilityTraits = []
-                    } else {
-                        strongSelf.activateArea.accessibilityTraits = [.notEnabled]
-                    }
+                    let resolved = ItemListSelectableOptionVoiceOver.resolve(
+                        value: item.subtitle,
+                        isSelected: item.checked,
+                        isEnabled: item.enabled
+                    )
+                    strongSelf.activateArea.accessibilityValue = resolved.value
+                    strongSelf.activateArea.accessibilityTraits = resolved.traits
                     
                     strongSelf.activateArea.frame = CGRect(origin: CGPoint(x: params.leftInset, y: 0.0), size: CGSize(width: params.width - params.leftInset - params.rightInset, height: layout.contentSize.height))
                     
