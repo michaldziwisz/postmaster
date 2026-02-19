@@ -164,6 +164,10 @@ final class ChatInviteRequestsTitlePanelNode: ChatTitleAccessoryPanelNode {
         
         self.activateAreaNode = AccessibilityAreaNode()
         self.activateAreaNode.accessibilityTraits = .button
+        self.activateAreaNode.activate = { [weak self] in
+            self?.buttonPressed()
+            return true
+        }
         
         super.init()
 
@@ -173,6 +177,7 @@ final class ChatInviteRequestsTitlePanelNode: ChatTitleAccessoryPanelNode {
         self.addSubnode(self.closeButton)
         
         self.button.addTarget(self, action: #selector(self.buttonPressed), forControlEvents: .touchUpInside)
+        self.button.isAccessibilityElement = false
         self.addSubnode(self.button)
         
         self.buttonTitle.isUserInteractionEnabled = false
@@ -213,6 +218,13 @@ final class ChatInviteRequestsTitlePanelNode: ChatTitleAccessoryPanelNode {
         let closeButtonSize = self.closeButton.measure(CGSize(width: 100.0, height: 100.0))
         transition.updateFrame(node: self.closeButton, frame: CGRect(origin: CGPoint(x: width - contentRightInset - closeButtonSize.width, y: floorToScreenPixels((panelHeight - closeButtonSize.height) / 2.0)), size: closeButtonSize))
         
+        let closeResolved = ChatInviteRequestsTitlePanelVoiceOver.resolveCloseButton(strings: interfaceState.strings, isEnabled: true)
+        self.closeButton.isAccessibilityElement = true
+        self.closeButton.accessibilityLabel = closeResolved.label
+        self.closeButton.accessibilityValue = nil
+        self.closeButton.accessibilityHint = closeResolved.hint
+        self.closeButton.accessibilityTraits = closeResolved.traits
+        
         self.buttonTitle.attributedText = NSAttributedString(string: interfaceState.strings.Conversation_RequestsToJoin(self.count), font: Font.regular(16.0), textColor: interfaceState.theme.rootController.navigationBar.accentTextColor)
         
         transition.updateFrame(node: self.button, frame: CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: width, height: panelHeight)))
@@ -231,8 +243,11 @@ final class ChatInviteRequestsTitlePanelNode: ChatTitleAccessoryPanelNode {
             transition.updateFrame(node: self.avatarsNode, frame: CGRect(origin: CGPoint(x: leftInset + 8.0, y: floor((panelHeight - avatarsSize.height) / 2.0)), size: avatarsSize))
         }
         
-        self.activateAreaNode.frame = CGRect(origin: .zero, size: CGSize(width: width, height: panelHeight))
-        self.activateAreaNode.accessibilityLabel = interfaceState.strings.Conversation_RequestsToJoin(self.count)
+        let actionResolved = ChatInviteRequestsTitlePanelVoiceOver.resolveMain(strings: interfaceState.strings, count: self.count, isEnabled: true)
+        self.activateAreaNode.frame = CGRect(origin: .zero, size: CGSize(width: max(0.0, width - contentRightInset - closeButtonSize.width), height: panelHeight))
+        self.activateAreaNode.accessibilityLabel = actionResolved.label
+        self.activateAreaNode.accessibilityHint = actionResolved.hint
+        self.activateAreaNode.accessibilityTraits = actionResolved.traits
         
         return LayoutResult(backgroundHeight: initialPanelHeight, insetHeight: panelHeight, hitTestSlop: 0.0)
     }
