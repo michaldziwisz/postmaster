@@ -478,6 +478,44 @@ final class ChatPinnedMessageTitlePanelNode: ChatTitleAccessoryPanelNode {
         transition.updateFrame(node: self.activityIndicator, frame: CGRect(origin: CGPoint(), size: indicatorSize))
         
         self.tapButton.frame = CGRect(origin: CGPoint(), size: CGSize(width: width - tapButtonRightInset, height: panelHeight))
+
+        let hasPinnedMessage = interfaceState.pinnedMessage != nil
+        self.tapButton.isAccessibilityElement = hasPinnedMessage
+        if !hasPinnedMessage {
+            self.tapButton.accessibilityLabel = nil
+            self.tapButton.accessibilityValue = nil
+            self.tapButton.accessibilityHint = nil
+            self.tapButton.accessibilityTraits = []
+        }
+        
+        let closeResolved = ChatPinnedMessageTitlePanelVoiceOver.resolveCloseButton(strings: interfaceState.strings, isEnabled: true)
+        self.closeButton.isAccessibilityElement = displayCloseButton
+        self.closeButton.accessibilityLabel = displayCloseButton ? closeResolved.label : nil
+        self.closeButton.accessibilityValue = nil
+        self.closeButton.accessibilityHint = displayCloseButton ? closeResolved.hint : nil
+        self.closeButton.accessibilityTraits = closeResolved.traits
+        
+        let listResolved = ChatPinnedMessageTitlePanelVoiceOver.resolveListButton(strings: interfaceState.strings, totalCount: interfaceState.pinnedMessage?.totalCount ?? 0, isEnabled: true)
+        self.listButton.isAccessibilityElement = displayListButton
+        self.listButton.accessibilityLabel = displayListButton ? listResolved.label : nil
+        self.listButton.accessibilityValue = nil
+        self.listButton.accessibilityHint = displayListButton ? listResolved.hint : nil
+        self.listButton.accessibilityTraits = listResolved.traits
+        
+        if let actionTitle {
+            let actionResolved = ChatPinnedMessageTitlePanelVoiceOver.resolveActionButton(title: actionTitle, isEnabled: true)
+            self.actionButton.isAccessibilityElement = true
+            self.actionButton.accessibilityLabel = actionResolved.label
+            self.actionButton.accessibilityValue = nil
+            self.actionButton.accessibilityHint = actionResolved.hint
+            self.actionButton.accessibilityTraits = actionResolved.traits
+        } else {
+            self.actionButton.isAccessibilityElement = false
+            self.actionButton.accessibilityLabel = nil
+            self.actionButton.accessibilityValue = nil
+            self.actionButton.accessibilityHint = nil
+            self.actionButton.accessibilityTraits = []
+        }
         
         self.clippingContainer.frame = CGRect(origin: CGPoint(), size: CGSize(width: width, height: panelHeight))
         self.contentContainer.frame = CGRect(origin: CGPoint(), size: CGSize(width: width, height: panelHeight))
@@ -783,6 +821,25 @@ final class ChatPinnedMessageTitlePanelNode: ChatTitleAccessoryPanelNode {
         } else {
             messageText = NSAttributedString(string: foldLineBreaks(textString.string), font: textFont, textColor: message.media.isEmpty || message.media.first is TelegramMediaWebpage ? theme.chat.inputPanel.primaryTextColor : theme.chat.inputPanel.secondaryTextColor)
         }
+
+        let titleText = titleStrings.map { segment -> String in
+            switch segment {
+            case let .number(_, attributedText), let .text(_, attributedText):
+                return attributedText.string
+            }
+        }.joined()
+        
+        let tapResolved = ChatPinnedMessageTitlePanelVoiceOver.resolveMain(
+            strings: strings,
+            title: titleText,
+            message: messageText.string,
+            isEnabled: true
+        )
+        self.tapButton.isAccessibilityElement = true
+        self.tapButton.accessibilityLabel = tapResolved.label
+        self.tapButton.accessibilityValue = tapResolved.value
+        self.tapButton.accessibilityHint = tapResolved.hint
+        self.tapButton.accessibilityTraits = tapResolved.traits
         
         let textConstrainedSize = CGSize(width: width - textLineInset - contentLeftInset - rightInset - textRightInset, height: CGFloat.greatestFiniteMagnitude)
         let (textLayout, textApply) = makeTextLayout(TextNodeLayoutArguments(attributedString: messageText, backgroundColor: nil, maximumNumberOfLines: 1, truncationType: .end, constrainedSize: textConstrainedSize, alignment: .natural, cutout: nil, insets: UIEdgeInsets(top: 2.0, left: 0.0, bottom: 2.0, right: 0.0)))
