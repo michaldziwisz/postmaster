@@ -1358,6 +1358,54 @@ final class PeerInfoHeaderNode: ASDisplayNode {
             TitleNodeStateExpanded: MultiScaleTextState(attributes: smallTitleAttributes, constrainedSize: titleConstrainedSize)
         ], mainState: TitleNodeStateRegular)
         
+        let titleCredibilityStatus: PeerInfoHeaderTitleVoiceOver.CredibilityStatus
+        switch credibilityIcon {
+        case .premium:
+            titleCredibilityStatus = .premium
+        case .verified:
+            titleCredibilityStatus = .verified
+        case .fake:
+            titleCredibilityStatus = .fake
+        case .scam:
+            titleCredibilityStatus = .scam
+        default:
+            titleCredibilityStatus = .none
+        }
+        
+        var titleHasEmojiStatus = false
+        var titleHasUniqueGift = false
+        if case let .emojiStatus(emojiStatus) = statusIcon {
+            titleHasEmojiStatus = true
+            if case .starGift = emojiStatus.content {
+                titleHasUniqueGift = !self.isSettings
+            }
+        }
+        
+        let titleAccessibility = PeerInfoHeaderTitleVoiceOver.resolve(
+            strings: presentationData.strings,
+            credibility: titleCredibilityStatus,
+            hasEmojiStatus: titleHasEmojiStatus,
+            hasUniqueGift: titleHasUniqueGift
+        )
+        let titleCustomActions: [UIAccessibilityCustomAction] = titleAccessibility.customActions.map { action in
+            switch action.kind {
+            case .showPremiumIntro:
+                return UIAccessibilityCustomAction(name: action.name, target: self, selector: #selector(self.performTitlePremiumIntroAccessibilityAction))
+            case .showEmojiStatusIntro:
+                return UIAccessibilityCustomAction(name: action.name, target: self, selector: #selector(self.performTitleEmojiStatusAccessibilityAction))
+            case .openUniqueGift:
+                return UIAccessibilityCustomAction(name: action.name, target: self, selector: #selector(self.performTitleOpenUniqueGiftAccessibilityAction))
+            }
+        }
+        
+        for key in [TitleNodeStateRegular, TitleNodeStateExpanded] {
+            if let titleTextNode = self.titleNode.stateNode(forKey: key) {
+                titleTextNode.accessibilityValue = titleAccessibility.value
+                titleTextNode.accessibilityTraits = titleAccessibility.traits
+                titleTextNode.accessibilityCustomActions = titleCustomActions.isEmpty ? nil : titleCustomActions
+            }
+        }
+        
         let subtitleNodeLayout = self.subtitleNode.updateLayout(text: subtitleStringText, states: [
             TitleNodeStateRegular: MultiScaleTextState(attributes: subtitleAttributes, constrainedSize: titleConstrainedSize),
             TitleNodeStateExpanded: MultiScaleTextState(attributes: smallSubtitleAttributes, constrainedSize: titleConstrainedSize)
@@ -2874,6 +2922,31 @@ final class PeerInfoHeaderNode: ASDisplayNode {
             
             self.updateAvatarMask(transition: transition)
         }
+    }
+    
+    @objc private func performTitlePremiumIntroAccessibilityAction() -> Bool {
+        let anchorView: UIView = self.isAvatarExpanded ? self.titleExpandedCredibilityIconView : self.titleCredibilityIconView
+        self.displayPremiumIntro?(anchorView, nil, self.emojiStatusFileAndPackTitle.get(), self.isAvatarExpanded)
+        return true
+    }
+    
+    @objc private func performTitleEmojiStatusAccessibilityAction() -> Bool {
+        let anchorView: UIView = self.isAvatarExpanded ? self.titleExpandedStatusIconView : self.titleStatusIconView
+        self.displayPremiumIntro?(anchorView, self.peer?.emojiStatus, self.emojiStatusFileAndPackTitle.get(), self.isAvatarExpanded)
+        return true
+    }
+    
+    @objc private func performTitleOpenUniqueGiftAccessibilityAction() -> Bool {
+        guard !self.isSettings, let emojiStatus = self.peer?.emojiStatus else {
+            return false
+        }
+        guard case let .starGift(_, _, _, slug, _, _, _, _, _) = emojiStatus.content else {
+            return false
+        }
+        
+        let anchorView: UIView = self.isAvatarExpanded ? self.titleExpandedStatusIconView : self.titleStatusIconView
+        self.openUniqueGift?(anchorView, slug)
+        return true
     }
     
     private func updateAvatarMask(transition: ContainedViewLayoutTransition) {
