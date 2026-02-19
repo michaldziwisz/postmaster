@@ -102,6 +102,16 @@ private final class ChatBusinessLinkTitlePanelComponent: Component {
                     self.addSubview(copyButtonView)
                 }
                 transition.setFrame(view: copyButtonView, frame: CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: copyButtonSize))
+                
+                let accessibility = ChatBusinessLinkTitlePanelVoiceOver.resolveCopyButton(
+                    strings: component.strings,
+                    isEnabled: (copyButtonView as? UIControl)?.isEnabled ?? true
+                )
+                copyButtonView.isAccessibilityElement = true
+                copyButtonView.accessibilityLabel = accessibility.label
+                copyButtonView.accessibilityHint = accessibility.hint
+                copyButtonView.accessibilityTraits = accessibility.traits
+                copyButtonView.accessibilityElementsHidden = true
             }
             
             let shareButtonSize = self.shareButton.update(
@@ -131,6 +141,16 @@ private final class ChatBusinessLinkTitlePanelComponent: Component {
                     self.addSubview(shareButtonView)
                 }
                 transition.setFrame(view: shareButtonView, frame: CGRect(origin: CGPoint(x: floor(availableSize.width * 0.5), y: 0.0), size: shareButtonSize))
+                
+                let accessibility = ChatBusinessLinkTitlePanelVoiceOver.resolveShareButton(
+                    strings: component.strings,
+                    isEnabled: (shareButtonView as? UIControl)?.isEnabled ?? true
+                )
+                shareButtonView.isAccessibilityElement = true
+                shareButtonView.accessibilityLabel = accessibility.label
+                shareButtonView.accessibilityHint = accessibility.hint
+                shareButtonView.accessibilityTraits = accessibility.traits
+                shareButtonView.accessibilityElementsHidden = true
             }
             
             return size
