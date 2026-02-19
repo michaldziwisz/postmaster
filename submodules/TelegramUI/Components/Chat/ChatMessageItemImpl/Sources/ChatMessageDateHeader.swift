@@ -242,6 +242,7 @@ private final class ChatMessageDateContentNode: ASDisplayNode {
     public let labelNode: TextNode
     public let backgroundNode: NavigationBackgroundNode
     public let stickBackgroundNode: ASImageNode
+    private let activateArea: AccessibilityAreaNode
     
     private var backgroundContent: WallpaperBubbleBackgroundNode?
     private var text: String
@@ -266,6 +267,8 @@ private final class ChatMessageDateContentNode: ASDisplayNode {
         self.stickBackgroundNode.isLayerBacked = true
         self.stickBackgroundNode.displayWithoutProcessing = true
         self.stickBackgroundNode.displaysAsynchronously = false
+        
+        self.activateArea = AccessibilityAreaNode()
         
         let nowTimestamp = Int32(CFAbsoluteTimeGetCurrent() + NSTimeIntervalSince1970)
         
@@ -315,6 +318,7 @@ private final class ChatMessageDateContentNode: ASDisplayNode {
             self.addSubnode(self.backgroundNode)
         }
         self.addSubnode(self.labelNode)
+        self.addSubnode(self.activateArea)
                 
         let titleFont = Font.medium(min(18.0, floor(presentationData.fontSize.baseDisplaySize * 13.0 / 17.0)))
         
@@ -324,6 +328,27 @@ private final class ChatMessageDateContentNode: ASDisplayNode {
         let (size, apply) = labelLayout(TextNodeLayoutArguments(attributedString: attributedString, backgroundColor: nil, maximumNumberOfLines: 1, truncationType: .end, constrainedSize: CGSize(width: 320.0, height: CGFloat.greatestFiniteMagnitude), alignment: .natural, cutout: nil, insets: UIEdgeInsets()))
         let _ = apply()
         self.labelNode.frame = CGRect(origin: CGPoint(), size: size.size)
+    }
+
+    func updateVoiceOver(isActionEnabled: Bool, action: (() -> Void)?) {
+        let resolved = ChatMessageDateHeaderVoiceOver.resolve(
+            strings: self.presentationData.strings,
+            title: self.text,
+            isActionEnabled: isActionEnabled
+        )
+        self.activateArea.accessibilityLabel = resolved.label
+        self.activateArea.accessibilityValue = nil
+        self.activateArea.accessibilityHint = resolved.hint
+        self.activateArea.accessibilityTraits = resolved.traits
+
+        if isActionEnabled, let action {
+            self.activateArea.activate = {
+                action()
+                return true
+            }
+        } else {
+            self.activateArea.activate = nil
+        }
     }
     
     func updatePresentationData(_ presentationData: ChatPresentationData, context: AccountContext) {
@@ -365,6 +390,7 @@ private final class ChatMessageDateContentNode: ASDisplayNode {
         
         transition.updateFrame(node: self.stickBackgroundNode, frame: CGRect(origin: CGPoint(), size: backgroundFrame.size))
         transition.updateFrame(node: self.backgroundNode, frame: backgroundFrame)
+        transition.updateFrame(node: self.activateArea, frame: backgroundFrame)
         self.backgroundNode.update(size: backgroundFrame.size, cornerRadius: backgroundFrame.size.height / 2.0, transition: transition)
         let labelFrame = CGRect(origin: CGPoint(x: backgroundFrame.origin.x + chatDateInset, y: backgroundFrame.origin.y + floorToScreenPixels((backgroundSize.height - labelSize.height) / 2.0)), size: labelSize)
         
@@ -407,6 +433,7 @@ private final class ChatMessagePeerContentNode: ASDisplayNode {
     public let labelNode: TextNode
     public let backgroundNode: NavigationBackgroundNode
     public let stickBackgroundNode: ASImageNode
+    private let activateArea: AccessibilityAreaNode
     
     private var backgroundContent: WallpaperBubbleBackgroundNode?
     private var text: String
@@ -433,6 +460,8 @@ private final class ChatMessagePeerContentNode: ASDisplayNode {
         self.stickBackgroundNode.isLayerBacked = true
         self.stickBackgroundNode.displayWithoutProcessing = true
         self.stickBackgroundNode.displaysAsynchronously = false
+        
+        self.activateArea = AccessibilityAreaNode()
         
         let text: String
         switch displayHeader.contents {
@@ -503,6 +532,7 @@ private final class ChatMessagePeerContentNode: ASDisplayNode {
             }
         }
         self.addSubnode(self.labelNode)
+        self.addSubnode(self.activateArea)
                 
         let titleFont = Font.medium(min(18.0, floor(presentationData.fontSize.baseDisplaySize * 13.0 / 17.0)))
         
@@ -516,6 +546,27 @@ private final class ChatMessagePeerContentNode: ASDisplayNode {
         let arrowIcon = UIImageView(image: ChatMessagePeerContentNode.arrowImage)
         self.arrowIcon = arrowIcon
         self.view.addSubview(arrowIcon)
+    }
+
+    func updateVoiceOver(isActionEnabled: Bool, action: (() -> Void)?) {
+        let resolved = ChatMessageDateHeaderVoiceOver.resolve(
+            strings: self.presentationData.strings,
+            title: self.text,
+            isActionEnabled: isActionEnabled
+        )
+        self.activateArea.accessibilityLabel = resolved.label
+        self.activateArea.accessibilityValue = nil
+        self.activateArea.accessibilityHint = resolved.hint
+        self.activateArea.accessibilityTraits = resolved.traits
+        
+        if isActionEnabled, let action {
+            self.activateArea.activate = {
+                action()
+                return true
+            }
+        } else {
+            self.activateArea.activate = nil
+        }
     }
     
     func updatePresentationData(_ presentationData: ChatPresentationData, context: AccountContext) {
@@ -579,6 +630,7 @@ private final class ChatMessagePeerContentNode: ASDisplayNode {
         
         transition.updateFrame(node: self.stickBackgroundNode, frame: CGRect(origin: CGPoint(), size: backgroundFrame.size))
         transition.updateFrame(node: self.backgroundNode, frame: backgroundFrame)
+        transition.updateFrame(node: self.activateArea, frame: backgroundFrame)
         self.backgroundNode.update(size: backgroundFrame.size, cornerRadius: backgroundFrame.size.height / 2.0, transition: transition)
         let labelFrame = CGRect(origin: CGPoint(x: backgroundFrame.origin.x + avatarInset + avatarDiameter + avatarSpacing, y: backgroundFrame.origin.y + floorToScreenPixels((backgroundSize.height - labelSize.height) / 2.0)), size: labelSize)
         
@@ -712,6 +764,19 @@ public final class ChatMessageDateHeaderNodeImpl: ListViewItemHeaderNode, ChatMe
     override public func updateLayout(size: CGSize, leftInset: CGFloat, rightInset: CGFloat, transition: ContainedViewLayoutTransition) {
         self.params = (size, leftInset, rightInset)
         
+        let isActionEnabled = self.action != nil
+        let activateAction: (() -> Void)?
+        if isActionEnabled {
+            activateAction = { [weak self] in
+                guard let self, let action = self.action else {
+                    return
+                }
+                action(self.localTimestamp, self.stickDistanceFactor < 0.5)
+            }
+        } else {
+            activateAction = nil
+        }
+        
         var contentOffsetY: CGFloat = 0.0
         var isFirst = true
         if let dateContentNode = self.dateContentNode {
@@ -724,6 +789,7 @@ public final class ChatMessageDateHeaderNodeImpl: ListViewItemHeaderNode, ChatMe
             let contentFrame = CGRect(origin: CGPoint(x: 0.0, y: contentOffsetY), size: CGSize(width: size.width, height: 20.0))
             transition.updateFrame(node: dateContentNode, frame: contentFrame)
             dateContentNode.update(size: contentFrame.size, leftInset: leftInset, rightInset: rightInset, transition: transition)
+            dateContentNode.updateVoiceOver(isActionEnabled: isActionEnabled, action: activateAction)
             contentOffsetY += 20.0
         }
         if let peerContentNode = self.peerContentNode {
@@ -736,6 +802,7 @@ public final class ChatMessageDateHeaderNodeImpl: ListViewItemHeaderNode, ChatMe
             let contentFrame = CGRect(origin: CGPoint(x: 0.0, y: contentOffsetY), size: CGSize(width: size.width, height: 20.0))
             transition.updateFrame(node: peerContentNode, frame: contentFrame)
             peerContentNode.update(size: contentFrame.size, leftInset: leftInset, rightInset: rightInset, transition: transition)
+            peerContentNode.updateVoiceOver(isActionEnabled: isActionEnabled, action: activateAction)
             contentOffsetY += 20.0
             
             if let sectionSeparator = self.sectionSeparator {
@@ -973,6 +1040,7 @@ public final class ChatMessageAvatarHeaderNodeImpl: ListViewItemHeaderNode, Chat
 
     private let containerNode: ContextControllerSourceNode
     public let avatarNode: AvatarNode
+    private let activateArea: AccessibilityAreaNode
     private var avatarVideoNode: AvatarVideoNode?
         
     private var cachedDataDisposable = MetaDisposable()
@@ -1009,6 +1077,8 @@ public final class ChatMessageAvatarHeaderNodeImpl: ListViewItemHeaderNode, Chat
 
         self.avatarNode = AvatarNode(font: avatarFont)
         self.avatarNode.contentNode.displaysAsynchronously = !presentationData.isPreview
+        
+        self.activateArea = AccessibilityAreaNode()
 
         let isRotated = controllerInteraction?.chatIsRotated ?? true
         
@@ -1020,6 +1090,7 @@ public final class ChatMessageAvatarHeaderNodeImpl: ListViewItemHeaderNode, Chat
 
         self.addSubnode(self.containerNode)
         self.containerNode.addSubnode(self.avatarNode)
+        self.addSubnode(self.activateArea)
 
         if let peer = peer {
             self.setPeer(context: context, theme: presentationData.theme.theme, synchronousLoad: synchronousLoad, peer: peer, authorOfMessage: messageReference, emptyColor: .black)
@@ -1038,6 +1109,10 @@ public final class ChatMessageAvatarHeaderNodeImpl: ListViewItemHeaderNode, Chat
                 messageId = id
             }
             strongSelf.controllerInteraction?.openPeerContextMenu(peer, messageId, strongSelf.containerNode, strongSelf.containerNode.bounds, gesture)
+        }
+        
+        self.activateArea.activate = { [weak self] in
+            return self?.performAvatarAccessibilityActivate() ?? false
         }
 
         self.updateSelectionState(animated: false)
@@ -1222,9 +1297,82 @@ public final class ChatMessageAvatarHeaderNodeImpl: ListViewItemHeaderNode, Chat
             self.setNeedsLayout()
         }
     }
+    
+    private func updateAvatarVoiceOver() {
+        let isEnabled = !self.isAvatarHidden
+        
+        var peerTitle: String?
+        var peerKind: ChatMessageAvatarHeaderVoiceOver.PeerKind = .other
+        
+        if let peer = self.peer {
+            peerTitle = EnginePeer(peer).displayTitle(strings: self.presentationData.strings, displayOrder: self.presentationData.nameDisplayOrder)
+            
+            if peer is TelegramUser {
+                peerKind = .user
+            } else if peer is TelegramGroup {
+                peerKind = .group
+            } else if let channel = peer as? TelegramChannel {
+                switch channel.info {
+                case .broadcast:
+                    peerKind = .channel
+                case .group:
+                    peerKind = .group
+                }
+            } else {
+                peerKind = .other
+            }
+        } else if self.peerId.namespace == Namespaces.Peer.Empty {
+            peerTitle = self.presentationData.strings.ChatList_AuthorHidden
+        }
+        
+        let resolved = ChatMessageAvatarHeaderVoiceOver.resolve(
+            strings: self.presentationData.strings,
+            peerTitle: peerTitle,
+            peerKind: peerKind,
+            isEnabled: isEnabled
+        )
+        
+        self.activateArea.isAccessibilityElement = resolved.isAccessibilityElement && !self.isAvatarHidden
+        self.activateArea.accessibilityLabel = resolved.label
+        self.activateArea.accessibilityValue = resolved.value
+        self.activateArea.accessibilityHint = resolved.hint
+        self.activateArea.accessibilityTraits = resolved.traits
+    }
+    
+    private func performAvatarAccessibilityActivate() -> Bool {
+        guard !self.isAvatarHidden, let controllerInteraction = self.controllerInteraction else {
+            return false
+        }
+        
+        if self.peerId.namespace == Namespaces.Peer.Empty, case let .message(_, _, id, _, _, _, _) = self.messageReference?.content {
+            controllerInteraction.displayMessageTooltip(id, self.presentationData.strings.Conversation_ForwardAuthorHiddenTooltip, false, self, self.avatarNode.frame)
+            return true
+        } else if let peer = self.peer {
+            if peer.id.isVerificationCodes {
+                controllerInteraction.playShakeAnimation()
+                return true
+            } else if let adMessageId = self.adMessageId {
+                controllerInteraction.activateAdAction(adMessageId, nil, false, false)
+                return true
+            } else {
+                if let channel = peer as? TelegramChannel, case .broadcast = channel.info {
+                    controllerInteraction.openPeer(EnginePeer(peer), .chat(textInputState: nil, subject: nil, peekData: nil), self.messageReference, .default)
+                } else {
+                    controllerInteraction.openPeer(EnginePeer(peer), .info(nil), self.messageReference, .groupParticipant(storyStats: nil, avatarHeaderNode: self))
+                }
+                return true
+            }
+        }
+        
+        return false
+    }
 
     override public func updateLayout(size: CGSize, leftInset: CGFloat, rightInset: CGFloat, transition: ContainedViewLayoutTransition) {
-        transition.updateFrame(node: self.containerNode, frame: CGRect(origin: CGPoint(x: leftInset + 7.0, y: -3.0), size: CGSize(width: avatarHeaderSize(), height: avatarHeaderSize())))
+        let containerFrame = CGRect(origin: CGPoint(x: leftInset + 7.0, y: -3.0), size: CGSize(width: avatarHeaderSize(), height: avatarHeaderSize()))
+        transition.updateFrame(node: self.containerNode, frame: containerFrame)
+        transition.updateFrame(node: self.activateArea, frame: containerFrame)
+        self.updateAvatarVoiceOver()
+        
         let avatarFrame = CGRect(origin: CGPoint(), size: CGSize(width: avatarHeaderSize(), height: avatarHeaderSize()))
         self.avatarNode.position = avatarFrame.center
         self.avatarNode.bounds = CGRect(origin: CGPoint(), size: avatarFrame.size)
@@ -1274,6 +1422,7 @@ public final class ChatMessageAvatarHeaderNodeImpl: ListViewItemHeaderNode, Chat
         }
         transition.updateTransform(node: self.avatarNode, transform: avatarTransform)
         transition.updateAlpha(node: self.avatarNode, alpha: isHidden ? 0.0 : 1.0)
+        self.updateAvatarVoiceOver()
     }
 
     override public func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
@@ -1290,21 +1439,7 @@ public final class ChatMessageAvatarHeaderNodeImpl: ListViewItemHeaderNode, Chat
 
     @objc private func tapGesture(_ recognizer: ListViewTapGestureRecognizer) {
         if case .ended = recognizer.state {
-            if self.peerId.namespace == Namespaces.Peer.Empty, case let .message(_, _, id, _, _, _, _) = self.messageReference?.content {
-                self.controllerInteraction?.displayMessageTooltip(id, self.presentationData.strings.Conversation_ForwardAuthorHiddenTooltip, false, self, self.avatarNode.frame)
-            } else if let peer = self.peer {
-                if peer.id.isVerificationCodes {
-                    self.controllerInteraction?.playShakeAnimation()
-                } else if let adMessageId = self.adMessageId {
-                    self.controllerInteraction?.activateAdAction(adMessageId, nil, false, false)
-                } else {
-                    if let channel = peer as? TelegramChannel, case .broadcast = channel.info {
-                        self.controllerInteraction?.openPeer(EnginePeer(peer), .chat(textInputState: nil, subject: nil, peekData: nil), self.messageReference, .default)
-                    } else {
-                        self.controllerInteraction?.openPeer(EnginePeer(peer), .info(nil), self.messageReference, .groupParticipant(storyStats: nil, avatarHeaderNode: self))
-                    }
-                }
-            }
+            let _ = self.performAvatarAccessibilityActivate()
         }
     }
     
