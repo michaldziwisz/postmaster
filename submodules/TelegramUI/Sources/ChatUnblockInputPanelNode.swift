@@ -45,6 +45,8 @@ final class ChatUnblockInputPanelNode: ChatInputPanelNode {
         
         self.backgroundView = GlassBackgroundView()
         self.backgroundView.isUserInteractionEnabled = false
+        self.backgroundView.isAccessibilityElement = false
+        self.backgroundView.accessibilityElementsHidden = true
         
         self.button = HighlightTrackingButton()
         
@@ -102,6 +104,12 @@ final class ChatUnblockInputPanelNode: ChatInputPanelNode {
         } else {
             string = strings.Conversation_Unblock
         }
+
+        let accessibility = ChatUnblockInputPanelVoiceOver.resolve(label: string, isEnabled: true)
+        self.button.isAccessibilityElement = true
+        self.button.accessibilityLabel = accessibility.label
+        self.button.accessibilityHint = accessibility.hint
+        self.button.accessibilityTraits = accessibility.traits
         
         let titleSize = self.title.update(
             transition: .immediate,
