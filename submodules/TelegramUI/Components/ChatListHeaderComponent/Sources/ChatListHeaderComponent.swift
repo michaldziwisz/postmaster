@@ -904,12 +904,14 @@ public final class ChatListHeaderComponent: Component {
                 
                 var primaryTitle = ""
                 var primaryTitleHasLock = false
+                var primaryTitleIsManuallyLocked = false
                 var primaryTitleHasActivity = false
                 var primaryTitlePeerStatus: StoryPeerListComponent.PeerStatus?
                 if let primaryContent = component.primaryContent {
                     if let chatListTitle = primaryContent.chatListTitle {
                         primaryTitle = chatListTitle.text
                         primaryTitleHasLock = chatListTitle.isPasscodeSet
+                        primaryTitleIsManuallyLocked = chatListTitle.isManuallyLocked
                         primaryTitleHasActivity = chatListTitle.activity
                         if let peerStatus = chatListTitle.peerStatus {
                             switch peerStatus {
@@ -934,6 +936,7 @@ public final class ChatListHeaderComponent: Component {
                         sideInset: component.sideInset,
                         title: primaryTitle,
                         titleHasLock: primaryTitleHasLock,
+                        titleIsManuallyLocked: primaryTitleIsManuallyLocked,
                         titleHasActivity: primaryTitleHasActivity,
                         titlePeerStatus: primaryTitlePeerStatus,
                         minTitleX: self.primaryContentView?.centerContentLeftInset ?? 0.0,

@@ -47,6 +47,7 @@ public final class StoryPeerListComponent: Component {
     public let sideInset: CGFloat
     public let title: String
     public let titleHasLock: Bool
+    public let titleIsManuallyLocked: Bool
     public let titleHasActivity: Bool
     public let titlePeerStatus: PeerStatus?
     public let minTitleX: CGFloat
@@ -70,6 +71,7 @@ public final class StoryPeerListComponent: Component {
         sideInset: CGFloat,
         title: String,
         titleHasLock: Bool,
+        titleIsManuallyLocked: Bool,
         titleHasActivity: Bool,
         titlePeerStatus: PeerStatus?,
         minTitleX: CGFloat,
@@ -92,6 +94,7 @@ public final class StoryPeerListComponent: Component {
         self.sideInset = sideInset
         self.title = title
         self.titleHasLock = titleHasLock
+        self.titleIsManuallyLocked = titleIsManuallyLocked
         self.titleHasActivity = titleHasActivity
         self.titlePeerStatus = titlePeerStatus
         self.minTitleX = minTitleX
@@ -125,6 +128,9 @@ public final class StoryPeerListComponent: Component {
             return false
         }
         if lhs.titleHasLock != rhs.titleHasLock {
+            return false
+        }
+        if lhs.titleIsManuallyLocked != rhs.titleIsManuallyLocked {
             return false
         }
         if lhs.titleHasActivity != rhs.titleHasActivity {
@@ -1477,9 +1483,16 @@ public final class StoryPeerListComponent: Component {
                 }
                 titleLockButton.frame = CGRect(origin: CGPoint(x: lockFrame.minX - 4.0, y: titleFrame.minY - 4.0), size: CGSize(width: titleFrame.maxX - lockFrame.minX + 4.0, height: titleFrame.height + 8.0))
                 titleLockButton.isAccessibilityElement = true
-                titleLockButton.accessibilityLabel = component.title
-                titleLockButton.accessibilityHint = component.strings.DialogList_PasscodeLockHelp
-                titleLockButton.accessibilityTraits = [.header, .button]
+                
+                let titleLockAccessibility = StoryPeerListTitleLockVoiceOver.resolve(
+                    strings: component.strings,
+                    titleText: component.title,
+                    isPasscodeSet: component.titleHasLock,
+                    isManuallyLocked: component.titleIsManuallyLocked
+                )
+                titleLockButton.accessibilityLabel = titleLockAccessibility.label
+                titleLockButton.accessibilityHint = titleLockAccessibility.hint
+                titleLockButton.accessibilityTraits = titleLockAccessibility.traits
             } else if let titleLockView = self.titleLockView {
                 self.titleLockView = nil
                 titleLockView.removeFromSuperview()
