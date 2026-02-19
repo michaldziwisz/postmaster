@@ -155,6 +155,16 @@ public class ChatMessageUnlockMediaNode: ASDisplayNode {
                                  
                 node.textNode?.textNode.displaysAsynchronously = !arguments.presentationData.isPreview
                 
+                let accessibility = ChatMessageUnlockMediaNodeVoiceOver.resolve(
+                    strings: arguments.presentationData.strings,
+                    amountString: amountString,
+                    isEnabled: true
+                )
+                node.contentNode.isAccessibilityElement = true
+                node.contentNode.accessibilityLabel = accessibility.label
+                node.contentNode.accessibilityHint = accessibility.hint
+                node.contentNode.accessibilityTraits = accessibility.traits
+                
                 var textArguments: TextNodeWithEntities.Arguments?
                 if let cache = arguments.animationCache, let renderer = arguments.animationRenderer {
                     textArguments = TextNodeWithEntities.Arguments(context: arguments.context, cache: cache, renderer: renderer, placeholderColor: .clear, attemptSynchronous: attemptSynchronous)
