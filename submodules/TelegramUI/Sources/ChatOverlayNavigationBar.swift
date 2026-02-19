@@ -17,6 +17,7 @@ final class ChatOverlayNavigationBar: ASDisplayNode {
     
     private let separatorNode: ASDisplayNode
     private let titleNode: TextNode
+    private let activateAreaNode: AccessibilityAreaNode
     private let closeButton: HighlightableButtonNode
     
     private var validLayout: CGSize?
@@ -48,6 +49,13 @@ final class ChatOverlayNavigationBar: ASDisplayNode {
         self.titleNode = TextNode()
         self.titleNode.displaysAsynchronously = false
         self.titleNode.isUserInteractionEnabled = false
+        self.titleNode.isAccessibilityElement = false
+        
+        self.activateAreaNode = AccessibilityAreaNode()
+        self.activateAreaNode.activate = { [weak self] in
+            self?.tapped()
+            return true
+        }
         
         self.closeButton = HighlightableButtonNode()
         self.closeButton.hitTestSlop = UIEdgeInsets(top: -8.0, left: -8.0, bottom: -8.0, right: -8.0)
@@ -73,6 +81,7 @@ final class ChatOverlayNavigationBar: ASDisplayNode {
         
         self.addSubnode(self.separatorNode)
         self.addSubnode(self.titleNode)
+        self.addSubnode(self.activateAreaNode)
         self.addSubnode(self.closeButton)
         
         self.closeButton.addTarget(self, action: #selector(self.closePressed), forControlEvents: [.touchUpInside])
@@ -85,19 +94,44 @@ final class ChatOverlayNavigationBar: ASDisplayNode {
         self.view.addGestureRecognizer(gestureRecognizer)
     }
         
-    func updateLayout(size: CGSize, transition: ContainedViewLayoutTransition) {
-        transition.updateFrame(node: self.separatorNode, frame: CGRect(origin: CGPoint(x: 0.0, y: size.height - UIScreenPixel), size: CGSize(width: size.width, height: UIScreenPixel)))
-        
-        let sideInset: CGFloat = 10.0
-        
+	    func updateLayout(size: CGSize, transition: ContainedViewLayoutTransition) {
+	        self.validLayout = size
+	        
+	        transition.updateFrame(node: self.separatorNode, frame: CGRect(origin: CGPoint(x: 0.0, y: size.height - UIScreenPixel), size: CGSize(width: size.width, height: UIScreenPixel)))
+	        
+	        let sideInset: CGFloat = 10.0
+	        
         let makeTitleLayout = TextNode.asyncLayout(self.titleNode)
         let (titleLayout, titleApply) = makeTitleLayout(TextNodeLayoutArguments(attributedString: NSAttributedString(string: self.peerTitle, font: titleFont, textColor: self.theme.inAppNotification.expandedNotification.navigationBar.primaryTextColor), maximumNumberOfLines: 1, truncationType: .end, constrainedSize: CGSize(width: size.width - sideInset * 2.0 - 40.0, height: size.height)))
         let _ = titleApply()
         transition.updateFrame(node: self.titleNode, frame: CGRect(origin: CGPoint(x: sideInset, y: floor((size.height - titleLayout.size.height) / 2.0)), size: titleLayout.size))
-        
-        let closeButtonSize = CGSize(width: size.height, height: size.height)
-        transition.updateFrame(node: self.closeButton, frame: CGRect(origin: CGPoint(x: size.width - sideInset - closeButtonSize.width + 10.0, y: 0.0), size: closeButtonSize))
-    }
+	        
+	        let closeButtonSize = CGSize(width: size.height, height: size.height)
+	        transition.updateFrame(node: self.closeButton, frame: CGRect(origin: CGPoint(x: size.width - sideInset - closeButtonSize.width + 10.0, y: 0.0), size: closeButtonSize))
+	        
+	        let titleResolved = ChatOverlayNavigationBarVoiceOver.resolveTitle(
+	            strings: self.strings,
+	            title: self.peerTitle,
+	            isEnabled: true
+	        )
+	        let closeResolved = ChatOverlayNavigationBarVoiceOver.resolveCloseButton(strings: self.strings, isEnabled: true)
+	        
+	        self.activateAreaNode.frame = CGRect(
+	            origin: .zero,
+	            size: CGSize(width: max(0.0, self.closeButton.frame.minX), height: size.height)
+	        )
+	        self.activateAreaNode.isAccessibilityElement = !titleResolved.label.isEmpty
+	        self.activateAreaNode.accessibilityLabel = titleResolved.label
+	        self.activateAreaNode.accessibilityValue = titleResolved.value
+	        self.activateAreaNode.accessibilityHint = titleResolved.hint
+	        self.activateAreaNode.accessibilityTraits = titleResolved.traits
+	        
+	        self.closeButton.isAccessibilityElement = true
+	        self.closeButton.accessibilityLabel = closeResolved.label
+	        self.closeButton.accessibilityValue = closeResolved.value
+	        self.closeButton.accessibilityHint = closeResolved.hint
+	        self.closeButton.accessibilityTraits = closeResolved.traits
+	    }
     
     @objc private func handleTap() {
         self.tapped()
