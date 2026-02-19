@@ -1519,6 +1519,11 @@ final class PeerInfoHeaderNode: ASDisplayNode {
             }
             
             subtitleBadgeSize = subtitleBadgeView.update(title: presentationData.strings.PeerInfo_HiddenStatusBadge, fillColor: contentButtonBackgroundColor, foregroundColor: contentButtonForegroundColor)
+            let subtitleBadgeResolved = PeerInfoSubtitleBadgeVoiceOver.resolve(strings: presentationData.strings, title: presentationData.strings.PeerInfo_HiddenStatusBadge)
+            subtitleBadgeView.isAccessibilityElement = true
+            subtitleBadgeView.accessibilityLabel = subtitleBadgeResolved.label
+            subtitleBadgeView.accessibilityHint = subtitleBadgeResolved.hint
+            subtitleBadgeView.accessibilityTraits = subtitleBadgeResolved.traits
         } else if let subtitleBadgeView = self.subtitleBadgeView {
             subtitleBadgeView.removeFromSuperview()
         }
@@ -2080,6 +2085,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                             customTheme: self.presentationData?.theme
                         ))
                     },
+                    accessibility: PeerInfoRatingVoiceOver.resolve(strings: presentationData.strings, level: Int(starRating.level)),
                     debugLevel: self.context.sharedContext.immediateExperimentalUISettings.debugRatingLayout
                 )),
                 environment: {},

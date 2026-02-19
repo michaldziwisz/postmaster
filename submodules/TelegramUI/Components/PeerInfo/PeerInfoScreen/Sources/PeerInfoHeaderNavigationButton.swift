@@ -281,7 +281,7 @@ final class PeerInfoHeaderNavigationButton: HighlightableButtonNode {
                 icon = PresentationResourcesRootController.navigationQrCodeIcon(presentationData.theme)
             case .moreSearchSort:
                 text = ""
-                accessibilityText = ""
+                accessibilityText = presentationData.strings.Common_More
             case .postStory:
                 text = ""
                 accessibilityText = presentationData.strings.Story_Privacy_PostStory

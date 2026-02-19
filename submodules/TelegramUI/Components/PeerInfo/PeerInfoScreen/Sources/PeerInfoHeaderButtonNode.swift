@@ -258,6 +258,11 @@ final class PeerInfoHeaderButtonNode: HighlightableButtonNode {
         
         self.textNode.attributedText = NSAttributedString(string: text.lowercased(), font: Font.regular(11.0), textColor: .white)
         self.accessibilityLabel = text
+        var accessibilityTraits: UIAccessibilityTraits = [.button]
+        if !isActive {
+            accessibilityTraits.insert(.notEnabled)
+        }
+        self.accessibilityTraits = accessibilityTraits
         let titleSize = self.textNode.updateLayout(CGSize(width: 120.0, height: .greatestFiniteMagnitude))
         
         transition.updateFrame(node: self.containerNode, frame: CGRect(origin: CGPoint(), size: size))

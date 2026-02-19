@@ -112,12 +112,27 @@ private func generateNumberOffsets() -> [CGPoint] {
 let numberOffsets: [CGPoint] = generateNumberOffsets()
 
 public final class PeerInfoRatingComponent: Component {
+    public struct Accessibility: Equatable {
+        public var label: String
+        public var value: String?
+        public var hint: String?
+        public var traits: UIAccessibilityTraits
+
+        public init(label: String, value: String?, hint: String?, traits: UIAccessibilityTraits) {
+            self.label = label
+            self.value = value
+            self.hint = hint
+            self.traits = traits
+        }
+    }
+
     let backgroundColor: UIColor
     let borderColor: UIColor
     let foregroundColor: UIColor
     let level: Int
     let action: () -> Void
     let debugLevel: Bool
+    let accessibility: Accessibility?
     
     public init(
         backgroundColor: UIColor,
@@ -125,6 +140,7 @@ public final class PeerInfoRatingComponent: Component {
         foregroundColor: UIColor,
         level: Int,
         action: @escaping () -> Void,
+        accessibility: Accessibility? = nil,
         debugLevel: Bool = false
     ) {
         self.backgroundColor = backgroundColor
@@ -132,6 +148,7 @@ public final class PeerInfoRatingComponent: Component {
         self.foregroundColor = foregroundColor
         self.level = level
         self.action = action
+        self.accessibility = accessibility
         self.debugLevel = debugLevel
     }
     
@@ -146,6 +163,9 @@ public final class PeerInfoRatingComponent: Component {
             return false
         }
         if lhs.level != rhs.level {
+            return false
+        }
+        if lhs.accessibility != rhs.accessibility {
             return false
         }
         if lhs.debugLevel != rhs.debugLevel {
@@ -188,6 +208,28 @@ public final class PeerInfoRatingComponent: Component {
         required init?(coder: NSCoder) {
             fatalError("init(coder:) has not been implemented")
         }
+
+        override public func accessibilityActivate() -> Bool {
+            guard let component = self.component else {
+                return false
+            }
+
+            if component.debugLevel {
+                if self.debugLevel < 10 {
+                    self.debugLevel += 1
+                } else {
+                    self.debugLevel += 10
+                }
+                if self.debugLevel >= 110 {
+                    self.debugLevel = 1
+                }
+                self.state?.updated(transition: .immediate)
+            } else {
+                component.action()
+            }
+
+            return true
+        }
         
         @objc private func onTapGesture(_ recognizer: UITapGestureRecognizer) {
             guard let component = self.component else {
@@ -218,6 +260,16 @@ public final class PeerInfoRatingComponent: Component {
             let previousComponent = self.component
             self.component = component
             self.state = state
+
+            if let accessibility = component.accessibility {
+                self.isAccessibilityElement = true
+                self.accessibilityLabel = accessibility.label
+                self.accessibilityValue = accessibility.value
+                self.accessibilityHint = accessibility.hint
+                self.accessibilityTraits = accessibility.traits
+            } else {
+                self.isAccessibilityElement = false
+            }
             
             let level: Int
             if component.debugLevel {
