@@ -23,11 +23,15 @@ private class MediaPickerSelectedItemNode: ASDisplayNode {
     private let interaction: MediaPickerInteraction?
     private let enableAnimations: Bool
     private let isExternalPreview: Bool
+    private var strings: PresentationStrings?
     
     private let imageNode: ImageNode
     private var checkNode: InteractiveCheckNode?
     private var durationBackgroundNode: ASDisplayNode?
     private var durationTextNode: ImmediateTextNode?
+    
+    private let activateAreaNode: AccessibilityAreaNode
+    private let selectionActivateAreaNode: AccessibilityAreaNode
     
     private var adjustmentsDisposable: Disposable?
     
@@ -73,11 +77,23 @@ private class MediaPickerSelectedItemNode: ASDisplayNode {
         self.imageNode.clipsToBounds = true
         self.imageNode.animateFirstTransition = false
         
+        self.activateAreaNode = AccessibilityAreaNode()
+        self.activateAreaNode.accessibilityTraits = [.button, .image]
+        self.selectionActivateAreaNode = AccessibilityAreaNode()
+        self.selectionActivateAreaNode.isAccessibilityElement = false
+        self.selectionActivateAreaNode.accessibilityTraits = [.button]
+        
         super.init()
         
         self.clipsToBounds = true
         
         self.addSubnode(self.imageNode)
+        self.addSubnode(self.activateAreaNode)
+        self.addSubnode(self.selectionActivateAreaNode)
+        
+        self.activateAreaNode.activate = { [weak self] in
+            return self?.performPrimaryAction() ?? false
+        }
         
         if let editingState = interaction?.editingState {
             if asset.isVideo {
@@ -110,6 +126,7 @@ private class MediaPickerSelectedItemNode: ASDisplayNode {
                         if let size = strongSelf.validLayout {
                             strongSelf.updateLayout(size: size, transition: .immediate)
                         }
+                        strongSelf.updateVoiceOver()
                     }
                 })
             }
@@ -171,11 +188,109 @@ private class MediaPickerSelectedItemNode: ASDisplayNode {
         self.view.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(self.tap)))
     }
     
-    @objc private func tap() {
-        guard let asset = self.asset as? TGMediaSelectableItem else {
+    func update(strings: PresentationStrings) {
+        if self.strings !== strings {
+            self.strings = strings
+            self.updateVoiceOver()
+        }
+    }
+    
+    private func updateVoiceOver() {
+        guard let strings = self.strings else {
             return
         }
+        
+        let kind: MediaPickerSelectedListItemVoiceOver.Kind = self.asset.isVideo ? .video : .photo
+        
+        let creationDate: Date?
+        if let asset = self.asset as? TGMediaAsset {
+            creationDate = asset.date
+        } else {
+            creationDate = nil
+        }
+        
+        let durationValue: String?
+        if let duration = self.videoDuration {
+            durationValue = stringForDuration(Int32(duration))
+        } else {
+            durationValue = nil
+        }
+        
+        let isSelected: Bool
+        if let selectionState = self.interaction?.selectionState, let selectableItem = self.asset as? TGMediaSelectableItem {
+            isSelected = selectionState.isIdentifierSelected(selectableItem.uniqueIdentifier)
+        } else {
+            isSelected = true
+        }
+        
+        let resolved = MediaPickerSelectedListItemVoiceOver.resolve(strings: strings, kind: kind, creationDate: creationDate, isSelected: isSelected)
+        self.activateAreaNode.accessibilityLabel = resolved.label
+        self.activateAreaNode.accessibilityHint = resolved.hint
+        self.activateAreaNode.accessibilityTraits = resolved.traits
+        self.activateAreaNode.accessibilityValue = durationValue
+        
+        if let selectableItem = self.asset as? TGMediaSelectableItem, let interaction = self.interaction {
+            self.activateAreaNode.accessibilityCustomActions = resolved.customActions.map { action in
+                UIAccessibilityCustomAction(name: action.name, actionHandler: { [weak self] _ in
+                    guard let self else {
+                        return false
+                    }
+                    switch action.kind {
+                    case .delete:
+                        if interaction.toggleSelection(selectableItem, false, true) {
+                            self.updateSelectionState()
+                            return true
+                        }
+                        return false
+                    }
+                })
+            }
+        } else {
+            self.activateAreaNode.accessibilityCustomActions = nil
+        }
+        
+        if let selectionState = self.interaction?.selectionState,
+           let selectableItem = self.asset as? TGMediaSelectableItem,
+           self.checkNode != nil {
+            let shouldExposeSelection = !(self.isExternalPreview || selectionState.count() < 2)
+            if shouldExposeSelection {
+                let selectionResolved = MediaPickerSelectedListItemVoiceOver.resolveSelectionControl(strings: strings, isSelected: isSelected)
+                self.selectionActivateAreaNode.isAccessibilityElement = true
+                self.selectionActivateAreaNode.accessibilityLabel = selectionResolved.label
+                self.selectionActivateAreaNode.accessibilityHint = selectionResolved.hint
+                self.selectionActivateAreaNode.accessibilityTraits = selectionResolved.traits
+                self.selectionActivateAreaNode.activate = { [weak self] in
+                    guard let self, let interaction = self.interaction else {
+                        return false
+                    }
+                    let newValue = !isSelected
+                    if !interaction.toggleSelection(selectableItem, newValue, true) {
+                        return false
+                    }
+                    self.checkNode?.setSelected(newValue, animated: true)
+                    self.updateVoiceOver()
+                    return true
+                }
+            } else {
+                self.selectionActivateAreaNode.isAccessibilityElement = false
+                self.selectionActivateAreaNode.activate = nil
+            }
+        } else {
+            self.selectionActivateAreaNode.isAccessibilityElement = false
+            self.selectionActivateAreaNode.activate = nil
+        }
+    }
+    
+    private func performPrimaryAction() -> Bool {
+        guard let asset = self.asset as? TGMediaSelectableItem else {
+            return false
+        }
         self.interaction?.openSelectedMedia(asset, self.imageNode.image)
+        return true
+    }
+    
+    @objc private func tap() {
+        _ = self.performPrimaryAction()
     }
     
     private var didSetupSpoiler = false
@@ -303,6 +418,8 @@ private class MediaPickerSelectedItemNode: ASDisplayNode {
                 transition.updateAlpha(node: checkNode, alpha: (self.isExternalPreview || selectionState.count() < 2) ? 0.0 : 1.0)
             }
         }
+        
+        self.updateVoiceOver()
     }
     
     func updateHiddenMedia() {
@@ -342,6 +459,7 @@ private class MediaPickerSelectedItemNode: ASDisplayNode {
         self.validLayout = size
         
         transition.updateFrame(node: self.imageNode, frame: CGRect(origin: CGPoint(), size: size))
+        transition.updateFrame(node: self.activateAreaNode, frame: CGRect(origin: .zero, size: size))
         
         if let spoilerNode = self.spoilerNode {
             transition.updateFrame(node: spoilerNode, frame: CGRect(origin: CGPoint(), size: size))
@@ -349,9 +467,11 @@ private class MediaPickerSelectedItemNode: ASDisplayNode {
         }
         
         let checkSize = CGSize(width: 29.0, height: 29.0)
+        let checkFrame = CGRect(origin: CGPoint(x: size.width - checkSize.width - 3.0, y: 3.0), size: checkSize)
         if let checkNode = self.checkNode {
-            transition.updateFrame(node: checkNode, frame: CGRect(origin: CGPoint(x: size.width - checkSize.width - 3.0, y: 3.0), size: checkSize))
+            transition.updateFrame(node: checkNode, frame: checkFrame)
         }
+        transition.updateFrame(node: self.selectionActivateAreaNode, frame: checkFrame)
         
         if let duration = self.videoDuration {
             let textNode: ImmediateTextNode
@@ -977,6 +1097,7 @@ final class MediaPickerSelectedListNode: ASDisplayNode, ASScrollViewDelegate, AS
                 itemNode.setup(size: CGSize(width: boundingWidth, height: boundingWidth))
             }
             itemNode.update(theme: theme)
+            itemNode.update(strings: presentationData.strings)
             itemNode.updateSelectionState()
             if !self.isReordering {
                 itemNode.updateHiddenMedia()
