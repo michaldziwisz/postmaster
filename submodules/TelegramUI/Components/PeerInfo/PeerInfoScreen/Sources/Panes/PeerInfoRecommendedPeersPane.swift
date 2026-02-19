@@ -409,6 +409,13 @@ final class PeerInfoRecommendedPeersPaneNode: ASDisplayNode, PeerInfoPaneNode {
                     view.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(self.unlockPressed)))
                     self.view.addSubview(view)
                 }
+                
+                let unlockTextResolved = PeerInfoRecommendedPeersUnlockTextVoiceOver.resolve(strings: presentationData.strings, isBots: isBots)
+                view.isAccessibilityElement = true
+                view.accessibilityLabel = unlockTextResolved.label
+                view.accessibilityHint = unlockTextResolved.hint
+                view.accessibilityTraits = unlockTextResolved.traits
+                
                 transition.updateFrame(view: view, frame: CGRect(origin: CGPoint(x: floor((size.width - unlockSize.width) / 2.0), y: size.height - bottomInset - unlockSize.height - 13.0 + scrollOffset), size: unlockSize))
             }
             
