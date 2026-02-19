@@ -2269,6 +2269,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         
         var settingsButtonSize: CGSize?
         if let customSecondaryLeftAction = self.customSecondaryLeftAction, case let .settings(_, action) = customSecondaryLeftAction {
+            let settingsAccessibility = InputIconButtonComponentVoiceOver.resolveSettings(strings: interfaceState.strings, isEnabled: true)
             let settingsButton: ComponentView<Empty>
             var settingsButtonTransition = transition
             if let current = self.settingsButton {
@@ -2283,6 +2284,8 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                 component: AnyComponent(InputIconButtonComponent(
                     theme: interfaceState.theme,
                     name: "Camera/Settings",
+                    accessibilityLabel: settingsAccessibility.label,
+                    accessibilityTraits: settingsAccessibility.traits,
                     action: action
                 )),
                 environment: {},

@@ -9,15 +9,21 @@ import AppBundle
 final class InputIconButtonComponent: Component {
     let theme: PresentationTheme
     let name: String
+    let accessibilityLabel: String
+    let accessibilityTraits: UIAccessibilityTraits
     let action: (UIView) -> Void
     
     init(
         theme: PresentationTheme,
         name: String,
+        accessibilityLabel: String,
+        accessibilityTraits: UIAccessibilityTraits,
         action: @escaping (UIView) -> Void
     ) {
         self.theme = theme
         self.name = name
+        self.accessibilityLabel = accessibilityLabel
+        self.accessibilityTraits = accessibilityTraits
         self.action = action
     }
     
@@ -26,6 +32,12 @@ final class InputIconButtonComponent: Component {
             return false
         }
         if lhs.name != rhs.name {
+            return false
+        }
+        if lhs.accessibilityLabel != rhs.accessibilityLabel {
+            return false
+        }
+        if lhs.accessibilityTraits != rhs.accessibilityTraits {
             return false
         }
         return true
@@ -45,6 +57,9 @@ final class InputIconButtonComponent: Component {
             self.iconView = GlassBackgroundView.ContentImageView()
             
             super.init(frame: frame)
+            
+            self.isAccessibilityElement = false
+            self.button.isAccessibilityElement = true
             
             self.addSubview(self.backgroundView)
             self.backgroundView.contentView.addSubview(self.iconView)
@@ -76,6 +91,9 @@ final class InputIconButtonComponent: Component {
             }
             
             self.iconView.tintColor = component.theme.chat.inputPanel.panelControlColor
+            
+            self.button.accessibilityLabel = component.accessibilityLabel
+            self.button.accessibilityTraits = component.accessibilityTraits
             
             self.component = component
             self.state = state
