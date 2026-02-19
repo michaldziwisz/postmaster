@@ -471,6 +471,8 @@ public class ItemListSingleLineInputItemNode: ListViewItemNode, UITextFieldDeleg
                     strongSelf.textNode.alpha = item.enabled ? 1.0 : 0.4
                     
                     strongSelf.clearButtonNode.accessibilityLabel = item.presentationData.strings.VoiceOver_Editing_ClearText
+                    strongSelf.clearButtonNode.accessibilityHint = nil
+                    strongSelf.clearButtonNode.accessibilityTraits = [.button]
                 }
             })
         }
@@ -491,7 +493,7 @@ public class ItemListSingleLineInputItemNode: ListViewItemNode, UITextFieldDeleg
         }
         self.clearIconNode.isHidden = isHidden
         self.clearButtonNode.isHidden = isHidden
-        self.clearButtonNode.isAccessibilityElement = isHidden
+        self.clearButtonNode.isAccessibilityElement = !isHidden
     }
     
     override public func animateInsertion(_ currentTimestamp: Double, duration: Double, options: ListViewItemAnimationOptions) {

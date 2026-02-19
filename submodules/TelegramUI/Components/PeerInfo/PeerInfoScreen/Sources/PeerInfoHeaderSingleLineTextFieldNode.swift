@@ -15,6 +15,7 @@ final class PeerInfoHeaderSingleLineTextFieldNode: ASDisplayNode, PeerInfoHeader
     private let maskNode: ASImageNode
     
     private var theme: PresentationTheme?
+    private var strings: PresentationStrings?
     
     var text: String {
         return self.textNode.textField.text ?? ""
@@ -84,12 +85,22 @@ final class PeerInfoHeaderSingleLineTextFieldNode: ASDisplayNode, PeerInfoHeader
         let isHidden = !self.textNode.textField.isFirstResponder || self.text.isEmpty
         self.clearIconNode.isHidden = isHidden
         self.clearButtonNode.isHidden = isHidden
-        self.clearButtonNode.isAccessibilityElement = isHidden
+        
+        if let strings = self.strings {
+            let resolved = PeerInfoHeaderTextFieldClearButtonVoiceOver.resolve(strings: strings, isHidden: isHidden)
+            self.clearButtonNode.isAccessibilityElement = resolved.isAccessibilityElement
+            self.clearButtonNode.accessibilityLabel = resolved.label
+            self.clearButtonNode.accessibilityHint = resolved.hint
+            self.clearButtonNode.accessibilityTraits = resolved.traits
+        } else {
+            self.clearButtonNode.isAccessibilityElement = !isHidden
+        }
     }
     
     func update(width: CGFloat, safeInset: CGFloat, isSettings: Bool, hasPrevious: Bool, hasNext: Bool, placeholder: String, isEnabled: Bool, presentationData: PresentationData, updateText: String?) -> CGFloat {
         let titleFont = Font.regular(presentationData.listsFontSize.itemListBaseFontSize)
         self.textNode.textField.font = titleFont
+        self.strings = presentationData.strings
         
         if self.theme !== presentationData.theme {
             self.theme = presentationData.theme

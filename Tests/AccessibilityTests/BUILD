@@ -69,6 +69,7 @@ swift_library(
         "//submodules/TelegramUI/Components/TabBarComponent",
         "//submodules/TelegramUI/Components/TabSelectorComponent",
         "//submodules/ItemListPeerActionItem",
+        "//submodules/ItemListUI",
         "//submodules/LocationUI",
         "//submodules/PeerInfoAvatarListNode",
     ],

@@ -20,6 +20,7 @@ final class PeerInfoHeaderMultiLineTextFieldNode: ASDisplayNode, PeerInfoHeaderT
     
     private var fontSize: PresentationFontSize?
     private var theme: PresentationTheme?
+    private var strings: PresentationStrings?
     private var currentParams: (width: CGFloat, safeInset: CGFloat)?
     private var currentMeasuredHeight: CGFloat?
     
@@ -102,6 +103,7 @@ final class PeerInfoHeaderMultiLineTextFieldNode: ASDisplayNode, PeerInfoHeaderT
         
         self.fontSize = presentationData.listsFontSize
         let titleFont = Font.regular(presentationData.listsFontSize.itemListBaseFontSize)
+        self.strings = presentationData.strings
         
         if self.theme !== presentationData.theme {
             self.theme = presentationData.theme
@@ -184,7 +186,16 @@ final class PeerInfoHeaderMultiLineTextFieldNode: ASDisplayNode, PeerInfoHeaderT
         let isHidden = !self.textNode.isFirstResponder() || self.text.isEmpty
         self.clearIconNode.isHidden = isHidden
         self.clearButtonNode.isHidden = isHidden
-        self.clearButtonNode.isAccessibilityElement = isHidden
+        
+        if let strings = self.strings {
+            let resolved = PeerInfoHeaderTextFieldClearButtonVoiceOver.resolve(strings: strings, isHidden: isHidden)
+            self.clearButtonNode.isAccessibilityElement = resolved.isAccessibilityElement
+            self.clearButtonNode.accessibilityLabel = resolved.label
+            self.clearButtonNode.accessibilityHint = resolved.hint
+            self.clearButtonNode.accessibilityTraits = resolved.traits
+        } else {
+            self.clearButtonNode.isAccessibilityElement = !isHidden
+        }
     }
     
     func editableTextNode(_ editableTextNode: ASEditableTextNode, shouldChangeTextIn range: NSRange, replacementText text: String) -> Bool {
