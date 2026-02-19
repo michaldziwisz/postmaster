@@ -1683,28 +1683,29 @@ private final class CameraScreenComponent: CombinedComponent {
                         
             if case .none = component.cameraState.recording, !state.isTransitioning {
                 if !state.displayingCollageSelection && component.cameraState.isStreaming == .none {
-                    let cancelButton = cancelButton.update(
-                        component: CameraButton(
-                            content: AnyComponentWithIdentity(
-                                id: "cancel",
-                                component: AnyComponent(
-                                    Image(
-                                        image: state.image(.cancel),
-                                        tintColor: controlsTintColor,
-                                        size: CGSize(width: 40.0, height: 40.0)
-                                    )
-                                )
-                            ),
-                            action: {
-                                guard let controller = controller() as? CameraScreenImpl else {
-                                    return
-                                }
-                                controller.requestDismiss(animated: true)
-                            }
-                        ).tagged(cancelButtonTag),
-                        availableSize: CGSize(width: 40.0, height: 40.0),
-                        transition: .immediate
-                    )
+	                    let cancelButton = cancelButton.update(
+	                        component: CameraButton(
+	                            content: AnyComponentWithIdentity(
+	                                id: "cancel",
+	                                component: AnyComponent(
+	                                    Image(
+	                                        image: state.image(.cancel),
+	                                        tintColor: controlsTintColor,
+	                                        size: CGSize(width: 40.0, height: 40.0)
+	                                    )
+	                                )
+	                            ),
+	                            action: {
+	                                guard let controller = controller() as? CameraScreenImpl else {
+	                                    return
+	                                }
+	                                controller.requestDismiss(animated: true)
+	                            },
+	                            accessibilityLabel: environment.strings.Common_Close
+	                        ).tagged(cancelButtonTag),
+	                        availableSize: CGSize(width: 40.0, height: 40.0),
+	                        transition: .immediate
+	                    )
                     context.add(cancelButton
                         .position(CGPoint(x: isTablet ? smallPanelWidth / 2.0 : availableSize.width - topControlSideInset - cancelButton.size.width / 2.0, y: max(environment.statusBarHeight + 5.0, environment.safeInsets.top + topControlVerticalInset) + cancelButton.size.height / 2.0))
                         .appear(.default(scale: true))
@@ -1766,22 +1767,24 @@ private final class CameraScreenComponent: CombinedComponent {
                     let isStreaming = component.cameraState.mode == .live && component.cameraState.isStreaming != .none
                     var endStreamButtonWidth: CGFloat = 56.0
                     if isStreaming {
-                        let endStreamButton = endStreamButton.update(
-                            component: GlassBarButtonComponent(
-                                size: nil,
-                                backgroundColor: UIColor.black.withAlphaComponent(0.5),
-                                isDark: true,
-                                state: .glass,
-                                component: AnyComponentWithIdentity(id: "label", component: AnyComponent(Text(text: environment.strings.Camera_LiveStream_End, font: Font.semibold(17.0), color: .white))),
-                                action: { [weak state] _ in
-                                    if let state {
-                                        state.endLiveStream()
-                                    }
-                                }
-                            ),
-                            availableSize: CGSize(width: 120.0, height: 40.0),
-                            transition: .immediate
-                        )
+	                        let endStreamButton = endStreamButton.update(
+	                            component: GlassBarButtonComponent(
+	                                size: nil,
+	                                backgroundColor: UIColor.black.withAlphaComponent(0.5),
+	                                isDark: true,
+	                                state: .glass,
+	                                component: AnyComponentWithIdentity(id: "label", component: AnyComponent(Text(text: environment.strings.Camera_LiveStream_End, font: Font.semibold(17.0), color: .white))),
+	                                action: { [weak state] _ in
+	                                    if let state {
+	                                        state.endLiveStream()
+	                                    }
+	                                },
+	                                accessibilityLabel: environment.strings.Camera_LiveStream_End,
+	                                accessibilityHint: nil
+	                            ),
+	                            availableSize: CGSize(width: 120.0, height: 40.0),
+	                            transition: .immediate
+	                        )
                         context.add(endStreamButton
                             .position(CGPoint(x: availableSize.width - topControlSideInset - 3.0 - endStreamButton.size.width / 2.0, y: max(environment.statusBarHeight + 5.0, environment.safeInsets.top + topControlVerticalInset) + endStreamButton.size.height / 2.0))
                             .appear(.default(scale: true))
@@ -1798,28 +1801,29 @@ private final class CameraScreenComponent: CombinedComponent {
                             rightMostButtonWidth = -55.0
                         }
                     } else if state.displayingCollageSelection {
-                        let disableCollageButton = disableCollageButton.update(
-                            component: CameraButton(
-                                content: AnyComponentWithIdentity(
-                                    id: "disableCollage",
-                                    component: AnyComponent(
-                                        CollageIconComponent(
-                                            grid: component.cameraState.collageGrid,
-                                            crossed: true,
-                                            isSelected: false,
-                                            tintColor: controlsTintColor
-                                        )
-                                    )
-                                ),
-                                action: { [weak state] in
-                                    if let state {
-                                        state.disableCollageCamera()
-                                    }
-                                }
-                            ).tagged(disableCollageButtonTag),
-                            availableSize: CGSize(width: 40.0, height: 40.0),
-                            transition: .immediate
-                        )
+	                        let disableCollageButton = disableCollageButton.update(
+	                            component: CameraButton(
+	                                content: AnyComponentWithIdentity(
+	                                    id: "disableCollage",
+	                                    component: AnyComponent(
+	                                        CollageIconComponent(
+	                                            grid: component.cameraState.collageGrid,
+	                                            crossed: true,
+	                                            isSelected: false,
+	                                            tintColor: controlsTintColor
+	                                        )
+	                                    )
+	                                ),
+	                                action: { [weak state] in
+	                                    if let state {
+	                                        state.disableCollageCamera()
+	                                    }
+	                                },
+	                                accessibilityLabel: environment.strings.VoiceOver_Camera_DisableCollage
+	                            ).tagged(disableCollageButtonTag),
+	                            availableSize: CGSize(width: 40.0, height: 40.0),
+	                            transition: .immediate
+	                        )
                         context.add(disableCollageButton
                             .position(CGPoint(x: availableSize.width - topControlSideInset - disableCollageButton.size.width / 2.0 - 5.0, y: max(environment.statusBarHeight + 5.0, environment.safeInsets.top + topControlVerticalInset) + disableCollageButton.size.height / 2.0 + 2.0))
                             .appear(.default(scale: true))
@@ -1827,26 +1831,40 @@ private final class CameraScreenComponent: CombinedComponent {
                             .shadow(Shadow(color: UIColor(white: 0.0, alpha: 0.25), radius: 3.0, offset: .zero))
                         )
                         rightMostButtonWidth = disableCollageButton.size.width + 4.0
-                    } else if component.cameraState.collageProgress > 1.0 - .ulpOfOne {
-                        rightMostButtonWidth = 0.0
-                    } else {
-                        let flashButton = flashButton.update(
-                            component: CameraButton(
-                                content: flashContentComponent,
-                                action: { [weak state] in
-                                    if let state {
-                                        state.toggleFlashMode()
-                                    }
-                                },
-                                longTapAction: { [weak state] in
-                                    if let state {
-                                        state.presentFlashTint()
-                                    }
-                                }
-                            ).tagged(flashButtonTag),
-                            availableSize: CGSize(width: 40.0, height: 40.0),
-                            transition: .immediate
-                        )
+	                    } else if component.cameraState.collageProgress > 1.0 - .ulpOfOne {
+	                        rightMostButtonWidth = 0.0
+	                    } else {
+	                        let flashAccessibilityValue: String
+	                        switch component.cameraState.flashMode {
+	                        case .off:
+	                            flashAccessibilityValue = environment.strings.Camera_FlashOff
+	                        case .on:
+	                            flashAccessibilityValue = environment.strings.Camera_FlashOn
+	                        case .auto:
+	                            flashAccessibilityValue = environment.strings.Camera_FlashAuto
+	                        }
+	                        
+	                        let flashButton = flashButton.update(
+	                            component: CameraButton(
+	                                content: flashContentComponent,
+	                                action: { [weak state] in
+	                                    if let state {
+	                                        state.toggleFlashMode()
+	                                    }
+	                                },
+	                                longTapAction: { [weak state] in
+	                                    if let state {
+	                                        state.presentFlashTint()
+	                                    }
+	                                },
+	                                accessibilityLabel: environment.strings.VoiceOver_Camera_Flash,
+	                                accessibilityValue: flashAccessibilityValue,
+	                                accessibilityHint: environment.strings.VoiceOver_Media_PlaybackRateChange,
+	                                accessibilityLongPressActionName: environment.strings.VoiceOver_Camera_FlashTint
+	                            ).tagged(flashButtonTag),
+	                            availableSize: CGSize(width: 40.0, height: 40.0),
+	                            transition: .immediate
+	                        )
                         
                         let position = CGPoint(x: isTablet ? availableSize.width - smallPanelWidth / 2.0 : availableSize.width - topControlSideInset - flashButton.size.width / 2.0 - 50.0, y: max(environment.statusBarHeight + 5.0, environment.safeInsets.top + topControlVerticalInset) + flashButton.size.height / 2.0)
                         flashButtonPosition = position
@@ -1862,26 +1880,28 @@ private final class CameraScreenComponent: CombinedComponent {
                     if !isSticker && !isAvatar && !isTablet {
                         var nextButtonX = availableSize.width - topControlSideInset - rightMostButtonWidth / 2.0 - 100.0
                         if Camera.isDualCameraSupported(forRoundVideo: false) && !component.cameraState.isCollageEnabled && component.cameraState.isStreaming == .none {
-                            let dualButton = dualButton.update(
-                                component: CameraButton(
-                                    content: AnyComponentWithIdentity(
-                                        id: "dual",
-                                        component: AnyComponent(
-                                            DualIconComponent(
-                                                isSelected: component.cameraState.isDualCameraEnabled,
-                                                tintColor: controlsTintColor
-                                            )
-                                        )
-                                    ),
-                                    action: { [weak state] in
-                                        if let state {
-                                            state.toggleDualCamera()
-                                        }
-                                    }
-                                ).tagged(dualButtonTag),
-                                availableSize: CGSize(width: 40.0, height: 40.0),
-                                transition: .immediate
-                            )
+	                            let dualButton = dualButton.update(
+	                                component: CameraButton(
+	                                    content: AnyComponentWithIdentity(
+	                                        id: "dual",
+	                                        component: AnyComponent(
+	                                            DualIconComponent(
+	                                                isSelected: component.cameraState.isDualCameraEnabled,
+	                                                tintColor: controlsTintColor
+	                                            )
+	                                        )
+	                                    ),
+	                                    action: { [weak state] in
+	                                        if let state {
+	                                            state.toggleDualCamera()
+	                                        }
+	                                    },
+	                                    accessibilityLabel: environment.strings.VoiceOver_Camera_DualCamera,
+	                                    accessibilityTraits: component.cameraState.isDualCameraEnabled ? [.selected] : []
+	                                ).tagged(dualButtonTag),
+	                                availableSize: CGSize(width: 40.0, height: 40.0),
+	                                transition: .immediate
+	                            )
                             context.add(dualButton
                                 .position(CGPoint(x: nextButtonX, y: max(environment.statusBarHeight + 5.0, environment.safeInsets.top + topControlVerticalInset) + dualButton.size.height / 2.0 + 2.0))
                                 .appear(.default(scale: true))
@@ -1894,28 +1914,29 @@ private final class CameraScreenComponent: CombinedComponent {
                         
                         if component.cameraState.mode == .live {
                             if component.cameraState.isStreaming == .camera {
-                                let flipButton = flipButton.update(
-                                    component: CameraButton(
-                                        content: AnyComponentWithIdentity(
-                                            id: "flip",
-                                            component: AnyComponent(
-                                                FlipButtonContentComponent(
-                                                    action: animateFlipAction,
-                                                    maskFrame: .zero,
-                                                    tintColor: controlsTintColor
-                                                )
-                                            )
-                                        ),
-                                        minSize: CGSize(width: 44.0, height: 44.0),
-                                        action: { [weak state] in
-                                            if let state {
-                                                state.togglePosition(animateFlipAction)
-                                            }
-                                        }
-                                    ),
-                                    availableSize: availableSize,
-                                    transition: context.transition
-                                )
+	                                let flipButton = flipButton.update(
+	                                    component: CameraButton(
+	                                        content: AnyComponentWithIdentity(
+	                                            id: "flip",
+	                                            component: AnyComponent(
+	                                                FlipButtonContentComponent(
+	                                                    action: animateFlipAction,
+	                                                    maskFrame: .zero,
+	                                                    tintColor: controlsTintColor
+	                                                )
+	                                            )
+	                                        ),
+	                                        minSize: CGSize(width: 44.0, height: 44.0),
+	                                        action: { [weak state] in
+	                                            if let state {
+	                                                state.togglePosition(animateFlipAction)
+	                                            }
+	                                        },
+	                                        accessibilityLabel: environment.strings.VoiceOver_Camera_SwitchCamera
+	                                    ),
+	                                    availableSize: availableSize,
+	                                    transition: context.transition
+	                                )
                                 context.add(flipButton
                                     .position(CGPoint(x: nextButtonX, y: max(environment.statusBarHeight + 5.0, environment.safeInsets.top + topControlVerticalInset) + flipButton.size.height / 2.0 - 4.0))
                                     .appear(.default(scale: true))
@@ -1923,28 +1944,30 @@ private final class CameraScreenComponent: CombinedComponent {
                                 )
                             }
                         } else {
-                            let collageButton = collageButton.update(
-                                component: CameraButton(
-                                    content: AnyComponentWithIdentity(
-                                        id: "collage",
-                                        component: AnyComponent(
-                                            CollageIconComponent(
-                                                grid: component.cameraState.collageGrid,
-                                                crossed: false,
-                                                isSelected: component.cameraState.isCollageEnabled,
-                                                tintColor: controlsTintColor
-                                            )
-                                        )
-                                    ),
-                                    action: { [weak state] in
-                                        if let state {
-                                            state.toggleCollageCamera()
-                                        }
-                                    }
-                                ).tagged(collageButtonTag),
-                                availableSize: CGSize(width: 40.0, height: 40.0),
-                                transition: .immediate
-                            )
+	                            let collageButton = collageButton.update(
+	                                component: CameraButton(
+	                                    content: AnyComponentWithIdentity(
+	                                        id: "collage",
+	                                        component: AnyComponent(
+	                                            CollageIconComponent(
+	                                                grid: component.cameraState.collageGrid,
+	                                                crossed: false,
+	                                                isSelected: component.cameraState.isCollageEnabled,
+	                                                tintColor: controlsTintColor
+	                                            )
+	                                        )
+	                                    ),
+	                                    action: { [weak state] in
+	                                        if let state {
+	                                            state.toggleCollageCamera()
+	                                        }
+	                                    },
+	                                    accessibilityLabel: environment.strings.VoiceOver_Camera_Collage,
+	                                    accessibilityTraits: component.cameraState.isCollageEnabled ? [.selected] : []
+	                                ).tagged(collageButtonTag),
+	                                availableSize: CGSize(width: 40.0, height: 40.0),
+	                                transition: .immediate
+	                            )
                             if component.cameraState.isCollageEnabled {
                                 nextButtonX += 48.0
                             }
@@ -1993,28 +2016,29 @@ private final class CameraScreenComponent: CombinedComponent {
             }
             
             if isTablet && hasAllRequiredAccess {
-                let flipButton = flipButton.update(
-                    component: CameraButton(
-                        content: AnyComponentWithIdentity(
-                            id: "flip",
-                            component: AnyComponent(
-                                FlipButtonContentComponent(
-                                    action: animateFlipAction,
-                                    maskFrame: .zero,
-                                    tintColor: controlsTintColor
-                                )
-                            )
-                        ),
-                        minSize: CGSize(width: 44.0, height: 44.0),
-                        action: { [weak state] in
-                            if let state {
-                                state.togglePosition(animateFlipAction)
-                            }
-                        }
-                    ),
-                    availableSize: availableSize,
-                    transition: context.transition
-                )
+	                let flipButton = flipButton.update(
+	                    component: CameraButton(
+	                        content: AnyComponentWithIdentity(
+	                            id: "flip",
+	                            component: AnyComponent(
+	                                FlipButtonContentComponent(
+	                                    action: animateFlipAction,
+	                                    maskFrame: .zero,
+	                                    tintColor: controlsTintColor
+	                                )
+	                            )
+	                        ),
+	                        minSize: CGSize(width: 44.0, height: 44.0),
+	                        action: { [weak state] in
+	                            if let state {
+	                                state.togglePosition(animateFlipAction)
+	                            }
+	                        },
+	                        accessibilityLabel: environment.strings.VoiceOver_Camera_SwitchCamera
+	                    ),
+	                    availableSize: availableSize,
+	                    transition: context.transition
+	                )
                 context.add(flipButton
                     .position(CGPoint(x: smallPanelWidth / 2.0, y: availableSize.height / 2.0))
                     .appear(.default(scale: true))

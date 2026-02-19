@@ -2673,166 +2673,180 @@ final class StoryStickersContentView: UIView, EmojiCustomContentView {
         items.append(
             AnyComponentWithIdentity(
                 id: "link",
-                component: AnyComponent(
-                    CameraButton(
-                        content: AnyComponentWithIdentity(
-                            id: "content",
-                            component: AnyComponent(
-                                InteractiveStickerButtonContent(
-                                    context: self.context,
-                                    theme: theme,
-                                    title: strings.MediaEditor_AddLink,
-                                    iconName: self.context.isPremium ? "Media Editor/Link" : "Media Editor/LinkLocked",
-                                    useOpaqueTheme: useOpaqueTheme,
-                                    tintContainerView: self.tintContainerView
-                                )
-                            )
-                        ),
-                        action: { [weak self] in
-                            if let self {
-                                self.linkAction()
-                            }
-                        })
-                )
-            )
-        )
+	                component: AnyComponent(
+	                    CameraButton(
+	                        content: AnyComponentWithIdentity(
+	                            id: "content",
+	                            component: AnyComponent(
+	                                InteractiveStickerButtonContent(
+	                                    context: self.context,
+	                                    theme: theme,
+	                                    title: strings.MediaEditor_AddLink,
+	                                    iconName: self.context.isPremium ? "Media Editor/Link" : "Media Editor/LinkLocked",
+	                                    useOpaqueTheme: useOpaqueTheme,
+	                                    tintContainerView: self.tintContainerView
+	                                )
+	                            )
+	                        ),
+	                        action: { [weak self] in
+	                            if let self {
+	                                self.linkAction()
+	                            }
+	                        },
+	                        accessibilityLabel: strings.MediaEditor_Shortcut_Link
+	                    )
+	                )
+	            )
+	        )
         items.append(
             AnyComponentWithIdentity(
                 id: "location",
-                component: AnyComponent(
-                    CameraButton(
-                        content: AnyComponentWithIdentity(
-                            id: "content",
-                            component: AnyComponent(
-                                InteractiveStickerButtonContent(
-                                    context: self.context,
-                                    theme: theme,
-                                    title: strings.MediaEditor_AddLocationShort,
-                                    iconName: "Chat/Attach Menu/Location",
-                                    useOpaqueTheme: useOpaqueTheme,
-                                    tintContainerView: self.tintContainerView
-                                )
-                            )
-                        ),
-                        action: { [weak self] in
-                            if let self {
-                                self.locationAction()
-                            }
-                        })
-                )
-            )
-        )
+	                component: AnyComponent(
+	                    CameraButton(
+	                        content: AnyComponentWithIdentity(
+	                            id: "content",
+	                            component: AnyComponent(
+	                                InteractiveStickerButtonContent(
+	                                    context: self.context,
+	                                    theme: theme,
+	                                    title: strings.MediaEditor_AddLocationShort,
+	                                    iconName: "Chat/Attach Menu/Location",
+	                                    useOpaqueTheme: useOpaqueTheme,
+	                                    tintContainerView: self.tintContainerView
+	                                )
+	                            )
+	                        ),
+	                        action: { [weak self] in
+	                            if let self {
+	                                self.locationAction()
+	                            }
+	                        },
+	                        accessibilityLabel: strings.MediaEditor_Shortcut_Location
+	                    )
+	                )
+	            )
+	        )
         
         if case .none = self.weather {
             
         } else {
             maxHorizontalItems = 3
             
-            let weatherButtonContent: AnyComponent<Empty>
-            switch self.weather {
-            case .notAllowed, .notDetermined, .notPreloaded:
-                weatherButtonContent = AnyComponent(
-                    InteractiveStickerButtonContent(
-                        context: self.context,
-                        theme: theme,
-                        title: stringForTemperature(24),
-                        iconName: "☀️",
-                        iconFile: self.context.animatedEmojiStickersValue["☀️"]?.first?.file._parse(),
-                        useOpaqueTheme: useOpaqueTheme,
-                        tintContainerView: self.tintContainerView
-                    )
-                )
-            case let .loaded(weather):
-                weatherButtonContent = AnyComponent(
-                    InteractiveStickerButtonContent(
-                        context: self.context,
-                        theme: theme,
-                        title: stringForTemperature(weather.temperature),
-                        iconName: weather.emoji,
-                        iconFile: weather.emojiFile,
-                        useOpaqueTheme: useOpaqueTheme,
-                        tintContainerView: self.tintContainerView
-                    )
-                )
-            case .fetching:
-                weatherButtonContent = AnyComponent(
-                    InteractiveStickerButtonContent(
-                        context: self.context,
-                        theme: theme,
-                        title: nil,
-                        iconName: nil,
-                        useOpaqueTheme: useOpaqueTheme,
-                        tintContainerView: self.tintContainerView
-                    )
-                )
-            default:
-                fatalError()
-            }
+	            let weatherButtonContent: AnyComponent<Empty>
+	            let weatherAccessibilityLabel: String
+	            switch self.weather {
+	            case .notAllowed, .notDetermined, .notPreloaded:
+	                weatherAccessibilityLabel = "\(strings.MediaEditor_Shortcut_Weather), \(stringForTemperature(24))"
+	                weatherButtonContent = AnyComponent(
+	                    InteractiveStickerButtonContent(
+	                        context: self.context,
+	                        theme: theme,
+	                        title: stringForTemperature(24),
+	                        iconName: "☀️",
+	                        iconFile: self.context.animatedEmojiStickersValue["☀️"]?.first?.file._parse(),
+	                        useOpaqueTheme: useOpaqueTheme,
+	                        tintContainerView: self.tintContainerView
+	                    )
+	                )
+	            case let .loaded(weather):
+	                weatherAccessibilityLabel = "\(strings.MediaEditor_Shortcut_Weather), \(stringForTemperature(weather.temperature))"
+	                weatherButtonContent = AnyComponent(
+	                    InteractiveStickerButtonContent(
+	                        context: self.context,
+	                        theme: theme,
+	                        title: stringForTemperature(weather.temperature),
+	                        iconName: weather.emoji,
+	                        iconFile: weather.emojiFile,
+	                        useOpaqueTheme: useOpaqueTheme,
+	                        tintContainerView: self.tintContainerView
+	                    )
+	                )
+	            case .fetching:
+	                weatherAccessibilityLabel = strings.MediaEditor_Shortcut_Weather
+	                weatherButtonContent = AnyComponent(
+	                    InteractiveStickerButtonContent(
+	                        context: self.context,
+	                        theme: theme,
+	                        title: nil,
+	                        iconName: nil,
+	                        useOpaqueTheme: useOpaqueTheme,
+	                        tintContainerView: self.tintContainerView
+	                    )
+	                )
+	            default:
+	                fatalError()
+	            }
             items.append(
                 AnyComponentWithIdentity(
                     id: "weather",
-                    component: AnyComponent(
-                        CameraButton(
-                            content: AnyComponentWithIdentity(
-                                id: "weather",
-                                component: weatherButtonContent
-                            ),
-                            action: { [weak self] in
-                                if let self {
-                                    self.weatherAction()
-                                }
-                            })
-                    )
-                )
-            )
-        }
+	                    component: AnyComponent(
+	                        CameraButton(
+	                            content: AnyComponentWithIdentity(
+	                                id: "weather",
+	                                component: weatherButtonContent
+	                            ),
+	                            action: { [weak self] in
+	                                if let self {
+	                                    self.weatherAction()
+	                                }
+	                            },
+	                            accessibilityLabel: weatherAccessibilityLabel
+	                        )
+	                    )
+	                )
+	            )
+	        }
         
         items.append(
             AnyComponentWithIdentity(
                 id: "audio",
-                component: AnyComponent(
-                    CameraButton(
-                        content: AnyComponentWithIdentity(
-                            id: "audio",
-                            component: AnyComponent(
-                                InteractiveStickerButtonContent(
-                                    context: self.context,
-                                    theme: theme,
-                                    title: strings.MediaEditor_AddAudio,
-                                    iconName: "Media Editor/Audio",
-                                    useOpaqueTheme: useOpaqueTheme,
-                                    tintContainerView: self.tintContainerView
-                                )
-                            )
-                        ),
-                        action: { [weak self] in
-                            if let self {
-                                self.audioAction()
-                            }
-                        })
-                )
-            )
-        )
+	                component: AnyComponent(
+	                    CameraButton(
+	                        content: AnyComponentWithIdentity(
+	                            id: "audio",
+	                            component: AnyComponent(
+	                                InteractiveStickerButtonContent(
+	                                    context: self.context,
+	                                    theme: theme,
+	                                    title: strings.MediaEditor_AddAudio,
+	                                    iconName: "Media Editor/Audio",
+	                                    useOpaqueTheme: useOpaqueTheme,
+	                                    tintContainerView: self.tintContainerView
+	                                )
+	                            )
+	                        ),
+	                        action: { [weak self] in
+	                            if let self {
+	                                self.audioAction()
+	                            }
+	                        },
+	                        accessibilityLabel: strings.MediaEditor_Shortcut_Audio
+	                    )
+	                )
+	            )
+	        )
         
         items.append(
             AnyComponentWithIdentity(
                 id: "reaction",
-                component: AnyComponent(
-                    CameraButton(
-                        content: AnyComponentWithIdentity(
-                            id: "reaction",
-                            component: AnyComponent(
-                                InteractiveReactionButtonContent(theme: theme)
-                            )
-                        ),
-                        action: { [weak self] in
-                            if let self {
-                                self.reactionAction()
-                            }
-                        })
-                )
-            )
-        )
+	                component: AnyComponent(
+	                    CameraButton(
+	                        content: AnyComponentWithIdentity(
+	                            id: "reaction",
+	                            component: AnyComponent(
+	                                InteractiveReactionButtonContent(theme: theme)
+	                            )
+	                        ),
+	                        action: { [weak self] in
+	                            if let self {
+	                                self.reactionAction()
+	                            }
+	                        },
+	                        accessibilityLabel: strings.MediaEditor_Shortcut_Reaction
+	                    )
+	                )
+	            )
+	        )
         
         let size = self.container.update(
             transition: transition,

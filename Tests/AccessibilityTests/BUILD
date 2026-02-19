@@ -35,6 +35,7 @@ swift_library(
         "//submodules/MediaPlayer:UniversalMediaPlayer",
         "//submodules/TelegramPresentationData",
         "//submodules/TelegramUI/Components/ActionPanelComponent",
+        "//submodules/TelegramUI/Components/CameraButtonComponent",
         "//submodules/TelegramUI/Components/ChatList/ChatListFilterTabContainerNode",
         "//submodules/TelegramUI/Components/ChatListHeaderComponent",
         "//submodules/TelegramUI/Components/GlassBarButtonComponent",

@@ -605,29 +605,30 @@ private final class VideoMessageCameraScreenComponent: CombinedComponent {
                     transition: .immediate
                 )
                 
-                let flipButton = flipButton.update(
-                    component: CameraButton(
-                        content: AnyComponentWithIdentity(
-                            id: "flip",
-                            component: AnyComponent(
-                                Image(
-                                    image: state.image(.flip, theme: environment.theme),
-                                    tintColor: environment.theme.chat.inputPanel.panelControlColor,
-                                    size: CGSize(width: 30.0, height: 30.0)
-                                )
-                            )
-                        ),
-                        minSize: CGSize(width: 40.0, height: 40.0),
-                        isExclusive: false,
-                        action: { [weak state] in
-                            if let state {
-                                state.togglePosition()
-                            }
-                        }
-                    ),
-                    availableSize: availableSize,
-                    transition: context.transition
-                )
+	                let flipButton = flipButton.update(
+	                    component: CameraButton(
+	                        content: AnyComponentWithIdentity(
+	                            id: "flip",
+	                            component: AnyComponent(
+	                                Image(
+	                                    image: state.image(.flip, theme: environment.theme),
+	                                    tintColor: environment.theme.chat.inputPanel.panelControlColor,
+	                                    size: CGSize(width: 30.0, height: 30.0)
+	                                )
+	                            )
+	                        ),
+	                        minSize: CGSize(width: 40.0, height: 40.0),
+	                        isExclusive: false,
+	                        action: { [weak state] in
+	                            if let state {
+	                                state.togglePosition()
+	                            }
+	                        },
+	                        accessibilityLabel: environment.strings.VoiceOver_Camera_SwitchCamera
+	                    ),
+	                    availableSize: availableSize,
+	                    transition: context.transition
+	                )
                 
                 context.add(flipButtonBackground
                     .position(CGPoint(x: flipButton.size.width / 2.0 + sideInset, y: availableSize.height - flipButton.size.height / 2.0 - 8.0))
@@ -678,24 +679,37 @@ private final class VideoMessageCameraScreenComponent: CombinedComponent {
                     )
                 }
                 
-                if !environment.metrics.isTablet {
-                    let flashButton = flashButton.update(
-                        component: CameraButton(
-                            content: flashContentComponent,
-                            minSize: CGSize(width: 40.0, height: 40.0),
-                            isExclusive: false,
-                            action: { [weak state] in
-                                if let state {
-                                    state.toggleFlashMode()
-                                    Queue.mainQueue().justDispatch {
-                                        flashAction.invoke(Void())
-                                    }
-                                }
-                            }
-                        ),
-                        availableSize: availableSize,
-                        transition: context.transition
-                    )
+	                if !environment.metrics.isTablet {
+	                    let flashAccessibilityValue: String
+	                    switch component.cameraState.flashMode {
+	                    case .off:
+	                        flashAccessibilityValue = environment.strings.Camera_FlashOff
+	                    case .on:
+	                        flashAccessibilityValue = environment.strings.Camera_FlashOn
+	                    default:
+	                        flashAccessibilityValue = environment.strings.Camera_FlashOff
+	                    }
+	                    
+	                    let flashButton = flashButton.update(
+	                        component: CameraButton(
+	                            content: flashContentComponent,
+	                            minSize: CGSize(width: 40.0, height: 40.0),
+	                            isExclusive: false,
+	                            action: { [weak state] in
+	                                if let state {
+	                                    state.toggleFlashMode()
+	                                    Queue.mainQueue().justDispatch {
+	                                        flashAction.invoke(Void())
+	                                    }
+	                                }
+	                            },
+	                            accessibilityLabel: environment.strings.VoiceOver_Camera_Flash,
+	                            accessibilityValue: flashAccessibilityValue,
+	                            accessibilityHint: environment.strings.VoiceOver_Media_PlaybackRateChange
+	                        ),
+	                        availableSize: availableSize,
+	                        transition: context.transition
+	                    )
                     
                     let flashButtonBackground = flashButtonBackground.update(
                         component: GlassBackgroundComponent(

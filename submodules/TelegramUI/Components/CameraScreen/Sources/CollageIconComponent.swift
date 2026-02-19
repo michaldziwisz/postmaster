@@ -62,6 +62,11 @@ private func generateCollageIcon(grid: Camera.CollageGrid, crossed: Bool) -> UII
     })
 }
 
+private func voiceOverCollageGridLabel(_ grid: Camera.CollageGrid) -> String {
+    let pattern = grid.rows.map { String($0.columns) }.joined(separator: "-")
+    return "Collage layout \(pattern), \(grid.count) tiles"
+}
+
 final class CollageIconComponent: Component {
     typealias EnvironmentType = Empty
     
@@ -228,29 +233,30 @@ final class CollageIconCarouselComponent: Component {
                     itemView = ComponentView()
                     self.itemViews[grid] = itemView
                 }
-                let itemSize = itemView.update(
-                    transition: .immediate,
-                    component: AnyComponent(CameraButton(
-                        content: AnyComponentWithIdentity(
-                            id: "content",
-                            component: AnyComponent(
-                                CollageIconComponent(
-                                    grid: grid,
-                                    crossed: false,
-                                    isSelected: false,
-                                    tintColor: .white
-                                )
-                            )
-                        ),
-                        action: { [weak self] in
-                            if let component = self?.component {
-                                component.selected(grid)
-                            }
-                        }
-                    )),
-                    environment: {},
-                    containerSize: buttonSize
-                )
+	                let itemSize = itemView.update(
+	                    transition: .immediate,
+	                    component: AnyComponent(CameraButton(
+	                        content: AnyComponentWithIdentity(
+	                            id: "content",
+	                            component: AnyComponent(
+	                                CollageIconComponent(
+	                                    grid: grid,
+	                                    crossed: false,
+	                                    isSelected: false,
+	                                    tintColor: .white
+	                                )
+	                            )
+	                        ),
+	                        action: { [weak self] in
+	                            if let component = self?.component {
+	                                component.selected(grid)
+	                            }
+	                        },
+	                        accessibilityLabel: voiceOverCollageGridLabel(grid)
+	                    )),
+	                    environment: {},
+	                    containerSize: buttonSize
+	                )
                 if let view = itemView.view {
                     if view.superview == nil {
                         self.scrollView.addSubview(view)

@@ -10,6 +10,12 @@ public final class CameraButton: Component {
     let isExclusive: Bool
     let action: () -> Void
     let longTapAction: (() -> Void)?
+    let accessibilityLabel: String
+    let accessibilityValue: String?
+    let accessibilityHint: String?
+    let accessibilityTraits: UIAccessibilityTraits
+    let isVisible: Bool
+    let accessibilityLongPressActionName: String?
 
     public init(
         content: AnyComponentWithIdentity<Empty>,
@@ -18,7 +24,13 @@ public final class CameraButton: Component {
         isEnabled: Bool = true,
         isExclusive: Bool = true,
         action: @escaping () -> Void,
-        longTapAction: (() -> Void)? = nil
+        longTapAction: (() -> Void)? = nil,
+        accessibilityLabel: String,
+        accessibilityValue: String? = nil,
+        accessibilityHint: String? = nil,
+        accessibilityTraits: UIAccessibilityTraits = [],
+        isVisible: Bool = true,
+        accessibilityLongPressActionName: String? = nil
     ) {
         self.content = content
         self.minSize = minSize
@@ -27,6 +39,12 @@ public final class CameraButton: Component {
         self.isExclusive = isExclusive
         self.action = action
         self.longTapAction = longTapAction
+        self.accessibilityLabel = accessibilityLabel
+        self.accessibilityValue = accessibilityValue
+        self.accessibilityHint = accessibilityHint
+        self.accessibilityTraits = accessibilityTraits
+        self.isVisible = isVisible
+        self.accessibilityLongPressActionName = accessibilityLongPressActionName
     }
     
     public func tagged(_ tag: AnyObject) -> CameraButton {
@@ -37,7 +55,13 @@ public final class CameraButton: Component {
             isEnabled: self.isEnabled,
             isExclusive: self.isExclusive,
             action: self.action,
-            longTapAction: self.longTapAction
+            longTapAction: self.longTapAction,
+            accessibilityLabel: self.accessibilityLabel,
+            accessibilityValue: self.accessibilityValue,
+            accessibilityHint: self.accessibilityHint,
+            accessibilityTraits: self.accessibilityTraits,
+            isVisible: self.isVisible,
+            accessibilityLongPressActionName: self.accessibilityLongPressActionName
         )
     }
     
@@ -55,6 +79,27 @@ public final class CameraButton: Component {
             return false
         }
         if lhs.isExclusive != rhs.isExclusive {
+            return false
+        }
+        if (lhs.longTapAction != nil) != (rhs.longTapAction != nil) {
+            return false
+        }
+        if lhs.accessibilityLabel != rhs.accessibilityLabel {
+            return false
+        }
+        if lhs.accessibilityValue != rhs.accessibilityValue {
+            return false
+        }
+        if lhs.accessibilityHint != rhs.accessibilityHint {
+            return false
+        }
+        if lhs.accessibilityTraits != rhs.accessibilityTraits {
+            return false
+        }
+        if lhs.isVisible != rhs.isVisible {
+            return false
+        }
+        if lhs.accessibilityLongPressActionName != rhs.accessibilityLongPressActionName {
             return false
         }
         return true
@@ -185,6 +230,29 @@ public final class CameraButton: Component {
             self.updateScale(transition: transition)
             self.isEnabled = component.isEnabled
             self.longTapGestureRecognizer?.isEnabled = component.longTapAction != nil
+            
+            self.isAccessibilityElement = component.isVisible
+            self.accessibilityLabel = component.accessibilityLabel
+            self.accessibilityValue = component.accessibilityValue
+            self.accessibilityHint = component.accessibilityHint
+            
+            var traits: UIAccessibilityTraits = [.button]
+            traits.formUnion(component.accessibilityTraits)
+            if !component.isEnabled {
+                traits.insert(.notEnabled)
+            }
+            self.accessibilityTraits = traits
+            
+            if let accessibilityLongPressActionName = component.accessibilityLongPressActionName, component.longTapAction != nil {
+                self.accessibilityCustomActions = [
+                    UIAccessibilityCustomAction(name: accessibilityLongPressActionName, actionHandler: { [weak self] in
+                        self?.component?.longTapAction?()
+                        return true
+                    })
+                ]
+            } else {
+                self.accessibilityCustomActions = nil
+            }
             
             self.contentView.bounds = CGRect(origin: .zero, size: contentSize)
             self.contentView.center = CGPoint(x: size.width / 2.0, y: size.height / 2.0)

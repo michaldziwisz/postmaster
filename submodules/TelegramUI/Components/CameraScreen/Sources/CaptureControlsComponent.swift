@@ -1258,7 +1258,9 @@ final class CaptureControlsComponent: Component {
                             tag: component.galleryButtonTag,
                             action: {
                                 component.galleryTapped()
-                            }
+                            },
+                            accessibilityLabel: component.strings.Attachment_Gallery,
+                            isVisible: !(isLiveStream || isRecording || isTransitioning || hideControls)
                         )
                     ),
                     environment: {},
@@ -1315,7 +1317,9 @@ final class CaptureControlsComponent: Component {
                             minSize: CGSize(width: 44.0, height: 44.0),
                             action: {
                                 component.flipTapped()
-                            }
+                            },
+                            accessibilityLabel: component.strings.VoiceOver_Camera_SwitchCamera,
+                            isVisible: isRecording && !isTransitioning && !hideControls
                         )
                     ),
                     environment: {},
@@ -1340,21 +1344,24 @@ final class CaptureControlsComponent: Component {
                 let bottomFlipButtonSize = self.bottomFlipButton.update(
                     transition: .immediate,
                     component: AnyComponent(
-                        GlassBarButtonComponent(
-                            size: CGSize(width: 48.0, height: 48.0),
-                            backgroundColor: UIColor(rgb: 0x212121),
-                            isDark: true,
-                            state: .tintedGlass,
-                            component: AnyComponentWithIdentity(id: "flip", component: AnyComponent(
-                                FlipButtonContentComponent(
-                                    action: component.flipAnimationAction,
-                                    maskFrame: flipButtonMaskFrame,
+	                        GlassBarButtonComponent(
+	                            size: CGSize(width: 48.0, height: 48.0),
+	                            backgroundColor: UIColor(rgb: 0x212121),
+	                            isDark: true,
+	                            state: .tintedGlass,
+	                            isVisible: !isRecording && !isLiveActive && !isTransitioning && !hideControls,
+	                            component: AnyComponentWithIdentity(id: "flip", component: AnyComponent(
+	                                FlipButtonContentComponent(
+	                                    action: component.flipAnimationAction,
+	                                    maskFrame: flipButtonMaskFrame,
                                     tintColor: component.tintColor
                                 )
                             )),
                             action: { _ in
                                 component.flipTapped()
-                            }
+                            },
+                            accessibilityLabel: component.strings.VoiceOver_Camera_SwitchCamera,
+                            accessibilityHint: nil
                         )
                     ),
                     environment: {},
@@ -1380,25 +1387,28 @@ final class CaptureControlsComponent: Component {
                 }
             }
             
-            let bottomSettingsButtonSize = self.bottomSettingsButton.update(
-                transition: .immediate,
-                component: AnyComponent(
-                    GlassBarButtonComponent(
-                        size: CGSize(width: 48.0, height: 48.0),
-                        backgroundColor: UIColor(rgb: 0x212121),
-                        isDark: true,
-                        state: .tintedGlass,
-                        component: AnyComponentWithIdentity(id: "settings", component: AnyComponent(
-                            BundleIconComponent(name: "Camera/Settings", tintColor: .white)
-                        )),
-                        action: { _ in
-                            component.settingsTapped()
-                        }
-                    )
-                ),
-                environment: {},
-                containerSize: availableSize
-            )
+                let bottomSettingsButtonSize = self.bottomSettingsButton.update(
+                    transition: .immediate,
+                    component: AnyComponent(
+                        GlassBarButtonComponent(
+                            size: CGSize(width: 48.0, height: 48.0),
+                            backgroundColor: UIColor(rgb: 0x212121),
+                            isDark: true,
+                            state: .tintedGlass,
+                            isVisible: isLiveStream && !isLiveActive && !isRecording && !isTransitioning && !hideControls,
+                            component: AnyComponentWithIdentity(id: "settings", component: AnyComponent(
+                                BundleIconComponent(name: "Camera/Settings", tintColor: .white)
+                            )),
+                            action: { _ in
+                                component.settingsTapped()
+                            },
+                            accessibilityLabel: component.strings.Settings_Title,
+                            accessibilityHint: nil
+                        )
+                    ),
+                    environment: {},
+                    containerSize: availableSize
+                )
             let bottomFlipButtonFrame = CGRect(origin: CGPoint(x: 16.0, y: 21.0), size: bottomSettingsButtonSize)
             if let bottomSettingsButtonView = self.bottomSettingsButton.view {
                 if bottomSettingsButtonView.superview == nil {
@@ -1578,7 +1588,7 @@ final class CaptureControlsComponent: Component {
                 codeResultView.view?.layer.animatePosition(from: .zero, to: CGPoint(x: 0.0, y: 64.0), duration: 0.4, timingFunction: kCAMediaTimingFunctionSpring, removeOnCompletion: false, additive: true)
             }
             
-            let _ = self.lockView.update(
+                let _ = self.lockView.update(
                 transition: .immediate,
                 component: AnyComponent(
                     CameraButton(
@@ -1594,7 +1604,9 @@ final class CaptureControlsComponent: Component {
                         minSize: hintIconSize,
                         action: {
                             component.lockRecording()
-                        }
+                        },
+                        accessibilityLabel: component.strings.VoiceOver_Camera_LockRecording,
+                        isVisible: isHolding
                     )
                 ),
                 environment: {},

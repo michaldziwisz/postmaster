@@ -1640,26 +1640,29 @@ final class MediaEditorScreenComponent: Component {
                     }
                 }
                 
-                let saveButtonSize = self.saveButton.update(
-                    transition: transition,
-                    component: AnyComponent(CameraButton(
-                        content: saveContentComponent,
-                        action: { [weak self, weak controller] in
-                            guard let self, let controller else {
-                                return
-                            }
-                            guard !controller.node.recording.isActive else {
-                                return
-                            }
+	                let saveButtonSize = self.saveButton.update(
+	                    transition: transition,
+	                    component: AnyComponent(CameraButton(
+	                        content: saveContentComponent,
+	                        isEnabled: component.isSavingAvailable && !controller.node.recording.isActive,
+	                        action: { [weak self, weak controller] in
+	                            guard let self, let controller else {
+	                                return
+	                            }
+	                            guard !controller.node.recording.isActive else {
+	                                return
+	                            }
                             if let view = self.saveButton.findTaggedView(tag: saveButtonTag) as? LottieAnimationComponent.View {
                                 view.playOnce()
-                            }
-                            controller.requestSave()
-                        }
-                    )),
-                    environment: {},
-                    containerSize: CGSize(width: 44.0, height: 44.0)
-                )
+	                            }
+	                            controller.requestSave()
+	                        },
+	                        accessibilityLabel: environment.strings.Common_Save,
+	                        isVisible: displayTopButtons && !component.isDismissing && !component.isInteractingWithEntities
+	                    )),
+	                    environment: {},
+	                    containerSize: CGSize(width: 44.0, height: 44.0)
+	                )
                 let saveButtonFrame = CGRect(
                     origin: CGPoint(x: availableSize.width - 20.0 - saveButtonSize.width, y: max(environment.statusBarHeight + 10.0, environment.safeInsets.top + 20.0)),
                     size: saveButtonSize
@@ -1722,17 +1725,18 @@ final class MediaEditorScreenComponent: Component {
                         )
                     }
                     
-                    let dayNightButtonSize = self.dayNightButton.update(
-                        transition: transition,
-                        component: AnyComponent(CameraButton(
-                            content: dayNightContentComponent,
-                            action: { [weak controller, weak state, weak mediaEditor] in
-                                guard let controller, let state else {
-                                    return
-                                }
-                                guard !controller.node.recording.isActive else {
-                                    return
-                                }
+	                    let dayNightButtonSize = self.dayNightButton.update(
+	                        transition: transition,
+	                        component: AnyComponent(CameraButton(
+	                            content: dayNightContentComponent,
+	                            isEnabled: !controller.node.recording.isActive,
+	                            action: { [weak controller, weak state, weak mediaEditor] in
+	                                guard let controller, let state else {
+	                                    return
+	                                }
+	                                guard !controller.node.recording.isActive else {
+	                                    return
+	                                }
                                 if let mediaEditor {
                                     state.dayNightDidChange = true
                                     
@@ -1751,13 +1755,15 @@ final class MediaEditorScreenComponent: Component {
                                                 stickerEntityView.isNightTheme = mediaEditor.values.nightTheme
                                             }
                                         }
-                                    }
-                                }
-                            }
-                        )),
-                        environment: {},
-                        containerSize: CGSize(width: 44.0, height: 44.0)
-                    )
+	                                    }
+	                                }
+	                            },
+	                            accessibilityLabel: isNightTheme ? environment.strings.Conversation_Theme_SwitchToLight : environment.strings.Conversation_Theme_SwitchToDark,
+	                            isVisible: displayTopButtons && !component.isDismissing && !component.isInteractingWithEntities
+	                        )),
+	                        environment: {},
+	                        containerSize: CGSize(width: 44.0, height: 44.0)
+	                    )
                     let dayNightButtonFrame = CGRect(
                         origin: CGPoint(x: availableSize.width - 20.0 - dayNightButtonSize.width - 50.0, y: max(environment.statusBarHeight + 10.0, environment.safeInsets.top + 20.0)),
                         size: dayNightButtonSize
@@ -1817,16 +1823,17 @@ final class MediaEditorScreenComponent: Component {
                         )
                     }
                     
-                    let muteButtonSize = self.muteButton.update(
-                        transition: transition,
-                        component: AnyComponent(CameraButton(
-                            content: muteContentComponent,
-                            action: { [weak state, weak controller] in
-                                guard let controller else {
-                                    return
-                                }
-                                guard !controller.node.recording.isActive else {
-                                    return
+	                    let muteButtonSize = self.muteButton.update(
+	                        transition: transition,
+	                        component: AnyComponent(CameraButton(
+	                            content: muteContentComponent,
+	                            isEnabled: !controller.node.recording.isActive,
+	                            action: { [weak state, weak controller] in
+	                                guard let controller else {
+	                                    return
+	                                }
+	                                guard !controller.node.recording.isActive else {
+	                                    return
                                 }
                                 
                                 if let mediaEditor {
@@ -1835,13 +1842,16 @@ final class MediaEditorScreenComponent: Component {
                                     mediaEditor.setVideoIsMuted(isMuted)
                                     state?.updated()
                                     
-                                    controller.node.presentMutedTooltip()
-                                }
-                            }
-                        )),
-                        environment: {},
-                        containerSize: CGSize(width: 44.0, height: 44.0)
-                    )
+	                                    controller.node.presentMutedTooltip()
+	                                }
+	                            },
+	                            accessibilityLabel: isVideoMuted ? environment.strings.Conversation_Unmute : environment.strings.Conversation_Mute,
+	                            accessibilityTraits: isVideoMuted ? [.selected] : [],
+	                            isVisible: displayTopButtons && !component.isDismissing && !component.isInteractingWithEntities
+	                        )),
+	                        environment: {},
+	                        containerSize: CGSize(width: 44.0, height: 44.0)
+	                    )
                     
                     var xOffset: CGFloat
                     var yOffset: CGFloat = 0.0
@@ -1911,26 +1921,29 @@ final class MediaEditorScreenComponent: Component {
                         )
                     }
                     
-                    let playbackButtonSize = self.playbackButton.update(
-                        transition: transition,
-                        component: AnyComponent(CameraButton(
-                            content: playbackContentComponent,
-                            action: { [weak controller, weak mediaEditor, weak state] in
-                                guard let controller else {
-                                    return
-                                }
-                                guard !controller.node.recording.isActive else {
-                                    return
+	                    let playbackButtonSize = self.playbackButton.update(
+	                        transition: transition,
+	                        component: AnyComponent(CameraButton(
+	                            content: playbackContentComponent,
+	                            isEnabled: !controller.node.recording.isActive,
+	                            action: { [weak controller, weak mediaEditor, weak state] in
+	                                guard let controller else {
+	                                    return
+	                                }
+	                                guard !controller.node.recording.isActive else {
+	                                    return
                                 }
                                 if let mediaEditor {
-                                    state?.playbackDidChange = true
-                                    mediaEditor.togglePlayback()
-                                }
-                            }
-                        )),
-                        environment: {},
-                        containerSize: CGSize(width: 44.0, height: 44.0)
-                    )
+	                                    state?.playbackDidChange = true
+	                                    mediaEditor.togglePlayback()
+	                                }
+	                            },
+	                            accessibilityLabel: playerState.isPlaying ? environment.strings.VoiceOver_Media_PlaybackPause : environment.strings.VoiceOver_Media_PlaybackPlay,
+	                            isVisible: displayTopButtons && !component.isDismissing && !component.isInteractingWithEntities
+	                        )),
+	                        environment: {},
+	                        containerSize: CGSize(width: 44.0, height: 44.0)
+	                    )
                     
                     
                     var xOffset: CGFloat
