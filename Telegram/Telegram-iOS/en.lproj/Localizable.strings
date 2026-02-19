@@ -1246,6 +1246,7 @@
 "EnterPasscode.TouchId" = "Unlock Telegram";
 
 "DialogList.PasscodeLockHelp" = "Tap to lock Telegram";
+"DialogList.PasscodeUnlockHelp" = "Tap to unlock Telegram";
 
 "PasscodeSettings.AutoLock" = "Auto-Lock";
 "PasscodeSettings.AutoLock.Disabled" = "Disabled";

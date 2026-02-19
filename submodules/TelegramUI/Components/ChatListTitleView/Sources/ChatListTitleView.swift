@@ -83,7 +83,10 @@ public final class ChatListTitleView: UIView, NavigationBarTitleView, Navigation
         
         if self._title != oldValue {
             self.titleNode.attributedText = NSAttributedString(string: self.title.text, font: titleFont, textColor: self.theme.rootController.navigationBar.primaryTextColor)
-            self.buttonView.accessibilityLabel = self.title.text
+            let buttonAccessibility = ChatListTitleVoiceOver.resolve(strings: self.strings, titleText: self.title.text, isPasscodeSet: self.title.isPasscodeSet, isManuallyLocked: self.title.isManuallyLocked)
+            self.buttonView.accessibilityLabel = buttonAccessibility.label
+            self.buttonView.accessibilityHint = buttonAccessibility.hint
+            self.buttonView.accessibilityTraits = buttonAccessibility.traits
             self.activityIndicator.isHidden = !self.title.activity
            
             self.proxyButton.isHidden = !self.title.hasProxy
@@ -225,6 +228,11 @@ public final class ChatListTitleView: UIView, NavigationBarTitleView, Navigation
         didSet {
             if self.strings !== oldValue {
                 self.proxyButton.accessibilityLabel = self.strings.VoiceOver_Navigation_ProxySettings
+                
+                let buttonAccessibility = ChatListTitleVoiceOver.resolve(strings: self.strings, titleText: self.title.text, isPasscodeSet: self.title.isPasscodeSet, isManuallyLocked: self.title.isManuallyLocked)
+                self.buttonView.accessibilityLabel = buttonAccessibility.label
+                self.buttonView.accessibilityHint = buttonAccessibility.hint
+                self.buttonView.accessibilityTraits = buttonAccessibility.traits
             }
         }
     }
