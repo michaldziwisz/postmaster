@@ -147,17 +147,66 @@ private final class AutodownloadDataUsagePickerItemNode: ListViewItemNode, ItemL
         self.addSubnode(self.customTextNode)
         self.addSubnode(self.activateArea)
         
-//        self.activateArea.increment = { [weak self] in
-//            if let self {
-//                self.sliderView?.increase()
-//            }
-//        }
-//        
-//        self.activateArea.decrement = { [weak self] in
-//            if let self {
-//                self.sliderView?.decrease()
-//            }
-//        }
+        self.activateArea.increment = { [weak self] in
+            self?.accessibilityStep(delta: 1)
+        }
+        
+        self.activateArea.decrement = { [weak self] in
+            self?.accessibilityStep(delta: -1)
+        }
+    }
+    
+    private func accessibilityStep(delta: Int) {
+        guard let item = self.item, item.enabled else {
+            return
+        }
+        
+        let valueCount = 3 + (item.customPosition != nil ? 1 : 0)
+        let currentPosition = self.accessibilityPosition(for: item.value, customPosition: item.customPosition)
+        let nextPosition = max(0, min(valueCount - 1, currentPosition + delta))
+        
+        guard nextPosition != currentPosition, let nextValue = self.accessibilityValue(for: nextPosition, customPosition: item.customPosition) else {
+            return
+        }
+        
+        item.updated(nextValue)
+    }
+    
+    private func accessibilityPosition(for value: AutomaticDownloadDataUsage, customPosition: Int?) -> Int {
+        var position = value.rawValue
+        if let customPosition {
+            if case .custom = value {
+                position = customPosition
+            } else if position >= customPosition {
+                position += 1
+            }
+        }
+        return position
+    }
+    
+    private func accessibilityValue(for position: Int, customPosition: Int?) -> AutomaticDownloadDataUsage? {
+        if let customPosition {
+            if position == customPosition {
+                return .custom
+            } else {
+                return AutomaticDownloadDataUsage(rawValue: position > customPosition ? (position - 1) : position)
+            }
+        } else {
+            return AutomaticDownloadDataUsage(rawValue: position)
+        }
+    }
+    
+    private func accessibilityValueString(strings: PresentationStrings, value: AutomaticDownloadDataUsage) -> String {
+        switch value {
+        case .low:
+            return strings.AutoDownloadSettings_DataUsageLow
+        case .medium:
+            return strings.AutoDownloadSettings_DataUsageMedium
+        case .high:
+            return strings.AutoDownloadSettings_DataUsageHigh
+        case .custom:
+            return strings.AutoDownloadSettings_DataUsageCustom
+        }
     }
     
     func asyncLayout() -> (_ item: AutodownloadDataUsagePickerItem, _ params: ListViewItemLayoutParams, _ neighbors: ItemListNeighbors) -> (ListViewItemNodeLayout, () -> Void) {
@@ -319,33 +368,21 @@ private final class AutodownloadDataUsagePickerItemNode: ListViewItemNode, ItemL
                         sliderView.isUserInteractionEnabled = item.enabled
                         sliderView.alpha = item.enabled ? 1.0 : 0.4
                         sliderView.layer.allowsGroupOpacity = !item.enabled
+                        sliderView.isAccessibilityElement = false
+                        sliderView.accessibilityElementsHidden = true
                     }
                     
                     strongSelf.activateArea.accessibilityLabel = item.strings.AutoDownloadSettings_DataUsage
+                    let valueString = strongSelf.accessibilityValueString(strings: item.strings, value: item.value)
+                    let resolved = ItemListAdjustableVoiceOver.resolve(value: valueString, isEnabled: item.enabled)
+                    strongSelf.activateArea.accessibilityValue = resolved.value
+                    strongSelf.activateArea.accessibilityHint = nil
+                    strongSelf.activateArea.accessibilityTraits = resolved.traits
                     
                     strongSelf.activateArea.frame = CGRect(origin: CGPoint(x: params.leftInset, y: 0.0), size: CGSize(width: params.width - params.leftInset - params.rightInset, height: layout.contentSize.height))
                 }
             })
         }
-    }
-    
-    private func updateAccessibilityLabels() {
-//        guard let item = self.item else {
-//            return
-//        }
-//        var textNodes: [TextNode] = [self.lowTextNode, self.mediumTextNode, self.highTextNode]
-//        if let customPosition = item.customPosition {
-//            textNodes.insert(self.customTextNode, at: customPosition)
-//        }
-//        if let value = self.sliderView?.value {
-//            self.activateArea.accessibilityValue = textNodes[Int(value)].cachedLayout?.attributedString?.string ?? ""
-//        }
-//        var accessibilityTraits: UIAccessibilityTraits = [.adjustable]
-//        if item.enabled {
-//        } else {
-//            accessibilityTraits.insert(.notEnabled)
-//        }
-//        self.activateArea.accessibilityTraits = accessibilityTraits
     }
     
     override func animateInsertion(_ currentTimestamp: Double, duration: Double, options: ListViewItemAnimationOptions) {
@@ -356,4 +393,3 @@ private final class AutodownloadDataUsagePickerItemNode: ListViewItemNode, ItemL
         self.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.15, removeOnCompletion: false)
     }
 }
-
