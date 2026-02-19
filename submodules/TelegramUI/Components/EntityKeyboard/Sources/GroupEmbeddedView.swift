@@ -9,6 +9,28 @@ import MultiAnimationRenderer
 import PagerComponent
 
 final class GroupEmbeddedView: UIScrollView, UIScrollViewDelegate, PagerExpandableScrollView {
+    private final class ItemAccessibilityView: UIView {
+        private let activate: () -> Bool
+        
+        init(activate: @escaping () -> Bool) {
+            self.activate = activate
+            
+            super.init(frame: CGRect())
+            
+            self.backgroundColor = .clear
+            self.isUserInteractionEnabled = false
+            self.isAccessibilityElement = true
+        }
+        
+        required init?(coder: NSCoder) {
+            fatalError("init(coder:) has not been implemented")
+        }
+        
+        override func accessibilityActivate() -> Bool {
+            return self.activate()
+        }
+    }
+    
     private struct ItemLayout {
         var itemSize: CGFloat
         var itemSpacing: CGFloat
@@ -47,10 +69,12 @@ final class GroupEmbeddedView: UIScrollView, UIScrollViewDelegate, PagerExpandab
     private let performItemAction: (EmojiPagerContentComponent.Item, UIView, CGRect, CALayer) -> Void
     
     private var visibleItemLayers: [EmojiKeyboardItemLayer.Key: EmojiKeyboardItemLayer] = [:]
+    private var visibleItemAccessibilityViews: [EmojiKeyboardItemLayer.Key: ItemAccessibilityView] = [:]
     private var ignoreScrolling: Bool = false
     
     private var context: AccountContext?
     private var theme: PresentationTheme?
+    private var strings: PresentationStrings?
     private var cache: AnimationCache?
     private var renderer: MultiAnimationRenderer?
     private var currentInsets: UIEdgeInsets?
@@ -105,7 +129,7 @@ final class GroupEmbeddedView: UIScrollView, UIScrollViewDelegate, PagerExpandab
     }
     
     private func updateVisibleItems(transition: ComponentTransition, attemptSynchronousLoad: Bool) {
-        guard let context = self.context, let theme = self.theme, let itemLayout = self.itemLayout, let items = self.items, let cache = self.cache, let renderer = self.renderer else {
+        guard let context = self.context, let theme = self.theme, let strings = self.strings, let itemLayout = self.itemLayout, let items = self.items, let cache = self.cache, let renderer = self.renderer else {
             return
         }
         
@@ -141,6 +165,26 @@ final class GroupEmbeddedView: UIScrollView, UIScrollViewDelegate, PagerExpandab
                     self.layer.addSublayer(itemLayer)
                 }
                 
+                let accessibilityView: ItemAccessibilityView
+                if let current = self.visibleItemAccessibilityViews[itemId] {
+                    accessibilityView = current
+                } else {
+                    accessibilityView = ItemAccessibilityView(activate: { [weak self, weak itemLayer] in
+                        guard let self, let itemLayer else {
+                            return false
+                        }
+                        self.performItemAction(itemLayer.item, self, itemLayer.frame, itemLayer)
+                        return true
+                    })
+                    self.visibleItemAccessibilityViews[itemId] = accessibilityView
+                    self.addSubview(accessibilityView)
+                }
+                
+                let voiceOver = EmojiPagerContentItemVoiceOver.resolve(strings: strings, item: item, isSelected: false)
+                accessibilityView.accessibilityLabel = voiceOver.label
+                accessibilityView.accessibilityHint = voiceOver.hint
+                accessibilityView.accessibilityTraits = voiceOver.traits
+                
                 switch item.tintMode {
                 case let .custom(color):
                     itemLayer.layerTintColor = color.cgColor
@@ -154,6 +198,7 @@ final class GroupEmbeddedView: UIScrollView, UIScrollViewDelegate, PagerExpandab
                 
                 let itemFrame = itemLayout.frame(at: index)
                 itemLayer.frame = itemFrame
+                accessibilityView.frame = itemFrame
                 
                 itemLayer.isVisibleForAnimations = self.isStickers ? context.sharedContext.energyUsageSettings.loopStickers : context.sharedContext.energyUsageSettings.loopEmoji
             }
@@ -169,11 +214,23 @@ final class GroupEmbeddedView: UIScrollView, UIScrollViewDelegate, PagerExpandab
         for id in removedIds {
             self.visibleItemLayers.removeValue(forKey: id)
         }
+
+        var removedAccessibilityIds: [EmojiKeyboardItemLayer.Key] = []
+        for (id, view) in self.visibleItemAccessibilityViews {
+            if !validIds.contains(id) {
+                removedAccessibilityIds.append(id)
+                view.removeFromSuperview()
+            }
+        }
+        for id in removedAccessibilityIds {
+            self.visibleItemAccessibilityViews.removeValue(forKey: id)
+        }
     }
     
     func update(
         context: AccountContext,
         theme: PresentationTheme,
+        strings: PresentationStrings,
         insets: UIEdgeInsets,
         size: CGSize,
         items: [EmojiPagerContentComponent.Item],
@@ -188,6 +245,7 @@ final class GroupEmbeddedView: UIScrollView, UIScrollViewDelegate, PagerExpandab
         
         self.context = context
         self.theme = theme
+        self.strings = strings
         self.currentInsets = insets
         self.currentSize = size
         self.items = items

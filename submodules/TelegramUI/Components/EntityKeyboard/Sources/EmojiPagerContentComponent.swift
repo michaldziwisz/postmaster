@@ -3171,6 +3171,12 @@ public final class EmojiPagerContentComponent: Component {
                                     component.inputInteractionHolder.inputInteraction?.addGroupAction(groupId, false, true)
                                 }
                             },
+                            clearPressed: { [weak self] in
+                                guard let strongSelf = self, let component = strongSelf.component else {
+                                    return
+                                }
+                                component.inputInteractionHolder.inputInteraction?.clearGroup(groupId)
+                            },
                             performItemAction: { [weak self] item, view, rect, layer in
                                 guard let strongSelf = self, let component = strongSelf.component else {
                                     return
@@ -3197,6 +3203,7 @@ public final class EmojiPagerContentComponent: Component {
                     let (groupHeaderSize, centralContentWidth) = groupHeaderView.update(
                         context: component.context,
                         theme: keyboardChildEnvironment.theme,
+                        strings: keyboardChildEnvironment.strings,
                         forceNeedsVibrancy: false,
                         layoutType: itemLayout.layoutType,
                         hasTopSeparator: hasTopSeparator,

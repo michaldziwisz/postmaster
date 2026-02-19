@@ -12,8 +12,31 @@ final class GroupHeaderLayer: UIView {
     override static var layerClass: AnyClass {
         return PassthroughLayer.self
     }
+
+    private final class ActionAccessibilityView: UIView {
+        private let activate: () -> Bool
+
+        init(activate: @escaping () -> Bool) {
+            self.activate = activate
+
+            super.init(frame: CGRect())
+
+            self.backgroundColor = .clear
+            self.isUserInteractionEnabled = false
+            self.isAccessibilityElement = true
+        }
+
+        required init?(coder: NSCoder) {
+            fatalError("init(coder:) has not been implemented")
+        }
+
+        override func accessibilityActivate() -> Bool {
+            return self.activate()
+        }
+    }
     
     private let actionPressed: () -> Void
+    private let clearPressed: (() -> Void)?
     private let performItemAction: (EmojiPagerContentComponent.Item, UIView, CGRect, CALayer) -> Void
     
     private let textLayer: SimpleLayer
@@ -32,6 +55,9 @@ final class GroupHeaderLayer: UIView {
     private var actionButton: GroupHeaderActionButton?
     
     private var groupEmbeddedView: GroupEmbeddedView?
+
+    private let headerAccessibilityView: UIView
+    private let clearAccessibilityView: ActionAccessibilityView
     
     private var theme: PresentationTheme?
     
@@ -40,14 +66,26 @@ final class GroupHeaderLayer: UIView {
     
     let tintContentLayer: SimpleLayer
     
-    init(actionPressed: @escaping () -> Void, performItemAction: @escaping (EmojiPagerContentComponent.Item, UIView, CGRect, CALayer) -> Void) {
+    init(actionPressed: @escaping () -> Void, clearPressed: (() -> Void)?, performItemAction: @escaping (EmojiPagerContentComponent.Item, UIView, CGRect, CALayer) -> Void) {
         self.actionPressed = actionPressed
+        self.clearPressed = clearPressed
         self.performItemAction = performItemAction
         
         self.textLayer = SimpleLayer()
         self.tintTextLayer = SimpleLayer()
         
         self.tintContentLayer = SimpleLayer()
+
+        self.headerAccessibilityView = UIView()
+        self.headerAccessibilityView.backgroundColor = .clear
+        self.headerAccessibilityView.isUserInteractionEnabled = false
+        self.headerAccessibilityView.isAccessibilityElement = true
+
+        self.clearAccessibilityView = ActionAccessibilityView(activate: {
+            clearPressed?()
+            return clearPressed != nil
+        })
+        self.clearAccessibilityView.isHidden = true
         
         super.init(frame: CGRect())
         
@@ -55,6 +93,9 @@ final class GroupHeaderLayer: UIView {
         self.tintContentLayer.addSublayer(self.tintTextLayer)
         
         (self.layer as? PassthroughLayer)?.mirrorLayer = self.tintContentLayer
+
+        self.addSubview(self.headerAccessibilityView)
+        self.addSubview(self.clearAccessibilityView)
     }
     
     required init?(coder: NSCoder) {
@@ -64,6 +105,7 @@ final class GroupHeaderLayer: UIView {
     func update(
         context: AccountContext,
         theme: PresentationTheme,
+        strings: PresentationStrings,
         forceNeedsVibrancy: Bool,
         layoutType: EmojiPagerContentComponent.ItemLayoutType,
         hasTopSeparator: Bool,
@@ -451,6 +493,7 @@ final class GroupHeaderLayer: UIView {
             groupEmbeddedView.update(
                 context: context,
                 theme: theme,
+                strings: strings,
                 insets: insets,
                 size: groupEmbeddedViewSize,
                 items: embeddedItems,
@@ -506,8 +549,62 @@ final class GroupHeaderLayer: UIView {
                 tintSeparatorLayer.removeFromSuperlayer()
             }
         }
+
+        self.updateVoiceOver(
+            strings: strings,
+            title: title,
+            subtitle: subtitle,
+            badge: badge,
+            isPremiumLocked: isPremiumLocked,
+            hasClear: hasClear,
+            isStickers: isStickers,
+            isEmbedded: embeddedItems != nil
+        )
         
         return (size, titleHorizontalOffset + textSize.width + clearWidth)
+    }
+
+    private func updateVoiceOver(strings: PresentationStrings, title: String, subtitle: String?, badge: String?, isPremiumLocked: Bool, hasClear: Bool, isStickers: Bool, isEmbedded: Bool) {
+        let resolved = GroupHeaderLayerVoiceOver.resolve(
+            strings: strings,
+            title: title,
+            subtitle: subtitle,
+            badge: badge,
+            isPremiumLocked: isPremiumLocked,
+            hasClear: hasClear,
+            isStickers: isStickers,
+            isEmbedded: isEmbedded
+        )
+        
+        self.headerAccessibilityView.accessibilityLabel = resolved.header.label
+        self.headerAccessibilityView.accessibilityValue = resolved.header.value
+        self.headerAccessibilityView.accessibilityHint = nil
+        self.headerAccessibilityView.accessibilityTraits = resolved.header.traits
+        
+        var headerFrame = self.textLayer.frame
+        if let subtitleLayer = self.subtitleLayer {
+            headerFrame = headerFrame.union(subtitleLayer.frame)
+        }
+        if let badgeLayer = self.badgeLayer {
+            headerFrame = headerFrame.union(badgeLayer.frame)
+        }
+        if let lockIconLayer = self.lockIconLayer {
+            headerFrame = headerFrame.union(lockIconLayer.frame)
+        }
+        self.headerAccessibilityView.frame = headerFrame.insetBy(dx: -4.0, dy: -4.0)
+        
+        if let clear = resolved.clear, let clearIconLayer = self.clearIconLayer {
+            self.clearAccessibilityView.isHidden = false
+            self.clearAccessibilityView.accessibilityLabel = clear.label
+            self.clearAccessibilityView.accessibilityValue = nil
+            self.clearAccessibilityView.accessibilityHint = clear.hint
+            self.clearAccessibilityView.accessibilityTraits = clear.traits
+            self.clearAccessibilityView.frame = clearIconLayer.frame.insetBy(dx: -8.0, dy: -8.0)
+        } else {
+            self.clearAccessibilityView.isHidden = true
+            self.clearAccessibilityView.accessibilityLabel = nil
+            self.clearAccessibilityView.accessibilityHint = nil
+        }
     }
     
     override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
