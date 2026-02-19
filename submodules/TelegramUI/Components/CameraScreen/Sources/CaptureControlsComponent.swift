@@ -1432,15 +1432,29 @@ final class CaptureControlsComponent: Component {
                 blobState = .stopVideo
             case .holdRecording:
                 blobState = self.panBlobState ?? .video
-            case .live:
-                blobState = .live
-                hitTestEdgeInsets = UIEdgeInsets(top: 0.0, left: -130.0, bottom: 0.0, right: -130.0)
-            }
-            
-            let shutterButtonSize = self.shutterButtonView.update(
-                transition: transition,
-                component: AnyComponent(
-                    Button(
+	            case .live:
+	                blobState = .live
+	                hitTestEdgeInsets = UIEdgeInsets(top: 0.0, left: -130.0, bottom: 0.0, right: -130.0)
+	            }
+	            
+	            let shutterVoiceOverState: CameraShutterVoiceOver.State
+	            switch component.shutterState {
+	            case .generic, .disabled:
+	                shutterVoiceOverState = .takePhoto
+	            case .video, .transition:
+	                shutterVoiceOverState = .startVideoRecording
+	            case .stopRecording, .holdRecording:
+	                shutterVoiceOverState = .stopVideoRecording
+	            case .live:
+	                shutterVoiceOverState = .startLiveStream
+	            }
+	            let shutterAccessibility = CameraShutterVoiceOver.resolve(strings: component.strings, state: shutterVoiceOverState)
+	            let shutterIsVisible = !(isTransitioning || isLiveActive)
+	            
+	            let shutterButtonSize = self.shutterButtonView.update(
+	                transition: transition,
+	                component: AnyComponent(
+	                    Button(
                         content: AnyComponent(
                             ShutterButtonContentComponent(
                                 strings: component.strings,
@@ -1453,21 +1467,31 @@ final class CaptureControlsComponent: Component {
                                 collageCount: component.collageCount,
                                 highlightedAction: self.shutterHightlightedAction,
                                 updateOffsetX: self.shutterUpdateOffsetX,
-                                updateOffsetY: self.shutterUpdateOffsetY
-                            )
-                        ),
-                        automaticHighlight: false,
-                        action: { [weak self] in
-                            self?.hapticFeedback.impact(.light)
-                            self?.shutterUpdateOffsetX.invoke((0.0, .immediate))
-                            component.shutterTapped()
-                        },
-                        highlightedAction: self.shutterHightlightedAction
-                    ).minSize(maximumShutterSize).withHitTestEdgeInsets(hitTestEdgeInsets)
-                ),
-                environment: {},
-                containerSize: availableSize
-            )
+	                                updateOffsetY: self.shutterUpdateOffsetY
+	                            )
+	                        ),
+	                        automaticHighlight: false,
+	                        isEnabled: component.hasAccess,
+	                        action: { [weak self] in
+	                            self?.hapticFeedback.impact(.light)
+	                            self?.shutterUpdateOffsetX.invoke((0.0, .immediate))
+	                            component.shutterTapped()
+	                        },
+	                        highlightedAction: self.shutterHightlightedAction
+	                    )
+	                    .minSize(maximumShutterSize)
+	                    .withHitTestEdgeInsets(hitTestEdgeInsets)
+	                    .withAccessibility(
+	                        label: shutterAccessibility.label,
+	                        value: shutterAccessibility.value,
+	                        hint: shutterAccessibility.hint,
+	                        traits: [],
+	                        isVisible: shutterIsVisible
+	                    )
+	                ),
+	                environment: {},
+	                containerSize: availableSize
+	            )
             let shutterButtonFrame = CGRect(origin: CGPoint(x: (availableSize.width - shutterButtonSize.width) / 2.0, y: (size.height - shutterButtonSize.height) / 2.0), size: shutterButtonSize)
 
             let guideSpacing: CGFloat = 9.0
