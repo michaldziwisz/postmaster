@@ -17,5 +17,17 @@ public enum ChatMessageBubbleItemNodeVoiceOver {
     public static func resolveAdCloseButton(strings: PresentationStrings) -> Resolved {
         return Resolved(label: strings.Common_Close, hint: nil, traits: [.button])
     }
+    
+    public static func resolveAuthorNameButton(strings: PresentationStrings, title: String, isEnabled: Bool) -> Resolved {
+        var traits: UIAccessibilityTraits = [.button]
+        if !isEnabled {
+            traits.insert(.notEnabled)
+        }
+        
+        return Resolved(
+            label: title,
+            hint: isEnabled ? strings.VoiceOver_Chat_OpenHint : nil,
+            traits: traits
+        )
+    }
 }
-

@@ -3911,6 +3911,26 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
             nameHighlightNode.frame = nameHiglightFrame.insetBy(dx: -2.0, dy: -1.0)
             nameButtonNode.frame = nameHiglightFrame.insetBy(dx: -2.0, dy: -3.0)
             
+            let isNameButtonEnabled = strongSelf.selectionNode == nil
+            nameButtonNode.isEnabled = isNameButtonEnabled
+            if let authorNameString = authorNameString {
+                let nameAccessibility = ChatMessageBubbleItemNodeVoiceOver.resolveAuthorNameButton(
+                    strings: item.presentationData.strings,
+                    title: authorNameString,
+                    isEnabled: isNameButtonEnabled
+                )
+                nameButtonNode.isAccessibilityElement = true
+                nameButtonNode.accessibilityLabel = nameAccessibility.label
+                nameButtonNode.accessibilityHint = nameAccessibility.hint
+                nameButtonNode.accessibilityTraits = nameAccessibility.traits
+            } else {
+                nameButtonNode.isAccessibilityElement = false
+                nameButtonNode.accessibilityLabel = nil
+                nameButtonNode.accessibilityHint = nil
+                nameButtonNode.accessibilityTraits = []
+            }
+            nameHighlightNode.isAccessibilityElement = false
+            
             let nameColor = authorNameColor ?? item.presentationData.theme.theme.chat.message.outgoing.accentTextColor
             if themeUpdated {
                 nameHighlightNode.image = generateFilledRoundedRectImage(size: CGSize(width: 8.0, height: 8.0), cornerRadius: 4.0, color: nameColor.withAlphaComponent(0.1))?.stretchableImage(withLeftCapWidth: 4, topCapHeight: 4)
