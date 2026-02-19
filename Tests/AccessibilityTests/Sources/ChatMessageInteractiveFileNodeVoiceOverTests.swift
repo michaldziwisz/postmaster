@@ -63,6 +63,27 @@ final class ChatMessageInteractiveFileNodeVoiceOverTests: XCTestCase {
         XCTAssertTrue(resolved.traits.contains(.button))
     }
     
+    func testResolveOpenButtonUsesOpenLabel() {
+        let resolved = ChatMessageInteractiveFileNodeVoiceOver.resolveOpenButton(
+            strings: defaultPresentationStrings,
+            isEnabled: true
+        )
+        
+        XCTAssertEqual(resolved.label, defaultPresentationStrings.Conversation_LinkDialogOpen)
+        XCTAssertTrue(resolved.traits.contains(.button))
+        XCTAssertFalse(resolved.traits.contains(.startsMediaSession))
+        XCTAssertFalse(resolved.traits.contains(.notEnabled))
+    }
+    
+    func testResolveOpenButtonDisabledAddsNotEnabledTrait() {
+        let resolved = ChatMessageInteractiveFileNodeVoiceOver.resolveOpenButton(
+            strings: defaultPresentationStrings,
+            isEnabled: false
+        )
+        
+        XCTAssertTrue(resolved.traits.contains(.notEnabled))
+    }
+    
     func testResolveWaveformIsAdjustable() {
         let resolved = ChatMessageInteractiveFileNodeVoiceOver.resolveWaveform(
             label: "Timeline",
@@ -77,4 +98,3 @@ final class ChatMessageInteractiveFileNodeVoiceOverTests: XCTestCase {
         XCTAssertTrue(resolved.traits.contains(.adjustable))
     }
 }
-

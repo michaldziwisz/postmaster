@@ -1687,15 +1687,16 @@ public final class ChatMessageInteractiveFileNode: ASDisplayNode {
         strings: PresentationStrings,
         message: Message,
         resourceStatus: FileMediaResourceStatus,
+        isAudio: Bool,
         isVoice: Bool,
         isViewOnceMessage: Bool,
         audioDuration: Int32?,
         isSelecting: Bool,
         progressFrame: CGRect
     ) {
-        let shouldExposeControls = isVoice && !isSelecting
+        let shouldExposePlaybackControl = !isSelecting
         
-        if !shouldExposeControls {
+        if !shouldExposePlaybackControl {
             self.isPlaybackAccessibilityEnabled = false
             self.playbackAccessibilityArea.isAccessibilityElement = false
             self.playbackAccessibilityArea.accessibilityLabel = nil
@@ -1731,11 +1732,18 @@ public final class ChatMessageInteractiveFileNode: ASDisplayNode {
             
             switch fetchStatus {
             case .Local:
-                playbackResolved = ChatMessageInteractiveFileNodeVoiceOver.resolvePlaybackButton(
-                    strings: strings,
-                    isPlaying: false,
-                    isEnabled: true
-                )
+                if isAudio {
+                    playbackResolved = ChatMessageInteractiveFileNodeVoiceOver.resolvePlaybackButton(
+                        strings: strings,
+                        isPlaying: false,
+                        isEnabled: true
+                    )
+                } else {
+                    playbackResolved = ChatMessageInteractiveFileNodeVoiceOver.resolveOpenButton(
+                        strings: strings,
+                        isEnabled: true
+                    )
+                }
             default:
                 let isFetching: Bool
                 if case .Fetching = fetchStatus {
@@ -1751,14 +1759,28 @@ public final class ChatMessageInteractiveFileNode: ASDisplayNode {
             }
         }
         
-        self.isPlaybackAccessibilityEnabled = true
+        self.isPlaybackAccessibilityEnabled = !playbackResolved.traits.contains(.notEnabled)
         self.playbackAccessibilityArea.isAccessibilityElement = true
         self.playbackAccessibilityArea.accessibilityLabel = playbackResolved.label
         self.playbackAccessibilityArea.accessibilityValue = playbackResolved.value
         self.playbackAccessibilityArea.accessibilityHint = playbackResolved.hint
         self.playbackAccessibilityArea.accessibilityTraits = playbackResolved.traits
         
-        self.voiceOverFallbackDuration = audioDuration.flatMap(Double.init)
+        if isVoice {
+            self.voiceOverFallbackDuration = audioDuration.flatMap(Double.init)
+        } else {
+            self.voiceOverFallbackDuration = nil
+        }
+        
+        guard isVoice else {
+            self.isWaveformAccessibilityEnabled = false
+            self.waveformAccessibilityArea.isAccessibilityElement = false
+            self.waveformAccessibilityArea.accessibilityLabel = nil
+            self.waveformAccessibilityArea.accessibilityValue = nil
+            self.waveformAccessibilityArea.accessibilityHint = nil
+            self.waveformAccessibilityArea.accessibilityTraits = []
+            return
+        }
         
         guard let waveformFrame = self.voiceOverWaveformFrame else {
             self.isWaveformAccessibilityEnabled = false
@@ -2215,6 +2237,7 @@ public final class ChatMessageInteractiveFileNode: ASDisplayNode {
             strings: presentationData.strings,
             message: message,
             resourceStatus: resourceStatus,
+            isAudio: isAudio,
             isVoice: isVoice,
             isViewOnceMessage: isViewOnceMessage,
             audioDuration: audioDuration,

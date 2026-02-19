@@ -30,6 +30,19 @@ public enum ChatMessageInteractiveFileNodeVoiceOver {
         )
     }
     
+    public static func resolveOpenButton(strings: PresentationStrings, isEnabled: Bool) -> Resolved {
+        var traits: UIAccessibilityTraits = [.button]
+        if !isEnabled {
+            traits.insert(.notEnabled)
+        }
+        return Resolved(
+            label: strings.Conversation_LinkDialogOpen,
+            value: nil,
+            hint: nil,
+            traits: traits
+        )
+    }
+    
     public static func resolveDownloadButton(strings: PresentationStrings, isFetching: Bool, isEnabled: Bool) -> Resolved {
         var traits: UIAccessibilityTraits = [.button]
         if !isEnabled {
