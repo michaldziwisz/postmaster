@@ -9,7 +9,8 @@ final class EmojiSearchHeaderVoiceOverTests: XCTestCase {
             placeholder: "Search Emoji",
             canFocus: true,
             isTextInputActive: true,
-            selectedCategoryTitle: nil,
+            selectedCategory: nil,
+            categories: [],
             strings: defaultPresentationStrings
         )
         
@@ -25,7 +26,8 @@ final class EmojiSearchHeaderVoiceOverTests: XCTestCase {
             placeholder: "Search Emoji",
             canFocus: true,
             isTextInputActive: false,
-            selectedCategoryTitle: nil,
+            selectedCategory: nil,
+            categories: [],
             strings: defaultPresentationStrings
         )
         
@@ -42,7 +44,11 @@ final class EmojiSearchHeaderVoiceOverTests: XCTestCase {
             placeholder: "Search Emoji",
             canFocus: true,
             isTextInputActive: false,
-            selectedCategoryTitle: "Smileys & People",
+            selectedCategory: EmojiSearchHeaderVoiceOver.Category(id: 1, title: "Smileys & People"),
+            categories: [
+                EmojiSearchHeaderVoiceOver.Category(id: 1, title: "Smileys & People"),
+                EmojiSearchHeaderVoiceOver.Category(id: 2, title: "Animals & Nature")
+            ],
             strings: defaultPresentationStrings
         )
         
@@ -51,6 +57,14 @@ final class EmojiSearchHeaderVoiceOverTests: XCTestCase {
             EmojiSearchHeaderVoiceOver.CustomAction(
                 kind: .clearCategory,
                 name: defaultPresentationStrings.VoiceOver_EmojiSearch_ClearCategory
+            ),
+            EmojiSearchHeaderVoiceOver.CustomAction(
+                kind: .selectCategory(id: 1),
+                name: "Smileys & People"
+            ),
+            EmojiSearchHeaderVoiceOver.CustomAction(
+                kind: .selectCategory(id: 2),
+                name: "Animals & Nature"
             )
         ])
     }
@@ -60,11 +74,11 @@ final class EmojiSearchHeaderVoiceOverTests: XCTestCase {
             placeholder: "Search Emoji",
             canFocus: false,
             isTextInputActive: false,
-            selectedCategoryTitle: nil,
+            selectedCategory: nil,
+            categories: [],
             strings: defaultPresentationStrings
         )
         
         XCTAssertTrue(resolved.traits.contains(.notEnabled))
     }
 }
-

@@ -415,6 +415,42 @@ final class EmojiSearchSearchBarComponent: Component {
                 }
             }
         }
+
+        func selectCategory(id: Int64, dispatchEvent: Bool) {
+            guard let component = self.component, let itemLayout = self.itemLayout, let categories = component.categories else {
+                return
+            }
+            guard let index = categories.groups.firstIndex(where: { $0.id == id }) else {
+                return
+            }
+            
+            if self.selectedItem == AnyHashable(id) {
+                self.clearSelection(dispatchEvent: dispatchEvent)
+                return
+            }
+            
+            self.selectedItem = AnyHashable(id)
+            self.componentState?.updated(transition: .easeInOut(duration: 0.2))
+            
+            let group = categories.groups[index]
+            if dispatchEvent {
+                component.searchTermUpdated(group)
+            }
+            
+            var offset = self.scrollView.contentOffset.x
+            let maxDistance: CGFloat = 44.0
+            let itemFrame = itemLayout.frame(at: index)
+            if itemFrame.maxX - offset > self.scrollView.bounds.width - maxDistance {
+                offset = itemFrame.maxX - (self.scrollView.bounds.width - maxDistance)
+            }
+            if itemFrame.minX - offset < maxDistance {
+                offset = itemFrame.minX - maxDistance
+            }
+            offset = max(0.0, min(offset, self.scrollView.contentSize.width - self.scrollView.bounds.width))
+            if offset != self.scrollView.contentOffset.x {
+                self.scrollView.setContentOffset(CGPoint(x: offset, y: 0.0), animated: true)
+            }
+        }
         
         func scrollViewDidScroll(_ scrollView: UIScrollView) {
             if !self.ignoreScrolling {

@@ -13,6 +13,15 @@ public final class EmojiSearchHeaderView: UIView, UITextFieldDelegate {
             return bounds.integral
         }
     }
+
+    private final class EmojiSearchHeaderCategoryAccessibilityCustomAction: UIAccessibilityCustomAction {
+        let categoryId: Int64
+
+        init(name: String, categoryId: Int64, target: Any?, selector: Selector) {
+            self.categoryId = categoryId
+            super.init(name: name, target: target, selector: selector)
+        }
+    }
     
     private struct Params: Equatable {
         var context: AccountContext
@@ -312,6 +321,27 @@ public final class EmojiSearchHeaderView: UIView, UITextFieldDelegate {
             return false
         }
         self.clearCategorySearch()
+        return true
+    }
+
+    @objc private func performSelectCategoryAccessibilityCustomAction(_ action: UIAccessibilityCustomAction) -> Bool {
+        guard let action = action as? EmojiSearchHeaderCategoryAccessibilityCustomAction else {
+            return false
+        }
+        if self.currentPresetSearchTerm?.id == action.categoryId {
+            self.clearCategorySearch()
+            return true
+        }
+        guard let params = self.params, let searchCategories = params.searchCategories else {
+            return false
+        }
+        guard let _ = searchCategories.groups.first(where: { $0.id == action.categoryId }) else {
+            return false
+        }
+        guard let placeholderContentView = self.placeholderContent.view as? EmojiSearchSearchBarComponent.View else {
+            return false
+        }
+        placeholderContentView.selectCategory(id: action.categoryId, dispatchEvent: true)
         return true
     }
     
@@ -650,15 +680,29 @@ public final class EmojiSearchHeaderView: UIView, UITextFieldDelegate {
         }
         let _ = hasText
 
-        self.updateVoiceOver(placeholder: text, canFocus: canFocus, isActiveWithText: isActiveWithText, strings: strings)
+        let categoryActions: [EmojiSearchHeaderVoiceOver.Category] = (searchCategories?.groups ?? []).map { group in
+            return EmojiSearchHeaderVoiceOver.Category(id: group.id, title: group.title)
+        }
+        let selectedCategory: EmojiSearchHeaderVoiceOver.Category? = self.currentPresetSearchTerm.flatMap { group in
+            return EmojiSearchHeaderVoiceOver.Category(id: group.id, title: group.title)
+        }
+        self.updateVoiceOver(
+            placeholder: text,
+            canFocus: canFocus,
+            isActiveWithText: isActiveWithText,
+            selectedCategory: selectedCategory,
+            categories: categoryActions,
+            strings: strings
+        )
     }
 
-    private func updateVoiceOver(placeholder: String, canFocus: Bool, isActiveWithText: Bool, strings: PresentationStrings) {
+    private func updateVoiceOver(placeholder: String, canFocus: Bool, isActiveWithText: Bool, selectedCategory: EmojiSearchHeaderVoiceOver.Category?, categories: [EmojiSearchHeaderVoiceOver.Category], strings: PresentationStrings) {
         let resolved = EmojiSearchHeaderVoiceOver.resolve(
             placeholder: placeholder,
             canFocus: canFocus,
             isTextInputActive: self.textField != nil,
-            selectedCategoryTitle: self.currentPresetSearchTerm?.title,
+            selectedCategory: selectedCategory,
+            categories: categories,
             strings: strings
         )
         self.isAccessibilityElement = resolved.isAccessibilityElement
@@ -673,6 +717,8 @@ public final class EmojiSearchHeaderView: UIView, UITextFieldDelegate {
                 switch action.kind {
                 case .clearCategory:
                     return UIAccessibilityCustomAction(name: action.name, target: self, selector: #selector(self.performClearCategoryAccessibilityCustomAction(_:)))
+                case let .selectCategory(id):
+                    return EmojiSearchHeaderCategoryAccessibilityCustomAction(name: action.name, categoryId: id, target: self, selector: #selector(self.performSelectCategoryAccessibilityCustomAction(_:)))
                 }
             }
         }
