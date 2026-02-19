@@ -591,6 +591,15 @@ public final class EntityKeyboardComponent: Component {
                                     "collectible": ""
                                 ]
                                 if let icon = iconMapping[id], let title = titleMapping[id] {
+                                    let accessibilityLabel: String?
+                                    switch id {
+                                    case "liked":
+                                        accessibilityLabel = component.strings.VoiceOver_EmojiInput_Liked
+                                    case "collectible":
+                                        accessibilityLabel = component.strings.VoiceOver_EmojiInput_Collectibles
+                                    default:
+                                        accessibilityLabel = nil
+                                    }
                                     topEmojiItems.append(EntityKeyboardTopPanelComponent.Item(
                                         id: itemGroup.supergroupId,
                                         isReorderable: false,
@@ -600,6 +609,7 @@ public final class EntityKeyboardComponent: Component {
                                             useAccentColor: false,
                                             customTintColor: component.customTintColor,
                                             title: title,
+                                            accessibilityLabel: accessibilityLabel,
                                             pressed: { [weak self] in
                                                 self?.scrollToItemGroup(contentId: "emoji", groupId: itemGroup.supergroupId, subgroupId: nil)
                                             }
@@ -612,6 +622,7 @@ public final class EntityKeyboardComponent: Component {
                                     isReorderable: false,
                                     content: AnyComponent(EntityKeyboardStaticStickersPanelComponent(
                                         theme: component.theme,
+                                        strings: component.strings,
                                         title: component.strings.EmojiInput_PanelTitleEmoji,
                                         pressed: { [weak self] subgroupId in
                                             guard let strongSelf = self else {

@@ -90,6 +90,7 @@ final class EntityKeyboardAnimationTopPanelComponent: Component {
         var placeholderView: EmojiPagerContentComponent.View.ItemPlaceholderView?
         var component: EntityKeyboardAnimationTopPanelComponent?
         var titleView: ComponentView<Empty>?
+        private var accessibilityAction: (() -> Void)?
         
         override init(frame: CGRect) {
             super.init(frame: frame)
@@ -99,6 +100,14 @@ final class EntityKeyboardAnimationTopPanelComponent: Component {
         
         required init?(coder: NSCoder) {
             fatalError("init(coder:) has not been implemented")
+        }
+        
+        override func accessibilityActivate() -> Bool {
+            guard let accessibilityAction = self.accessibilityAction else {
+                return false
+            }
+            accessibilityAction()
+            return true
         }
         
         @objc private func tapGesture(_ recognizer: UITapGestureRecognizer) {
@@ -111,6 +120,18 @@ final class EntityKeyboardAnimationTopPanelComponent: Component {
             self.component = component
             
             let itemEnvironment = environment[EntityKeyboardTopPanelItemEnvironment.self].value
+            
+            self.isAccessibilityElement = true
+            let trimmedTitle = component.title.trimmingCharacters(in: .whitespacesAndNewlines)
+            let voiceOver = EntityKeyboardTopPanelVoiceOver.resolveItem(
+                label: trimmedTitle.isEmpty ? component.title : trimmedTitle,
+                isSelected: itemEnvironment.isHighlighted
+            )
+            self.accessibilityLabel = voiceOver.label
+            self.accessibilityHint = voiceOver.hint
+            self.accessibilityTraits = voiceOver.traits
+            self.accessibilityValue = nil
+            self.accessibilityAction = component.pressed
             
             let dimensions: CGSize = component.item.dimensions
             let displaySize = dimensions.aspectFitted(CGSize(width: 44.0, height: 44.0))
@@ -286,6 +307,7 @@ final class EntityKeyboardIconTopPanelComponent: Component {
     let useAccentColor: Bool
     let customTintColor: UIColor?
     let title: String
+    let accessibilityLabel: String?
     let pressed: () -> Void
     
     init(
@@ -294,6 +316,7 @@ final class EntityKeyboardIconTopPanelComponent: Component {
         useAccentColor: Bool,
         customTintColor: UIColor?,
         title: String,
+        accessibilityLabel: String? = nil,
         pressed: @escaping () -> Void
     ) {
         self.icon = icon
@@ -301,6 +324,7 @@ final class EntityKeyboardIconTopPanelComponent: Component {
         self.useAccentColor = useAccentColor
         self.customTintColor = customTintColor
         self.title = title
+        self.accessibilityLabel = accessibilityLabel
         self.pressed = pressed
     }
     
@@ -320,6 +344,9 @@ final class EntityKeyboardIconTopPanelComponent: Component {
         if lhs.title != rhs.title {
             return false
         }
+        if lhs.accessibilityLabel != rhs.accessibilityLabel {
+            return false
+        }
         
         return true
     }
@@ -330,6 +357,7 @@ final class EntityKeyboardIconTopPanelComponent: Component {
         
         var component: EntityKeyboardIconTopPanelComponent?
         var titleView: ComponentView<Empty>?
+        private var accessibilityAction: (() -> Void)?
         
         override init(frame: CGRect) {
             self.tintMaskView = UIView()
@@ -345,6 +373,14 @@ final class EntityKeyboardIconTopPanelComponent: Component {
         
         required init?(coder: NSCoder) {
             fatalError("init(coder:) has not been implemented")
+        }
+        
+        override func accessibilityActivate() -> Bool {
+            guard let accessibilityAction = self.accessibilityAction else {
+                return false
+            }
+            accessibilityAction()
+            return true
         }
         
         @objc private func tapGesture(_ recognizer: UITapGestureRecognizer) {
@@ -396,8 +432,20 @@ final class EntityKeyboardIconTopPanelComponent: Component {
                 
                 self.iconView.image = image
             }
-                
+            
             self.component = component
+            
+            self.isAccessibilityElement = true
+            let labelCandidate = (component.accessibilityLabel ?? component.title).trimmingCharacters(in: .whitespacesAndNewlines)
+            let voiceOver = EntityKeyboardTopPanelVoiceOver.resolveItem(
+                label: labelCandidate.isEmpty ? component.title : labelCandidate,
+                isSelected: itemEnvironment.isHighlighted
+            )
+            self.accessibilityLabel = voiceOver.label
+            self.accessibilityHint = voiceOver.hint
+            self.accessibilityTraits = voiceOver.traits
+            self.accessibilityValue = nil
+            self.accessibilityAction = component.pressed
             
             let color: UIColor
             if let customTintColor = component.customTintColor {
@@ -528,6 +576,7 @@ final class EntityKeyboardAvatarTopPanelComponent: Component {
         let avatarNode: AvatarNode
         var component: EntityKeyboardAvatarTopPanelComponent?
         var titleView: ComponentView<Empty>?
+        private var accessibilityAction: (() -> Void)?
         
         override init(frame: CGRect) {
             self.avatarNode = AvatarNode(font: avatarPlaceholderFont(size: 14.0))
@@ -543,6 +592,14 @@ final class EntityKeyboardAvatarTopPanelComponent: Component {
             fatalError("init(coder:) has not been implemented")
         }
         
+        override func accessibilityActivate() -> Bool {
+            guard let accessibilityAction = self.accessibilityAction else {
+                return false
+            }
+            accessibilityAction()
+            return true
+        }
+        
         @objc private func tapGesture(_ recognizer: UITapGestureRecognizer) {
             if case .ended = recognizer.state {
                 self.component?.pressed()
@@ -554,6 +611,18 @@ final class EntityKeyboardAvatarTopPanelComponent: Component {
             
             self.avatarNode.setPeer(context: component.context, theme: component.theme, peer: component.peer)
             self.component = component
+            
+            self.isAccessibilityElement = true
+            let trimmedTitle = component.title.trimmingCharacters(in: .whitespacesAndNewlines)
+            let voiceOver = EntityKeyboardTopPanelVoiceOver.resolveItem(
+                label: trimmedTitle.isEmpty ? component.title : trimmedTitle,
+                isSelected: itemEnvironment.isHighlighted
+            )
+            self.accessibilityLabel = voiceOver.label
+            self.accessibilityHint = voiceOver.hint
+            self.accessibilityTraits = voiceOver.traits
+            self.accessibilityValue = nil
+            self.accessibilityAction = component.pressed
             
             let nativeIconSize: CGSize = itemEnvironment.isExpanded ? CGSize(width: 44.0, height: 44.0) : CGSize(width: 24.0, height: 24.0)
             let boundingIconSize: CGSize = itemEnvironment.isExpanded ? CGSize(width: 38.0, height: 38.0) : CGSize(width: 24.0, height: 24.0)
@@ -619,21 +688,27 @@ final class EntityKeyboardStaticStickersPanelComponent: Component {
     typealias EnvironmentType = EntityKeyboardTopPanelItemEnvironment
     
     let theme: PresentationTheme
+    let strings: PresentationStrings
     let title: String
     let pressed: (EmojiPagerContentComponent.StaticEmojiSegment) -> Void
     
     init(
         theme: PresentationTheme,
+        strings: PresentationStrings,
         title: String,
         pressed: @escaping (EmojiPagerContentComponent.StaticEmojiSegment) -> Void
     ) {
         self.theme = theme
+        self.strings = strings
         self.title = title
         self.pressed = pressed
     }
     
     static func ==(lhs: EntityKeyboardStaticStickersPanelComponent, rhs: EntityKeyboardStaticStickersPanelComponent) -> Bool {
         if lhs.theme !== rhs.theme {
+            return false
+        }
+        if lhs.strings !== rhs.strings {
             return false
         }
         if lhs.title != rhs.title {
@@ -674,9 +749,28 @@ final class EntityKeyboardStaticStickersPanelComponent: Component {
             }
         }
         
+        private final class SegmentAccessibilityElement: UIAccessibilityElement {
+            let segment: EmojiPagerContentComponent.StaticEmojiSegment
+            var activateAction: (() -> Void)?
+            
+            init(container: Any, segment: EmojiPagerContentComponent.StaticEmojiSegment) {
+                self.segment = segment
+                super.init(accessibilityContainer: container)
+            }
+            
+            override func accessibilityActivate() -> Bool {
+                guard let activateAction = self.activateAction else {
+                    return false
+                }
+                activateAction()
+                return true
+            }
+        }
+        
         private let scrollViewContainer: UIView
         private let scrollView: UIScrollView
         private var visibleItemViews: [EmojiPagerContentComponent.StaticEmojiSegment: ComponentView<Empty>] = [:]
+        private var segmentAccessibilityElements: [SegmentAccessibilityElement] = []
         
         private var titleView: ComponentView<Empty>?
         
@@ -752,6 +846,48 @@ final class EntityKeyboardStaticStickersPanelComponent: Component {
                 return
             }
             self.updateVisibleItems(transition: .immediate, animateAppearingItems: true)
+            self.updateAccessibilityElements()
+        }
+        
+        private func updateAccessibilityElements() {
+            guard let component = self.component, let itemEnvironment = self.itemEnvironment, let itemLayout = self.itemLayout else {
+                self.accessibilityElements = nil
+                self.segmentAccessibilityElements.removeAll()
+                return
+            }
+            
+            self.isAccessibilityElement = false
+            
+            let segments = EmojiPagerContentComponent.StaticEmojiSegment.allCases
+            if self.segmentAccessibilityElements.count != segments.count {
+                self.segmentAccessibilityElements = segments.map { segment in
+                    SegmentAccessibilityElement(container: self, segment: segment)
+                }
+            }
+            
+            for i in 0 ..< segments.count {
+                let segment = segments[i]
+                let element = self.segmentAccessibilityElements[i]
+                
+                let isSelected = itemEnvironment.highlightedSubgroupId == AnyHashable(segment.rawValue)
+                let voiceOver = EntityKeyboardTopPanelVoiceOver.resolveStaticEmojiSegment(
+                    strings: component.strings,
+                    segment: segment,
+                    isSelected: isSelected
+                )
+                
+                element.accessibilityLabel = voiceOver.label
+                element.accessibilityHint = voiceOver.hint
+                element.accessibilityTraits = voiceOver.traits
+                
+                element.activateAction = { [weak self] in
+                    self?.component?.pressed(segment)
+                }
+                
+                element.accessibilityFrameInContainerSpace = self.scrollView.convert(itemLayout.frame(at: i), to: self)
+            }
+            
+            self.accessibilityElements = self.segmentAccessibilityElements
         }
         
         private func updateVisibleItems(transition: ComponentTransition, animateAppearingItems: Bool) {
@@ -885,6 +1021,7 @@ final class EntityKeyboardStaticStickersPanelComponent: Component {
             self.ignoreScrolling = false
             
             self.updateVisibleItems(transition: transition, animateAppearingItems: false)
+            self.updateAccessibilityElements()
             
             if (!itemEnvironment.isHighlighted || itemLayout.isExpanded) && self.scrollView.contentOffset.x != 0.0 {
                 self.scrollView.setContentOffset(CGPoint(), animated: true)
