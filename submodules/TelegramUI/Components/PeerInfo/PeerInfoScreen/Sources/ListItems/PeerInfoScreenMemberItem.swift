@@ -59,6 +59,7 @@ private final class PeerInfoScreenMemberItemNode: PeerInfoScreenItemNode {
     private let selectionNode: PeerInfoScreenSelectableBackgroundNode
     private let maskNode: ASImageNode
     private let bottomSeparatorNode: ASDisplayNode
+    private let activateArea: AccessibilityAreaNode
     
     private var item: PeerInfoScreenMemberItem?
     private var itemNode: ItemListPeerItemNode?
@@ -74,6 +75,8 @@ private final class PeerInfoScreenMemberItemNode: PeerInfoScreenItemNode {
         self.bottomSeparatorNode = ASDisplayNode()
         self.bottomSeparatorNode.isLayerBacked = true
         
+        self.activateArea = AccessibilityAreaNode()
+        
         super.init()
         
         bringToFrontForHighlightImpl = { [weak self] in
@@ -82,6 +85,15 @@ private final class PeerInfoScreenMemberItemNode: PeerInfoScreenItemNode {
         
         self.addSubnode(self.bottomSeparatorNode)
         self.addSubnode(self.selectionNode)
+        self.addSubnode(self.activateArea)
+        
+        self.activateArea.activate = { [weak self] in
+            guard let self, let item = self.item, let action = item.action else {
+                return false
+            }
+            action(.open)
+            return true
+        }
     }
     
     override func didLoad() {
@@ -264,6 +276,20 @@ private final class PeerInfoScreenMemberItemNode: PeerInfoScreenItemNode {
         
         transition.updateFrame(node: self.bottomSeparatorNode, frame: CGRect(origin: CGPoint(x: separatorInset, y: height - UIScreenPixel), size: CGSize(width: width - separatorInset - separatorRightInset, height: UIScreenPixel)))
         transition.updateAlpha(node: self.bottomSeparatorNode, alpha: bottomItem == nil ? 0.0 : 1.0)
+        
+        self.activateArea.frame = CGRect(origin: CGPoint(), size: CGSize(width: width, height: height))
+        if let itemNode = self.itemNode {
+            itemNode.isAccessibilityElement = false
+            itemNode.accessibilityElementsHidden = true
+            
+            let isEnabled = item.action != nil
+            let title = itemNode.accessibilityLabel ?? EnginePeer(item.member.peer).compactDisplayTitle
+            let resolved = PeerInfoScreenMemberItemVoiceOver.resolve(strings: presentationData.strings, title: title, value: itemNode.accessibilityValue, isEnabled: isEnabled)
+            self.activateArea.accessibilityLabel = resolved.label
+            self.activateArea.accessibilityValue = resolved.value
+            self.activateArea.accessibilityHint = resolved.hint
+            self.activateArea.accessibilityTraits = resolved.traits
+        }
         
         return height
     }
