@@ -258,11 +258,9 @@ public class NotificationsCategoryItemListItemNode: ListViewItemNode, ItemListIt
                     strongSelf.activateArea.frame = CGRect(origin: CGPoint(x: params.leftInset, y: 0.0), size: CGSize(width: params.width - params.leftInset - params.rightInset, height: layout.contentSize.height))
                     strongSelf.activateArea.accessibilityLabel = item.title
                     strongSelf.activateArea.accessibilityValue = item.label
-                    if item.enabled {
-                        strongSelf.activateArea.accessibilityTraits = []
-                    } else {
-                        strongSelf.activateArea.accessibilityTraits = .notEnabled
-                    }
+                    let resolved = ItemListRowVoiceOver.resolve(strings: item.presentationData.strings, kind: .open, isEnabled: item.enabled)
+                    strongSelf.activateArea.accessibilityHint = resolved.hint
+                    strongSelf.activateArea.accessibilityTraits = resolved.traits
                     
                     if let icon = item.icon {
                         if strongSelf.iconNode.supernode == nil {

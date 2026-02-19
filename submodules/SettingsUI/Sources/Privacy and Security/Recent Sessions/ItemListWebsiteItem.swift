@@ -318,11 +318,9 @@ class ItemListWebsiteItemNode: ItemListRevealOptionsItemNode {
                     }
                     strongSelf.activateArea.accessibilityValue = value
                     
-                    if item.enabled {
-                        strongSelf.activateArea.accessibilityTraits = []
-                    } else {
-                        strongSelf.activateArea.accessibilityTraits = .notEnabled
-                    }
+                    let resolved = ItemListRowVoiceOver.resolve(strings: item.presentationData.strings, kind: .open, isEnabled: item.enabled)
+                    strongSelf.activateArea.accessibilityHint = resolved.hint
+                    strongSelf.activateArea.accessibilityTraits = resolved.traits
                     
                     if let _ = updatedTheme {
                         strongSelf.topStripeNode.backgroundColor = item.presentationData.theme.list.itemBlocksSeparatorColor
