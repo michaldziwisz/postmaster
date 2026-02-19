@@ -17,14 +17,14 @@ final class NavigationButtonComponentAccessibilityTests: XCTestCase {
         )
         
         let componentView = ComponentView<NavigationButtonComponentEnvironment>()
-        _ = componentView.update(
-            transition: .immediate,
-            component: AnyComponent(component),
-            environment: {
-                NavigationButtonComponentEnvironment(theme: defaultPresentationTheme)
-            },
-            containerSize: CGSize(width: 100.0, height: 44.0)
-        )
+	        _ = componentView.update(
+	            transition: .immediate,
+	            component: AnyComponent(component),
+	            environment: {
+	                NavigationButtonComponentEnvironment(theme: defaultPresentationTheme, strings: defaultPresentationStrings)
+	            },
+	            containerSize: CGSize(width: 100.0, height: 44.0)
+	        )
         
         guard let buttonView = componentView.view as? NavigationButtonComponent.View else {
             XCTFail("Expected NavigationButtonComponent.View")
@@ -52,14 +52,14 @@ final class NavigationButtonComponentAccessibilityTests: XCTestCase {
         )
         
         let componentView = ComponentView<NavigationButtonComponentEnvironment>()
-        _ = componentView.update(
-            transition: .immediate,
-            component: AnyComponent(component),
-            environment: {
-                NavigationButtonComponentEnvironment(theme: defaultPresentationTheme)
-            },
-            containerSize: CGSize(width: 44.0, height: 44.0)
-        )
+	        _ = componentView.update(
+	            transition: .immediate,
+	            component: AnyComponent(component),
+	            environment: {
+	                NavigationButtonComponentEnvironment(theme: defaultPresentationTheme, strings: defaultPresentationStrings)
+	            },
+	            containerSize: CGSize(width: 44.0, height: 44.0)
+	        )
         
         guard let buttonView = componentView.view as? NavigationButtonComponent.View else {
             XCTFail("Expected NavigationButtonComponent.View")
@@ -85,14 +85,14 @@ final class NavigationButtonComponentAccessibilityTests: XCTestCase {
         )
         
         let componentView = ComponentView<NavigationButtonComponentEnvironment>()
-        _ = componentView.update(
-            transition: .immediate,
-            component: AnyComponent(component),
-            environment: {
-                NavigationButtonComponentEnvironment(theme: defaultPresentationTheme)
-            },
-            containerSize: CGSize(width: 44.0, height: 44.0)
-        )
+	        _ = componentView.update(
+	            transition: .immediate,
+	            component: AnyComponent(component),
+	            environment: {
+	                NavigationButtonComponentEnvironment(theme: defaultPresentationTheme, strings: defaultPresentationStrings)
+	            },
+	            containerSize: CGSize(width: 44.0, height: 44.0)
+	        )
         
         guard let buttonView = componentView.view as? NavigationButtonComponent.View else {
             XCTFail("Expected NavigationButtonComponent.View")
@@ -118,22 +118,22 @@ final class NavigationButtonComponentAccessibilityTests: XCTestCase {
         )
         
         let componentView = ComponentView<NavigationButtonComponentEnvironment>()
-        _ = componentView.update(
-            transition: .immediate,
-            component: AnyComponent(component),
-            environment: {
-                NavigationButtonComponentEnvironment(theme: defaultPresentationTheme)
-            },
-            containerSize: CGSize(width: 44.0, height: 44.0)
-        )
+	        _ = componentView.update(
+	            transition: .immediate,
+	            component: AnyComponent(component),
+	            environment: {
+	                NavigationButtonComponentEnvironment(theme: defaultPresentationTheme, strings: defaultPresentationStrings)
+	            },
+	            containerSize: CGSize(width: 44.0, height: 44.0)
+	        )
         
         guard let buttonView = componentView.view as? NavigationButtonComponent.View else {
             XCTFail("Expected NavigationButtonComponent.View")
             return
         }
         
-        XCTAssertTrue(buttonView.isAccessibilityElement)
-        XCTAssertEqual(buttonView.accessibilityLabel, "Proxy")
+	        XCTAssertTrue(buttonView.isAccessibilityElement)
+	        XCTAssertEqual(buttonView.accessibilityLabel, defaultPresentationStrings.VoiceOver_Navigation_ProxySettings)
         
         XCTAssertTrue(buttonView.accessibilityActivate())
         XCTAssertTrue(didPress)
@@ -152,11 +152,44 @@ final class NavigationButtonComponentAccessibilityTests: XCTestCase {
         )
         
         let componentView = ComponentView<NavigationButtonComponentEnvironment>()
+	        _ = componentView.update(
+	            transition: .immediate,
+	            component: AnyComponent(component),
+	            environment: {
+	                NavigationButtonComponentEnvironment(theme: defaultPresentationTheme, strings: defaultPresentationStrings)
+	            },
+	            containerSize: CGSize(width: 44.0, height: 44.0)
+	        )
+        
+        guard let buttonView = componentView.view as? NavigationButtonComponent.View else {
+            XCTFail("Expected NavigationButtonComponent.View")
+            return
+        }
+        
+        XCTAssertTrue(buttonView.isAccessibilityElement)
+        XCTAssertEqual(buttonView.accessibilityLabel, defaultPresentationStrings.Common_More)
+        
+        XCTAssertTrue(buttonView.accessibilityActivate())
+        XCTAssertTrue(didPress)
+    }
+    
+    func testMoreButtonHasFallbackAccessibilityLabelWhenNotProvided() {
+        XCTAssertTrue(Thread.isMainThread)
+        
+        var didPress = false
+        let component = NavigationButtonComponent(
+            content: .more,
+            pressed: { _ in
+                didPress = true
+            }
+        )
+        
+        let componentView = ComponentView<NavigationButtonComponentEnvironment>()
         _ = componentView.update(
             transition: .immediate,
             component: AnyComponent(component),
             environment: {
-                NavigationButtonComponentEnvironment(theme: defaultPresentationTheme)
+                NavigationButtonComponentEnvironment(theme: defaultPresentationTheme, strings: defaultPresentationStrings)
             },
             containerSize: CGSize(width: 44.0, height: 44.0)
         )

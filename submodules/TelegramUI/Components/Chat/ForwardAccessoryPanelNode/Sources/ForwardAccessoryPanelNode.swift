@@ -346,14 +346,7 @@ public final class ForwardAccessoryPanelNode: AccessoryPanelNode {
         self.textNode.attributedText = text
         self.originalText = text
         self.textNode.visibility = true
-        
-        let headerString: String
-        if messages.count == 1 {
-            headerString = "Forward message"
-        } else {
-            headerString = "Forward messages"
-        }
-        self.actionArea.accessibilityLabel = "\(headerString). From: \(authors).\n\(text)"
+        self.actionArea.accessibilityLabel = "\(title).\n\(text.string)"
         
         let titleSize = self.titleNode.updateLayout(CGSize(width: bounds.size.width - leftInset - textLineInset - rightInset - textRightInset, height: bounds.size.height))
         self.titleNode.frame = CGRect(origin: CGPoint(x: leftInset + textLineInset, y: 7.0), size: titleSize)

@@ -509,14 +509,14 @@ public final class ChatListHeaderComponent: Component {
                     buttonView = ComponentView<NavigationButtonComponentEnvironment>()
                     self.leftButtonViews[leftButton.id] = buttonView
                 }
-                let buttonSize = buttonView.update(
-                    transition: buttonTransition,
-                    component: leftButton.component,
-                    environment: {
-                        NavigationButtonComponentEnvironment(theme: theme)
-                    },
-                    containerSize: CGSize(width: 100.0, height: size.height)
-                )
+	                let buttonSize = buttonView.update(
+	                    transition: buttonTransition,
+	                    component: leftButton.component,
+	                    environment: {
+	                        NavigationButtonComponentEnvironment(theme: theme, strings: strings)
+	                    },
+	                    containerSize: CGSize(width: 100.0, height: size.height)
+	                )
                 let buttonFrame = CGRect(origin: CGPoint(x: nextLeftButtonX, y: floor((size.height - buttonSize.height) / 2.0)), size: buttonSize)
                 if let buttonComponentView = buttonView.view {
                     if buttonComponentView.superview == nil {
@@ -566,14 +566,14 @@ public final class ChatListHeaderComponent: Component {
                     buttonView = ComponentView<NavigationButtonComponentEnvironment>()
                     self.rightButtonViews[rightButton.id] = buttonView
                 }
-                let buttonSize = buttonView.update(
-                    transition: buttonTransition,
-                    component: rightButton.component,
-                    environment: {
-                        NavigationButtonComponentEnvironment(theme: theme)
-                    },
-                    containerSize: CGSize(width: 100.0, height: size.height)
-                )
+	                let buttonSize = buttonView.update(
+	                    transition: buttonTransition,
+	                    component: rightButton.component,
+	                    environment: {
+	                        NavigationButtonComponentEnvironment(theme: theme, strings: strings)
+	                    },
+	                    containerSize: CGSize(width: 100.0, height: size.height)
+	                )
                 let buttonFrame = CGRect(origin: CGPoint(x: nextRightButtonX, y: floor((size.height - buttonSize.height) / 2.0)), size: buttonSize)
                 if let buttonComponentView = buttonView.view {
                     if buttonComponentView.superview == nil {

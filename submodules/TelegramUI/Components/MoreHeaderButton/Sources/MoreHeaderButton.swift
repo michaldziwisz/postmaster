@@ -22,7 +22,7 @@ public final class MoreHeaderButton: HighlightableButtonNode {
     
     public var onPressed: (() -> Void)?
 
-    public init(color: UIColor) {
+    public init(color: UIColor, accessibilityLabel: String) {
         self.color = color
 
         self.referenceNode = ContextReferenceContentNode()
@@ -36,7 +36,7 @@ public final class MoreHeaderButton: HighlightableButtonNode {
         super.init()
         
         self.isAccessibilityElement = true
-        self.accessibilityLabel = "More"
+        self.accessibilityLabel = accessibilityLabel
         self.accessibilityTraits = [.button]
 
         self.containerNode.addSubnode(self.referenceNode)

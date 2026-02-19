@@ -436,7 +436,7 @@ public final class MessageInputActionButtonComponent: Component {
             }
             
             if case .more = component.mode, self.moreButton == nil {
-                let moreButton = MoreHeaderButton(color: .white)
+                let moreButton = MoreHeaderButton(color: .white, accessibilityLabel: component.strings.Common_More)
                 self.moreButton = moreButton
                 self.addSubnode(moreButton)
                 

@@ -8,13 +8,18 @@ import MoreHeaderButton
 
 public final class NavigationButtonComponentEnvironment: Equatable {
     public let theme: PresentationTheme
+    public let strings: PresentationStrings
     
-    public init(theme: PresentationTheme) {
+    public init(theme: PresentationTheme, strings: PresentationStrings) {
         self.theme = theme
+        self.strings = strings
     }
     
     public static func ==(lhs: NavigationButtonComponentEnvironment, rhs: NavigationButtonComponentEnvironment) -> Bool {
         if lhs.theme != rhs.theme {
+            return false
+        }
+        if lhs.strings !== rhs.strings {
             return false
         }
         return true
@@ -141,6 +146,7 @@ public final class NavigationButtonComponent: Component {
             self.component = component
             
             let theme = environment[NavigationButtonComponentEnvironment.self].value.theme
+            let strings = environment[NavigationButtonComponentEnvironment.self].value.strings
             var themeUpdated = false
             if self.theme !== theme {
                 self.theme = theme
@@ -177,11 +183,11 @@ public final class NavigationButtonComponent: Component {
                 case let .text(title, _):
                     self.accessibilityLabel = title
                 case .more:
-                    self.accessibilityLabel = "More"
+                    self.accessibilityLabel = strings.Common_More
                 case let .icon(imageName):
                     self.accessibilityLabel = Self.defaultAccessibilityLabel(forIconImageName: imageName)
                 case .proxy:
-                    self.accessibilityLabel = "Proxy"
+                    self.accessibilityLabel = strings.VoiceOver_Navigation_ProxySettings
                 }
             }
             
@@ -268,7 +274,7 @@ public final class NavigationButtonComponent: Component {
                         self.moreButton = nil
                     }
                     
-                    moreButton = MoreHeaderButton(color: theme.chat.inputPanel.panelControlColor)
+                    moreButton = MoreHeaderButton(color: theme.chat.inputPanel.panelControlColor, accessibilityLabel: strings.Common_More)
                     moreButton.isUserInteractionEnabled = true
                     moreButton.setContent(.more(MoreHeaderButton.optionsCircleImage(color: theme.chat.inputPanel.panelControlColor)))
                     moreButton.onPressed = { [weak self] in
@@ -289,6 +295,7 @@ public final class NavigationButtonComponent: Component {
                     self.addSubnode(moreButton)
                 }
                 
+                moreButton.accessibilityLabel = strings.Common_More
                 let buttonSize = CGSize(width: 44.0, height: 44.0)
                 size.width = 44.0
                 

@@ -74,20 +74,20 @@ final class MediaPickerGridItem: GridItem {
         self.stories = stories
     }
     
-    func node(layout: GridNodeLayout, synchronousLoad: Bool) -> GridItemNode {
-        switch self.content {
-        case let .asset(fetchResult, index):
-            let node = MediaPickerGridItemNode()
-            node.setup(interaction: self.interaction, fetchResult: fetchResult, index: index, theme: self.theme, selectable: self.selectable, enableAnimations: self.enableAnimations, stories: self.stories)
-            return node
-        case let .media(media, index):
-            let node = MediaPickerGridItemNode()
-            node.setup(interaction: self.interaction, media: media, index: index, theme: self.theme, selectable: self.selectable, enableAnimations: self.enableAnimations, stories: self.stories)
-            return node
-        case let .draft(draft, index):
-            let node = MediaPickerGridItemNode()
-            node.setup(interaction: self.interaction, draft: draft, index: index, theme: self.theme, strings: self.strings, selectable: self.selectable, enableAnimations: self.enableAnimations, stories: self.stories)
-            return node
+	    func node(layout: GridNodeLayout, synchronousLoad: Bool) -> GridItemNode {
+	        switch self.content {
+	        case let .asset(fetchResult, index):
+	            let node = MediaPickerGridItemNode()
+	            node.setup(interaction: self.interaction, fetchResult: fetchResult, index: index, theme: self.theme, strings: self.strings, selectable: self.selectable, enableAnimations: self.enableAnimations, stories: self.stories)
+	            return node
+	        case let .media(media, index):
+	            let node = MediaPickerGridItemNode()
+	            node.setup(interaction: self.interaction, media: media, index: index, theme: self.theme, strings: self.strings, selectable: self.selectable, enableAnimations: self.enableAnimations, stories: self.stories)
+	            return node
+	        case let .draft(draft, index):
+	            let node = MediaPickerGridItemNode()
+	            node.setup(interaction: self.interaction, draft: draft, index: index, theme: self.theme, strings: self.strings, selectable: self.selectable, enableAnimations: self.enableAnimations, stories: self.stories)
+	            return node
         }
     }
     
@@ -96,15 +96,15 @@ final class MediaPickerGridItem: GridItem {
             assertionFailure()
             return
         }
-        switch self.content {
-        case let .asset(fetchResult, index):
-            node.setup(interaction: self.interaction, fetchResult: fetchResult, index: index, theme: self.theme, selectable: self.selectable, enableAnimations: self.enableAnimations, stories: self.stories)
-        case let .media(media, index):
-            node.setup(interaction: self.interaction, media: media, index: index, theme: self.theme, selectable: self.selectable, enableAnimations: self.enableAnimations, stories: self.stories)
-        case let .draft(draft, index):
-            node.setup(interaction: self.interaction, draft: draft, index: index, theme: self.theme, strings: self.strings, selectable: self.selectable, enableAnimations: self.enableAnimations, stories: self.stories)
-        }
-    }
+	        switch self.content {
+	        case let .asset(fetchResult, index):
+	            node.setup(interaction: self.interaction, fetchResult: fetchResult, index: index, theme: self.theme, strings: self.strings, selectable: self.selectable, enableAnimations: self.enableAnimations, stories: self.stories)
+	        case let .media(media, index):
+	            node.setup(interaction: self.interaction, media: media, index: index, theme: self.theme, strings: self.strings, selectable: self.selectable, enableAnimations: self.enableAnimations, stories: self.stories)
+	        case let .draft(draft, index):
+	            node.setup(interaction: self.interaction, draft: draft, index: index, theme: self.theme, strings: self.strings, selectable: self.selectable, enableAnimations: self.enableAnimations, stories: self.stories)
+	        }
+	    }
 }
 
 final class MediaPickerGridItemNode: GridItemNode {
@@ -124,13 +124,18 @@ final class MediaPickerGridItemNode: GridItemNode {
     private let rightShadowNode: ASImageNode
     private let typeIconNode: ASImageNode
     private let durationNode: ImmediateTextNode
-    private let draftNode: ImmediateTextNode
-    private var statusNode: RadialStatusNode?
-    
-    private let activateAreaNode: AccessibilityAreaNode
-    
-    private var interaction: MediaPickerInteraction?
-    private var theme: PresentationTheme?
+	private let draftNode: ImmediateTextNode
+	private var statusNode: RadialStatusNode?
+	    
+	private let activateAreaNode: AccessibilityAreaNode
+	private let selectionActivateAreaNode: AccessibilityAreaNode
+	    
+	private var interaction: MediaPickerInteraction?
+	private var theme: PresentationTheme?
+	private var strings: PresentationStrings?
+	private var voiceOverKind: MediaPickerGridItemVoiceOver.Kind = .photo
+	private var voiceOverCreationDate: Date?
+	private var voiceOverValue: String?
         
     private struct SelectionState: Equatable {
         let selected: Bool
@@ -180,22 +185,30 @@ final class MediaPickerGridItemNode: GridItemNode {
         self.durationNode.isLayerBacked = true
         self.durationNode.textShadowColor = UIColor(white: 0.0, alpha: 0.4)
         self.durationNode.textShadowBlur = 4.0
-        self.draftNode = ImmediateTextNode()
-        
-        self.activateAreaNode = AccessibilityAreaNode()
-        self.activateAreaNode.accessibilityTraits = [.image]
-                        
-        super.init()
-        
-        self.clipsToBounds = true
-        
-        self.addSubnode(self.imageNode)
-        self.addSubnode(self.activateAreaNode)
-        
-        self.imageNode.contentUpdated = { [weak self] image in
-            self?.spoilerNode?.setImage(image)
-        }
-    }
+	        self.draftNode = ImmediateTextNode()
+	        
+	        self.activateAreaNode = AccessibilityAreaNode()
+	        self.activateAreaNode.accessibilityTraits = [.button, .image]
+	        self.selectionActivateAreaNode = AccessibilityAreaNode()
+	        self.selectionActivateAreaNode.isAccessibilityElement = false
+	        self.selectionActivateAreaNode.accessibilityTraits = [.button]
+	                        
+	        super.init()
+	        
+	        self.clipsToBounds = true
+	        
+	        self.addSubnode(self.imageNode)
+	        self.addSubnode(self.activateAreaNode)
+	        self.addSubnode(self.selectionActivateAreaNode)
+	        
+	        self.activateAreaNode.activate = { [weak self] in
+	            return self?.performPrimaryAction() ?? false
+	        }
+	        
+	        self.imageNode.contentUpdated = { [weak self] image in
+	            self?.spoilerNode?.setImage(image)
+	        }
+	    }
     
     deinit {
         self.spoilerDisposable.dispose()
@@ -241,10 +254,10 @@ final class MediaPickerGridItemNode: GridItemNode {
         }
     }
     
-    func updateSelectionState(isFirstTime: Bool = false, animated: Bool = false) {
-        if self.checkNode == nil, let _ = self.interaction?.selectionState, self.selectable, let theme = self.theme {
-            let checkNode = InteractiveCheckNode(theme: CheckNodeTheme(theme: theme, style: .overlay))
-            checkNode.valueChanged = { [weak self] value in
+	    func updateSelectionState(isFirstTime: Bool = false, animated: Bool = false) {
+	        if self.checkNode == nil, let _ = self.interaction?.selectionState, self.selectable, let theme = self.theme {
+	            let checkNode = InteractiveCheckNode(theme: CheckNodeTheme(theme: theme, style: .overlay))
+	            checkNode.valueChanged = { [weak self] value in
                 if let strongSelf = self, let interaction = strongSelf.interaction, let selectableItem = strongSelf.selectableItem {
                     if !interaction.toggleSelection(selectableItem, value, false) {
                         strongSelf.checkNode?.setSelected(false, animated: false)
@@ -271,10 +284,55 @@ final class MediaPickerGridItemNode: GridItemNode {
                     selectionIndex = Int(index)
                 }
             }
-            self.checkNode?.setSelected(selected, animated: animated)
-            self.selectionPromise.set(SelectionState(selected: selected, index: selectionIndex, count: selectionState.selectedItems().count))
-        }
-    }
+	            self.checkNode?.setSelected(selected, animated: animated)
+	            self.selectionPromise.set(SelectionState(selected: selected, index: selectionIndex, count: selectionState.selectedItems().count))
+	        }
+	        
+	        self.updateVoiceOver()
+	    }
+
+	    private func updateVoiceOver() {
+	        guard let strings = self.strings else {
+	            return
+	        }
+	        
+	        let isSelected = self.interaction?.selectionState?.isIdentifierSelected(self.identifier) ?? false
+	        let resolved = MediaPickerGridItemVoiceOver.resolveItem(
+	            strings: strings,
+	            kind: self.voiceOverKind,
+	            creationDate: self.voiceOverCreationDate,
+	            isDownloading: self.statusNode != nil,
+	            isSelected: isSelected
+	        )
+	        self.activateAreaNode.accessibilityLabel = resolved.label
+	        self.activateAreaNode.accessibilityHint = resolved.hint
+	        self.activateAreaNode.accessibilityTraits = resolved.traits
+	        self.activateAreaNode.accessibilityValue = self.voiceOverValue
+	        
+	        if self.checkNode != nil, self.selectable, self.interaction?.selectionState != nil {
+	            let selectionResolved = MediaPickerGridItemVoiceOver.resolveSelectionControl(strings: strings, isSelected: isSelected)
+	            self.selectionActivateAreaNode.isAccessibilityElement = true
+	            self.selectionActivateAreaNode.accessibilityLabel = selectionResolved.label
+	            self.selectionActivateAreaNode.accessibilityHint = selectionResolved.hint
+	            self.selectionActivateAreaNode.accessibilityTraits = selectionResolved.traits
+	            self.selectionActivateAreaNode.activate = { [weak self] in
+	                guard let self, let interaction = self.interaction, let selectableItem = self.selectableItem else {
+	                    return false
+	                }
+	                
+	                let newValue = !isSelected
+	                if !interaction.toggleSelection(selectableItem, newValue, false) {
+	                    return false
+	                }
+	                self.checkNode?.setSelected(newValue, animated: true)
+	                self.updateVoiceOver()
+	                return true
+	            }
+	        } else {
+	            self.selectionActivateAreaNode.isAccessibilityElement = false
+	            self.selectionActivateAreaNode.activate = nil
+	        }
+	    }
     
     private var innerIsHidden = false
     func updateHiddenMedia() {
@@ -312,10 +370,10 @@ final class MediaPickerGridItemNode: GridItemNode {
         self.view.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(self.imageNodeTap(_:))))
     }
     
-    func updateProgress(_ value: Float?, animated: Bool) {
-        if let value {
-            let statusNode: RadialStatusNode
-            if let current = self.statusNode {
+	    func updateProgress(_ value: Float?, animated: Bool) {
+	        if let value {
+	            let statusNode: RadialStatusNode
+	            if let current = self.statusNode {
                 statusNode = current
             } else {
                 statusNode = RadialStatusNode(backgroundNodeColor: UIColor(rgb: 0x000000, alpha: 0.6))
@@ -332,19 +390,33 @@ final class MediaPickerGridItemNode: GridItemNode {
                 statusNode.transitionToState(.none, animated: true, completion: { [weak statusNode] in
                     statusNode?.removeFromSupernode()
                 })
-            } else {
-                statusNode.removeFromSupernode()
-            }
-        }
-    }
+	            } else {
+	                statusNode.removeFromSupernode()
+	            }
+	        }
+	        
+	        self.updateVoiceOver()
+	    }
     
-    func setup(interaction: MediaPickerInteraction, draft: MediaEditorDraft, index: Int, theme: PresentationTheme, strings: PresentationStrings, selectable: Bool, enableAnimations: Bool, stories: Bool) {
-        self.interaction = interaction
-        self.theme = theme
-        self.selectable = selectable
-        self.enableAnimations = enableAnimations
-        
-        self.backgroundColor = theme.list.mediaPlaceholderColor
+	    func setup(interaction: MediaPickerInteraction, draft: MediaEditorDraft, index: Int, theme: PresentationTheme, strings: PresentationStrings, selectable: Bool, enableAnimations: Bool, stories: Bool) {
+	        self.interaction = interaction
+	        self.theme = theme
+	        self.strings = strings
+	        self.selectable = selectable
+	        self.enableAnimations = enableAnimations
+	        self.voiceOverKind = .draft
+	        if draft.timestamp > 0 {
+	            self.voiceOverCreationDate = Date(timeIntervalSince1970: TimeInterval(draft.timestamp))
+	        } else {
+	            self.voiceOverCreationDate = nil
+	        }
+	        if draft.isVideo {
+	            self.voiceOverValue = stringForDuration(Int32(draft.duration ?? 0.0))
+	        } else {
+	            self.voiceOverValue = nil
+	        }
+	        
+	        self.backgroundColor = theme.list.mediaPlaceholderColor
         
         if self.currentDraftState == nil || self.currentDraftState?.0.path != draft.path || self.currentDraftState!.1 != index || self.currentAssetState != nil {
             let imageSignal: Signal<UIImage?, NoError> = .single(draft.thumbnail)
@@ -401,9 +473,10 @@ final class MediaPickerGridItemNode: GridItemNode {
         self.updateHiddenMedia()
     }
     
-    func setup(interaction: MediaPickerInteraction, media: MediaPickerScreenImpl.Subject.Media, index: Int, theme: PresentationTheme, selectable: Bool, enableAnimations: Bool, stories: Bool) {
+    func setup(interaction: MediaPickerInteraction, media: MediaPickerScreenImpl.Subject.Media, index: Int, theme: PresentationTheme, strings: PresentationStrings, selectable: Bool, enableAnimations: Bool, stories: Bool) {
         self.interaction = interaction
         self.theme = theme
+        self.strings = strings
         self.selectable = selectable
         self.enableAnimations = enableAnimations
         self.stories = stories
@@ -422,6 +495,15 @@ final class MediaPickerGridItemNode: GridItemNode {
         if self.currentMediaState == nil || self.currentMediaState!.0.uniqueIdentifier != media.identifier || self.currentMediaState!.1 != index {
             self.currentMediaState = (media.asset, index)
             
+            switch media {
+            case .image:
+                self.voiceOverKind = .photo
+            case .video:
+                self.voiceOverKind = .video
+            }
+            self.voiceOverCreationDate = nil
+            self.voiceOverValue = nil
+            
             if self.draftNode.supernode != nil {
                 self.draftNode.removeFromSupernode()
             }
@@ -433,11 +515,12 @@ final class MediaPickerGridItemNode: GridItemNode {
         self.updateHiddenMedia()
     }
         
-    func setup(interaction: MediaPickerInteraction, fetchResult: PHFetchResult<PHAsset>, index: Int, theme: PresentationTheme, selectable: Bool, enableAnimations: Bool, stories: Bool) {
+    func setup(interaction: MediaPickerInteraction, fetchResult: PHFetchResult<PHAsset>, index: Int, theme: PresentationTheme, strings: PresentationStrings, selectable: Bool, enableAnimations: Bool, stories: Bool) {
         let isFirstTime = self.currentAssetState == nil
         
         self.interaction = interaction
         self.theme = theme
+        self.strings = strings
         self.selectable = selectable
         self.enableAnimations = enableAnimations
         self.stories = stories
@@ -453,14 +536,13 @@ final class MediaPickerGridItemNode: GridItemNode {
             self.draftNode.removeFromSupernode()
         }
         
-        if self.currentAssetState == nil || self.currentAssetState!.0 !== fetchResult || self.currentAssetState!.1 != index || self.currentDraftState != nil {
-            let editingContext = interaction.editingState
-            let asset = fetchResult.object(at: index)
-            
-            if asset.localIdentifier == self.currentAsset?.localIdentifier {
-                return
-            }
-            self.backgroundNode.image = nil
+	        if self.currentAssetState == nil || self.currentAssetState!.0 !== fetchResult || self.currentAssetState!.1 != index || self.currentDraftState != nil {
+	            let editingContext = interaction.editingState
+	            let asset = fetchResult.object(at: index)
+	            self.voiceOverCreationDate = asset.creationDate
+	            self.voiceOverKind = asset.mediaType == .video ? .video : .photo
+	            self.voiceOverValue = nil
+	            self.backgroundNode.image = nil
             
             self.progressDisposable.set(
                 (interaction.downloadManager.downloadProgress(identifier: asset.localIdentifier)
@@ -478,14 +560,10 @@ final class MediaPickerGridItemNode: GridItemNode {
             
             self.backgroundNode.image = nil
             
-            if #available(iOS 15.0, *) {
-                self.activateAreaNode.accessibilityLabel = "Photo \(asset.creationDate?.formatted(date: .abbreviated, time: .standard) ?? "")"
-            }
-            
-            let editedSignal = Signal<UIImage?, NoError> { subscriber in
-                if let signal = editingContext.thumbnailImageSignal(forIdentifier: asset.localIdentifier) {
-                    let disposable = signal.start(next: { next in
-                        if let image = next as? UIImage {
+	            let editedSignal = Signal<UIImage?, NoError> { subscriber in
+	                if let signal = editingContext.thumbnailImageSignal(forIdentifier: asset.localIdentifier) {
+	                    let disposable = signal.start(next: { next in
+	                        if let image = next as? UIImage {
                             subscriber.putNext(image)
                         } else {
                             subscriber.putNext(nil)
@@ -591,9 +669,9 @@ final class MediaPickerGridItemNode: GridItemNode {
                 self.currentDraftState = nil
             }
             
-            var typeIcon: UIImage?
-            var duration: String?
-            if asset.mediaType == .video {
+	            var typeIcon: UIImage?
+	            var duration: String?
+	            if asset.mediaType == .video {
                 if asset.mediaSubtypes.contains(.videoHighFrameRate) {
                     typeIcon = UIImage(bundleImageName: "Media Editor/MediaSlomo")
                 } else if asset.mediaSubtypes.contains(.videoTimelapse) {
@@ -601,11 +679,12 @@ final class MediaPickerGridItemNode: GridItemNode {
                 } else {
                     typeIcon = UIImage(bundleImageName: "Media Editor/MediaVideo")
                 }
-                duration = stringForDuration(Int32(asset.duration))
-            }
-            if asset.isFavorite {
-                typeIcon = generateTintedImage(image: UIImage(bundleImageName: "Media Grid/Favorite"), color: .white)
-            }
+	                duration = stringForDuration(Int32(asset.duration))
+	            }
+	            self.voiceOverValue = duration
+	            if asset.isFavorite {
+	                typeIcon = generateTintedImage(image: UIImage(bundleImageName: "Media Grid/Favorite"), color: .white)
+	            }
             
             if typeIcon != nil {
                 if self.leftShadowNode.supernode == nil {
@@ -728,15 +807,17 @@ final class MediaPickerGridItemNode: GridItemNode {
         if self.draftNode.supernode != nil {
             let draftSize = self.draftNode.updateLayout(self.bounds.size)
             self.draftNode.frame = CGRect(origin: CGPoint(x: 7.0, y: 5.0), size: draftSize)
-        }
-        
-        let checkSize = CGSize(width: 29.0, height: 29.0)
-        self.checkNode?.frame = CGRect(origin: CGPoint(x: self.bounds.width - checkSize.width - 3.0, y: 3.0), size: checkSize)
-        
-        if let spoilerNode = self.spoilerNode, self.bounds.width > 0.0 {
-            spoilerNode.frame = self.bounds
-            spoilerNode.update(size: self.bounds.size, transition: .immediate)
-        }
+	        }
+	        
+	        let checkSize = CGSize(width: 29.0, height: 29.0)
+	        let checkFrame = CGRect(origin: CGPoint(x: self.bounds.width - checkSize.width - 3.0, y: 3.0), size: checkSize)
+	        self.checkNode?.frame = checkFrame
+	        self.selectionActivateAreaNode.frame = checkFrame
+	        
+	        if let spoilerNode = self.spoilerNode, self.bounds.width > 0.0 {
+	            spoilerNode.frame = self.bounds
+	            spoilerNode.update(size: self.bounds.size, transition: .immediate)
+	        }
         
         if let priceNode = self.priceNode, self.bounds.width > 0.0 {
             priceNode.frame = self.bounds
@@ -772,28 +853,41 @@ final class MediaPickerGridItemNode: GridItemNode {
                     }
                 }
             })
-        } else {
-            return self.imageNode.image
-        }
-    }
-        
-    @objc func imageNodeTap(_ recognizer: UITapGestureRecognizer) {
-        if let (draft, _) = self.currentDraftState {
-            self.interaction?.openDraft(draft, self.imageNode.image)
-            return
-        }
-        guard let (fetchResult, index) = self.currentAssetState else {
-            return
-        }
-        if self.statusNode != nil {
-            if let asset = self.currentAsset {
-                self.interaction?.downloadManager.cancel(identifier: asset.localIdentifier)
-            }
-        } else {
-            self.interaction?.openMedia(fetchResult, index, self.imageNode.image)
-        }
-    }
-}
+	        } else {
+	            return self.imageNode.image
+	        }
+	    }
+
+	    private func performPrimaryAction() -> Bool {
+	        if let (draft, _) = self.currentDraftState {
+	            self.interaction?.openDraft(draft, self.imageNode.image)
+	            return true
+	        }
+	        if let (media, _) = self.currentMediaState {
+	            self.interaction?.openSelectedMedia(media, self.imageNode.image)
+	            return true
+	        }
+	        
+	        guard let (fetchResult, index) = self.currentAssetState else {
+	            return false
+	        }
+	        
+	        if self.statusNode != nil {
+	            if let asset = self.currentAsset {
+	                self.interaction?.downloadManager.cancel(identifier: asset.localIdentifier)
+	                return true
+	            }
+	            return false
+	        } else {
+	            self.interaction?.openMedia(fetchResult, index, self.imageNode.image)
+	            return true
+	        }
+	    }
+	        
+	    @objc func imageNodeTap(_ recognizer: UITapGestureRecognizer) {
+	        _ = self.performPrimaryAction()
+	    }
+	}
 
 class SpoilerOverlayNode: ASDisplayNode {
     private let blurNode: ASImageNode

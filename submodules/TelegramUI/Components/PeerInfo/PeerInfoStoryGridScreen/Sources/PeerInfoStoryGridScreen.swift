@@ -624,7 +624,7 @@ public class PeerInfoStoryGridScreen: ViewControllerComponentContainer {
         ), navigationBarAppearance: .default, theme: .default)
         
         let presentationData = context.sharedContext.currentPresentationData.with({ $0 })
-        let moreBarButton = MoreHeaderButton(color: presentationData.theme.rootController.navigationBar.buttonColor)
+        let moreBarButton = MoreHeaderButton(color: presentationData.theme.rootController.navigationBar.buttonColor, accessibilityLabel: presentationData.strings.Common_More)
         moreBarButton.isUserInteractionEnabled = true
         self.moreBarButton = moreBarButton
         

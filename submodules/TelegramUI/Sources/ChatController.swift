@@ -718,7 +718,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
             navigationBarPresentationData = NavigationBarPresentationData(presentationData: self.presentationData, hideBackground: false, hideBadge: false, style: .glass, glassStyle: .default)
         }
         
-        self.moreBarButton = MoreHeaderButton(color: self.presentationData.theme.chat.inputPanel.panelControlColor)
+        self.moreBarButton = MoreHeaderButton(color: self.presentationData.theme.chat.inputPanel.panelControlColor, accessibilityLabel: self.presentationData.strings.Common_More)
         self.moreBarButton.isUserInteractionEnabled = true
         
         super.init(context: context, navigationBarPresentationData: navigationBarPresentationData)
