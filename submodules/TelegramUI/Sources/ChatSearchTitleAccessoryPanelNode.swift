@@ -87,6 +87,7 @@ final class ChatSearchTitleAccessoryPanelNode: ChatTitleAccessoryPanelNode, Chat
             self.action = action
             
             self.containerButton = HighlightTrackingButton()
+            self.containerButton.accessibilityElementsHidden = true
             
             self.background = UIImageView()
             self.background.image = backgroundTagImage
@@ -219,6 +220,12 @@ final class ChatSearchTitleAccessoryPanelNode: ChatTitleAccessoryPanelNode, Chat
             
             transition.setFrame(view: self.containerButton, frame: CGRect(origin: CGPoint(), size: totalSize))
             
+            let accessibility = ChatSearchTitleAccessoryPanelVoiceOver.resolvePromo(strings: strings, isUnlock: isUnlock)
+            self.containerButton.accessibilityLabel = accessibility.label
+            self.containerButton.accessibilityValue = accessibility.value
+            self.containerButton.accessibilityHint = accessibility.hint
+            self.containerButton.accessibilityTraits = accessibility.traits
+            
             return isUnlock ? size : totalSize
         }
     }
@@ -226,6 +233,7 @@ final class ChatSearchTitleAccessoryPanelNode: ChatTitleAccessoryPanelNode, Chat
     private final class ItemView: UIView {
         private let context: AccountContext
         private let action: () -> Void
+        private var editTagTitleAction: (() -> Void)?
         
         private let extractedContainerNode: ContextExtractedContentContainingNode
         private let containerNode: ContextControllerSourceNode
@@ -245,6 +253,7 @@ final class ChatSearchTitleAccessoryPanelNode: ChatTitleAccessoryPanelNode, Chat
             self.containerNode = ContextControllerSourceNode()
             
             self.containerButton = HighlightTrackingButton()
+            self.containerButton.accessibilityElementsHidden = true
             
             self.background = UIImageView()
             self.background.image = backgroundTagImage
@@ -301,6 +310,14 @@ final class ChatSearchTitleAccessoryPanelNode: ChatTitleAccessoryPanelNode, Chat
             self.action()
         }
         
+        @objc private func performEditTagTitleAccessibilityCustomAction(_ action: UIAccessibilityCustomAction) -> Bool {
+            guard let editTagTitleAction = self.editTagTitleAction else {
+                return false
+            }
+            editTagTitleAction()
+            return true
+        }
+        
         override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
             var mappedPoint = point
             if self.bounds.insetBy(dx: -8.0, dy: -4.0).contains(point) {
@@ -309,7 +326,7 @@ final class ChatSearchTitleAccessoryPanelNode: ChatTitleAccessoryPanelNode, Chat
             return super.hitTest(mappedPoint, with: event)
         }
         
-        func update(item: Item, isSelected: Bool, isLocked: Bool, theme: PresentationTheme, height: CGFloat, transition: ComponentTransition) -> CGSize {
+        func update(item: Item, isSelected: Bool, isLocked: Bool, theme: PresentationTheme, strings: PresentationStrings, height: CGFloat, transition: ComponentTransition, editTagTitleAction: (() -> Void)?) -> CGSize {
             let spacing: CGFloat = 3.0
             
             let contentsAlpha: CGFloat = isLocked ? 0.6 : 1.0
@@ -420,7 +437,61 @@ final class ChatSearchTitleAccessoryPanelNode: ChatTitleAccessoryPanelNode, Chat
             self.extractedContainerNode.contentRect = CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: size.width, height: size.height))
             self.containerNode.frame = CGRect(origin: CGPoint(), size: size)
             
+            let reactionText = self.accessibilityReactionText(file: item.file, fallbackReaction: item.reaction)
+            let accessibility = ChatSearchTitleAccessoryPanelVoiceOver.resolveItem(
+                strings: strings,
+                title: item.title,
+                reactionText: reactionText,
+                count: item.count,
+                isSelected: isSelected,
+                isPremium: !isLocked
+            )
+            self.containerButton.accessibilityLabel = accessibility.label
+            self.containerButton.accessibilityValue = accessibility.value
+            self.containerButton.accessibilityHint = accessibility.hint
+            self.containerButton.accessibilityTraits = accessibility.traits
+            
+            let customActions = ChatSearchTitleAccessoryPanelVoiceOver.resolveItemCustomActions(strings: strings, hasTitle: item.title != nil, isPremium: !isLocked)
+            if !customActions.isEmpty, let editTagTitleAction {
+                self.editTagTitleAction = editTagTitleAction
+                self.containerButton.accessibilityCustomActions = customActions.map { action in
+                    switch action.kind {
+                    case .editTagTitle:
+                        return UIAccessibilityCustomAction(name: action.name, target: self, selector: #selector(self.performEditTagTitleAccessibilityCustomAction(_:)))
+                    }
+                }
+            } else {
+                self.editTagTitleAction = nil
+                self.containerButton.accessibilityCustomActions = nil
+            }
+            
             return size
+        }
+        
+        private func accessibilityReactionText(file: TelegramMediaFile, fallbackReaction: MessageReaction.Reaction) -> String? {
+            for attribute in file.attributes {
+                switch attribute {
+                case let .CustomEmoji(_, _, alt, _):
+                    if !alt.isEmpty {
+                        return alt
+                    }
+                case let .Sticker(displayText, _, _):
+                    if !displayText.isEmpty {
+                        return displayText
+                    }
+                default:
+                    continue
+                }
+            }
+            
+            switch fallbackReaction {
+            case let .builtin(value):
+                return value
+            case .custom:
+                return nil
+            case .stars:
+                return "⭐"
+            }
         }
     }
     
@@ -704,7 +775,31 @@ final class ChatSearchTitleAccessoryPanelNode: ChatTitleAccessoryPanelNode, Chat
                     isSelected = true
                 }
             }
-            let itemSize = itemView.update(item: item, isSelected: isSelected, isLocked: !params.interfaceState.isPremium, theme: params.interfaceState.theme, height: panelHeight, transition: .immediate)
+            
+            let reaction = item.reaction
+            let hasTitle = item.title != nil
+            let editTagTitleAction: (() -> Void)?
+            if params.interfaceState.isPremium {
+                editTagTitleAction = { [weak self] in
+                    guard let self else {
+                        return
+                    }
+                    self.openEditTagTitle(reaction: reaction, hasTitle: hasTitle)
+                }
+            } else {
+                editTagTitleAction = nil
+            }
+            
+            let itemSize = itemView.update(
+                item: item,
+                isSelected: isSelected,
+                isLocked: !params.interfaceState.isPremium,
+                theme: params.interfaceState.theme,
+                strings: params.interfaceState.strings,
+                height: panelHeight,
+                transition: .immediate,
+                editTagTitleAction: editTagTitleAction
+            )
             let itemFrame = CGRect(origin: CGPoint(x: contentSize.width, y: 0.0), size: itemSize)
             
             itemTransition.updatePosition(layer: itemView.layer, position: itemFrame.center)
