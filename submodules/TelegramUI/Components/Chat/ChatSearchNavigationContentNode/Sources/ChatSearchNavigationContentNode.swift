@@ -29,6 +29,7 @@ public final class ChatSearchNavigationContentNode: NavigationBarContentNode {
     private var activityIndicator: ActivityIndicator?
     private let searchBar: SearchBarNode
     private let close: (background: GlassBackgroundView, icon: UIImageView)
+    private let closeButton: HighlightTrackingButton
     
     private let interaction: ChatPanelInterfaceInteraction
     
@@ -53,6 +54,7 @@ public final class ChatSearchNavigationContentNode: NavigationBarContentNode {
         
         self.close = (GlassBackgroundView(), UIImageView())
         self.close.background.contentView.addSubview(self.close.icon)
+        self.closeButton = HighlightTrackingButton()
         
         self.searchBar = SearchBarNode(
             theme: SearchBarNodeTheme(
@@ -95,7 +97,8 @@ public final class ChatSearchNavigationContentNode: NavigationBarContentNode {
         self.backgroundView.contentView.addSubview(self.searchBar.view)
         
         self.backgroundContainer.contentView.addSubview(self.close.background)
-        self.close.background.contentView.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(self.onCloseTapGesture(_:))))
+        self.close.background.contentView.addSubview(self.closeButton)
+        self.closeButton.addTarget(self, action: #selector(self.closePressed), for: .touchUpInside)
         
         self.searchBar.cancel = { [weak self] in
             self?.searchBar.deactivate(clear: false)
@@ -144,10 +147,8 @@ public final class ChatSearchNavigationContentNode: NavigationBarContentNode {
         return 60.0
     }
     
-    @objc private func onCloseTapGesture(_ recognizer: UITapGestureRecognizer) {
-        if case .ended = recognizer.state {
-            self.searchBar.cancel?()
-        }
+    @objc private func closePressed() {
+        self.searchBar.cancel?()
     }
     
     override public func updateLayout(size: CGSize, leftInset: CGFloat, rightInset: CGFloat, transition: ContainedViewLayoutTransition) -> CGSize {
@@ -226,6 +227,13 @@ public final class ChatSearchNavigationContentNode: NavigationBarContentNode {
         
         transition.setFrame(view: self.close.background, frame: closeFrame)
         self.close.background.update(size: closeFrame.size, cornerRadius: closeFrame.height * 0.5, isDark: self.theme.overallDarkAppearance, tintColor: .init(kind: self.preferClearGlass ? .clear : .panel), isInteractive: true, transition: transition)
+
+        transition.setFrame(view: self.closeButton, frame: CGRect(origin: .zero, size: closeFrame.size))
+        let closeAccessibility = ChatSearchNavigationContentVoiceOver.resolveCloseButton(strings: self.strings, isEnabled: true)
+        self.closeButton.isAccessibilityElement = true
+        self.closeButton.accessibilityLabel = closeAccessibility.label
+        self.closeButton.accessibilityHint = closeAccessibility.hint
+        self.closeButton.accessibilityTraits = closeAccessibility.traits
         
         return size
     }
