@@ -448,15 +448,64 @@ final class StatsMessageItemNode: ListViewItemNode, ItemListItemNode {
                     strongSelf.offsetContainerNode.frame = CGRect(origin: CGPoint(), size: layout.contentSize)
                     strongSelf.countersContainerNode.frame = CGRect(origin: CGPoint(), size: layout.contentSize)
                     strongSelf.contextSourceNode.contentNode.frame = CGRect(origin: CGPoint(), size: layout.contentSize)
-                    strongSelf.containerNode.isGestureEnabled = item.contextAction != nil
-                    
-                    strongSelf.activateArea.frame = CGRect(origin: CGPoint(x: params.leftInset, y: 0.0), size: CGSize(width: params.width - params.leftInset - params.rightInset, height: layout.contentSize.height))
-                    strongSelf.activateArea.accessibilityLabel = text
-                    strongSelf.activateArea.accessibilityValue = label
-                    
-                    if let _ = updatedTheme {
-                        strongSelf.topStripeNode.backgroundColor = itemSeparatorColor
-                        strongSelf.bottomStripeNode.backgroundColor = itemSeparatorColor
+	                    strongSelf.containerNode.isGestureEnabled = item.contextAction != nil
+	                    
+	                    strongSelf.activateArea.frame = CGRect(origin: CGPoint(x: params.leftInset, y: 0.0), size: CGSize(width: params.width - params.leftInset - params.rightInset, height: layout.contentSize.height))
+	                    
+	                    let isStory: Bool
+	                    switch item.item {
+	                    case .story:
+	                        isStory = true
+	                    case .message:
+	                        isStory = false
+	                    }
+	                    let isEnabled = isStory || item.action != nil
+	                    let voiceOverResolved = StatsMessageItemVoiceOver.resolve(
+	                        strings: item.presentationData.strings,
+	                        title: text,
+	                        date: label,
+	                        views: viewsString,
+	                        reactionsValue: compactNumericCountString(Int(item.reactions), decimalSeparator: item.presentationData.dateTimeFormat.decimalSeparator),
+	                        publicSharesValue: compactNumericCountString(Int(item.forwards), decimalSeparator: item.presentationData.dateTimeFormat.decimalSeparator),
+	                        isEnabled: isEnabled
+	                    )
+	                    strongSelf.activateArea.accessibilityLabel = voiceOverResolved.label
+	                    strongSelf.activateArea.accessibilityValue = voiceOverResolved.value
+	                    strongSelf.activateArea.accessibilityHint = voiceOverResolved.hint
+	                    strongSelf.activateArea.accessibilityTraits = voiceOverResolved.traits
+	                    strongSelf.activateArea.activate = { [weak strongSelf] in
+	                        guard let strongSelf, let item = strongSelf.item else {
+	                            return false
+	                        }
+	                        switch item.item {
+	                        case .story:
+	                            strongSelf.storyPressed()
+	                            return true
+	                        case .message:
+	                            guard let action = item.action else {
+	                                return false
+	                            }
+	                            action()
+	                            return true
+	                        }
+	                    }
+	                    if item.contextAction != nil {
+	                        strongSelf.activateArea.accessibilityCustomActions = [
+	                            UIAccessibilityCustomAction(name: item.presentationData.strings.Common_More, actionHandler: { [weak strongSelf] in
+	                                guard let strongSelf, let item = strongSelf.item, let contextAction = item.contextAction else {
+	                                    return false
+	                                }
+	                                contextAction(strongSelf.contextSourceNode, nil)
+	                                return true
+	                            })
+	                        ]
+	                    } else {
+	                        strongSelf.activateArea.accessibilityCustomActions = nil
+	                    }
+	                    
+	                    if let _ = updatedTheme {
+	                        strongSelf.topStripeNode.backgroundColor = itemSeparatorColor
+	                        strongSelf.bottomStripeNode.backgroundColor = itemSeparatorColor
                         strongSelf.backgroundNode.backgroundColor = itemBackgroundColor
                         strongSelf.highlightedBackgroundNode.backgroundColor = item.presentationData.theme.list.itemHighlightedBackgroundColor
                     }
