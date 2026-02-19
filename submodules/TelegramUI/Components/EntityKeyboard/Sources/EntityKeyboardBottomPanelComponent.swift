@@ -49,6 +49,7 @@ private final class BottomPanelIconComponent: Component {
         let tintMaskContainer: UIView
         
         var component: BottomPanelIconComponent?
+        private var accessibilityAction: (() -> Void)?
         
         override init(frame: CGRect) {
             self.contentView = GlassBackgroundView.ContentImageView()
@@ -64,6 +65,14 @@ private final class BottomPanelIconComponent: Component {
         
         required init?(coder: NSCoder) {
             fatalError("init(coder:) has not been implemented")
+        }
+        
+        override func accessibilityActivate() -> Bool {
+            guard let accessibilityAction = self.accessibilityAction else {
+                return false
+            }
+            accessibilityAction()
+            return true
         }
         
         func update(component: BottomPanelIconComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
@@ -88,6 +97,15 @@ private final class BottomPanelIconComponent: Component {
             self.contentView.tintColor = component.theme.chat.inputPanel.panelControlColor
             
             transition.setFrame(view: self.contentView, frame: CGRect(origin: CGPoint(x: floor((size.width - textSize.width) / 2.0), y: (size.height - textSize.height) / 2.0), size: textSize))
+            
+            self.isAccessibilityElement = true
+            self.accessibilityLabel = component.title
+            self.accessibilityValue = nil
+            
+            let voiceOver = EntityKeyboardBottomPanelVoiceOver.resolveTab(isSelected: component.isHighlighted)
+            self.accessibilityTraits = voiceOver.traits
+            
+            self.accessibilityAction = component.action
             
             return size
         }
@@ -476,6 +494,9 @@ final class EntityKeyboardBottomPanelComponent: Component {
                         environment: {},
                         containerSize: CGSize(width: 28.0, height: 28.0)
                     )
+                    
+                    selectedIconView.isAccessibilityElement = false
+                    selectedIconView.accessibilityElementsHidden = true
                     
                     iconInfos[icon.id] = (size: iconSize, transition: iconTransition)
                     

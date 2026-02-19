@@ -401,12 +401,16 @@ public final class EntityKeyboardComponent: Component {
                 ))))
                 contentIcons.append(PagerComponentContentIcon(id: "masks", imageName: "Chat/Input/Media/EntityInputMasksIcon", title: component.strings.EmojiInput_TabMasks))
                 if let _ = component.maskContent?.inputInteractionHolder.inputInteraction?.openStickerSettings {
+                    let voiceOver = EntityKeyboardBottomPanelVoiceOver.resolveAccessoryButton(strings: component.strings, kind: .settings)
                     contentAccessoryRightButtons.append(AnyComponentWithIdentity(id: "masks", component: AnyComponent(EntityKeyboardBottomPanelButton(
                         icon: "Chat/Input/Media/EntityInputSettingsIcon",
                         theme: component.theme,
                         action: {
                             maskContent.inputInteractionHolder.inputInteraction?.openStickerSettings?()
-                        }
+                        },
+                        accessibilityLabel: voiceOver.label,
+                        accessibilityHint: voiceOver.hint,
+                        accessibilityTraits: voiceOver.traits
                     ))))
                 }
             }
@@ -415,12 +419,16 @@ public final class EntityKeyboardComponent: Component {
                 contents.append(AnyComponentWithIdentity(id: "gifs", component: AnyComponent(gifContent)))
                 contentIcons.append(PagerComponentContentIcon(id: "gifs", imageName: "Chat/Input/Media/EntityInputGifsIcon", title: component.strings.EmojiInput_TabGifs))
                 if let addImage = component.stickerContent?.inputInteractionHolder.inputInteraction?.addImage {
+                    let voiceOver = EntityKeyboardBottomPanelVoiceOver.resolveAccessoryButton(strings: component.strings, kind: .addImage)
                     contentAccessoryLeftButtons.append(AnyComponentWithIdentity(id: "gifs", component: AnyComponent(EntityKeyboardBottomPanelButton(
                         icon: "Media Editor/AddImage",
                         theme: component.theme,
                         action: {
                             addImage()
-                        }
+                        },
+                        accessibilityLabel: voiceOver.label,
+                        accessibilityHint: voiceOver.hint,
+                        accessibilityTraits: voiceOver.traits
                     ))))
                 }
             }
@@ -535,21 +543,29 @@ public final class EntityKeyboardComponent: Component {
                 ))))
                 contentIcons.append(PagerComponentContentIcon(id: "stickers", imageName: "Chat/Input/Media/EntityInputStickersIcon", title: component.strings.EmojiInput_TabStickers))
                 if let _ = component.stickerContent?.inputInteractionHolder.inputInteraction?.openStickerSettings {
+                    let voiceOver = EntityKeyboardBottomPanelVoiceOver.resolveAccessoryButton(strings: component.strings, kind: .settings)
                     contentAccessoryRightButtons.append(AnyComponentWithIdentity(id: "stickers", component: AnyComponent(EntityKeyboardBottomPanelButton(
                         icon: "Chat/Input/Media/EntityInputSettingsIcon",
                         theme: component.theme,
                         action: {
                             stickerContent.inputInteractionHolder.inputInteraction?.openStickerSettings?()
-                        }
+                        },
+                        accessibilityLabel: voiceOver.label,
+                        accessibilityHint: voiceOver.hint,
+                        accessibilityTraits: voiceOver.traits
                     ))))
                 }
                 if let addImage = component.stickerContent?.inputInteractionHolder.inputInteraction?.addImage {
+                    let voiceOver = EntityKeyboardBottomPanelVoiceOver.resolveAccessoryButton(strings: component.strings, kind: .addImage)
                     contentAccessoryLeftButtons.append(AnyComponentWithIdentity(id: "stickers", component: AnyComponent(EntityKeyboardBottomPanelButton(
                         icon: "Media Editor/AddImage",
                         theme: component.theme,
                         action: {
                             addImage()
-                        }
+                        },
+                        accessibilityLabel: voiceOver.label,
+                        accessibilityHint: voiceOver.hint,
+                        accessibilityTraits: voiceOver.traits
                     ))))
                 }
             }
@@ -647,6 +663,7 @@ public final class EntityKeyboardComponent: Component {
                 ))))
                 contentIcons.append(PagerComponentContentIcon(id: "emoji", imageName: "Chat/Input/Media/EntityInputEmojiIcon", title: component.strings.EmojiInput_TabEmoji))
                 if let _ = deleteBackwards {
+                    let voiceOver = EntityKeyboardBottomPanelVoiceOver.resolveAccessoryButton(strings: component.strings, kind: .switchToKeyboard)
                     contentAccessoryLeftButtons.append(AnyComponentWithIdentity(id: "emoji", component: AnyComponent(EntityKeyboardBottomPanelButton(
                         icon: "Chat/Input/Media/EntityInputGlobeIcon",
                         theme: component.theme,
@@ -655,20 +672,28 @@ public final class EntityKeyboardComponent: Component {
                                 return
                             }
                             component.switchToTextInput()
-                        }
+                        },
+                        accessibilityLabel: voiceOver.label,
+                        accessibilityHint: voiceOver.hint,
+                        accessibilityTraits: voiceOver.traits
                     ))))
                 } else if let addImage = component.emojiContent?.inputInteractionHolder.inputInteraction?.addImage {
+                    let voiceOver = EntityKeyboardBottomPanelVoiceOver.resolveAccessoryButton(strings: component.strings, kind: .addImage)
                     contentAccessoryLeftButtons.append(AnyComponentWithIdentity(id: "emoji", component: AnyComponent(EntityKeyboardBottomPanelButton(
                         icon: "Media Editor/AddImage",
                         theme: component.theme,
                         action: {
                             addImage()
-                        }
+                        },
+                        accessibilityLabel: voiceOver.label,
+                        accessibilityHint: voiceOver.hint,
+                        accessibilityTraits: voiceOver.traits
                     ))))
                 }
             }
                             
             if let _ = deleteBackwards {
+                let voiceOver = EntityKeyboardBottomPanelVoiceOver.resolveAccessoryButton(strings: component.strings, kind: .deleteBackwards)
                 contentAccessoryRightButtons.append(AnyComponentWithIdentity(id: "emoji", component: AnyComponent(EntityKeyboardBottomPanelButton(
                     icon: "Chat/Input/Media/EntityInputClearIcon",
                     theme: component.theme,
@@ -679,7 +704,10 @@ public final class EntityKeyboardComponent: Component {
                     holdAction: {
                         deleteBackwards?()
                         AudioServicesPlaySystemSound(1155)
-                    }
+                    },
+                    accessibilityLabel: voiceOver.label,
+                    accessibilityHint: voiceOver.hint,
+                    accessibilityTraits: voiceOver.traits
                 ))))
             }
             

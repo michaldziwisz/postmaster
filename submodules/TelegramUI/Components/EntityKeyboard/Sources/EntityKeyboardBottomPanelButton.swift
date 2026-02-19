@@ -14,17 +14,26 @@ final class EntityKeyboardBottomPanelButton: Component {
     let theme: PresentationTheme
     let action: () -> Void
     let holdAction: (() -> Void)?
+    let accessibilityLabel: String?
+    let accessibilityHint: String?
+    let accessibilityTraits: UIAccessibilityTraits
     
     init(
         icon: String,
         theme: PresentationTheme,
         action: @escaping () -> Void,
-        holdAction: (() -> Void)? = nil
+        holdAction: (() -> Void)? = nil,
+        accessibilityLabel: String? = nil,
+        accessibilityHint: String? = nil,
+        accessibilityTraits: UIAccessibilityTraits = [.button]
     ) {
         self.icon = icon
         self.theme = theme
         self.action = action
         self.holdAction = holdAction
+        self.accessibilityLabel = accessibilityLabel
+        self.accessibilityHint = accessibilityHint
+        self.accessibilityTraits = accessibilityTraits
     }
     
     static func ==(lhs: EntityKeyboardBottomPanelButton, rhs: EntityKeyboardBottomPanelButton) -> Bool {
@@ -35,6 +44,15 @@ final class EntityKeyboardBottomPanelButton: Component {
             return false
         }
         if (lhs.holdAction == nil) != (rhs.holdAction == nil) {
+            return false
+        }
+        if lhs.accessibilityLabel != rhs.accessibilityLabel {
+            return false
+        }
+        if lhs.accessibilityHint != rhs.accessibilityHint {
+            return false
+        }
+        if lhs.accessibilityTraits != rhs.accessibilityTraits {
             return false
         }
         return true
@@ -161,6 +179,11 @@ final class EntityKeyboardBottomPanelButton: Component {
             }
 
             self.component = component
+            
+            self.buttonView.isAccessibilityElement = true
+            self.buttonView.accessibilityLabel = component.accessibilityLabel
+            self.buttonView.accessibilityHint = component.accessibilityHint
+            self.buttonView.accessibilityTraits = component.accessibilityTraits
 
             self.iconView.tintColor = component.theme.chat.inputPanel.panelControlColor
             
