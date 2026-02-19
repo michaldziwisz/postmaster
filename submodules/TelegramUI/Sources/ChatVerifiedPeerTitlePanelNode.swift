@@ -24,6 +24,7 @@ final class ChatVerifiedPeerTitlePanelNode: ChatTitleAccessoryPanelNode {
     
     private let separatorNode: ASDisplayNode
     private let emojiStatusTextNode: TextNodeWithEntities
+    private let activateAreaNode: AccessibilityAreaNode
     
     private var presentationInterfaceState: ChatPresentationInterfaceState?
     
@@ -40,11 +41,18 @@ final class ChatVerifiedPeerTitlePanelNode: ChatTitleAccessoryPanelNode {
         self.separatorNode.isLayerBacked = true
                 
         self.emojiStatusTextNode = TextNodeWithEntities()
+        self.emojiStatusTextNode.textNode.isAccessibilityElement = false
+        
+        self.activateAreaNode = AccessibilityAreaNode()
+        self.activateAreaNode.activate = { [weak self] in
+            return self?.openVerificationLinkIfPossible() ?? false
+        }
         
         super.init()
 
         self.addSubnode(self.separatorNode)
         self.addSubnode(self.emojiStatusTextNode.textNode)
+        self.addSubnode(self.activateAreaNode)
     }
     
     override func didLoad() {
@@ -55,17 +63,33 @@ final class ChatVerifiedPeerTitlePanelNode: ChatTitleAccessoryPanelNode {
     }
     
     @objc private func tapped() {
+        let _ = self.openVerificationLinkIfPossible()
+    }
+    
+    private func openVerificationLinkIfPossible() -> Bool {
         guard let navigationController = self.interfaceInteraction?.getNavigationController(), let interfaceState = self.presentationInterfaceState else {
-            return
+            return false
         }
-        if let verification = interfaceState.peerVerification {
-            let entities = generateTextEntities(verification.description, enabledTypes: [.allUrl])
-            if let entity = entities.first {
-                let range = NSRange(location: entity.range.lowerBound, length: entity.range.upperBound - entity.range.lowerBound)
-                let url = (verification.description as NSString).substring(with: range)
-                self.context.sharedContext.openExternalUrl(context: self.context, urlContext: .generic, url: url, forceExternal: false, presentationData: self.context.sharedContext.currentPresentationData.with { $0 }, navigationController: navigationController, dismissInput: {})
-            }
+        guard let verification = interfaceState.peerVerification else {
+            return false
         }
+        let entities = generateTextEntities(verification.description, enabledTypes: [.allUrl])
+        guard let entity = entities.first else {
+            return false
+        }
+        
+        let range = NSRange(location: entity.range.lowerBound, length: entity.range.upperBound - entity.range.lowerBound)
+        let url = (verification.description as NSString).substring(with: range)
+        self.context.sharedContext.openExternalUrl(
+            context: self.context,
+            urlContext: .generic,
+            url: url,
+            forceExternal: false,
+            presentationData: self.context.sharedContext.currentPresentationData.with { $0 },
+            navigationController: navigationController,
+            dismissInput: {}
+        )
+        return true
     }
     
     override func updateLayout(width: CGFloat, leftInset: CGFloat, rightInset: CGFloat, transition: ContainedViewLayoutTransition, interfaceState: ChatPresentationInterfaceState) -> LayoutResult {
@@ -133,6 +157,25 @@ final class ChatVerifiedPeerTitlePanelNode: ChatTitleAccessoryPanelNode {
 
         let initialPanelHeight = panelHeight
         transition.updateFrame(node: self.separatorNode, frame: CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: width, height: UIScreenPixel)))
+        self.activateAreaNode.frame = CGRect(origin: .zero, size: CGSize(width: width, height: initialPanelHeight))
+        
+        if let verification = interfaceState.peerVerification {
+            let entities = generateTextEntities(verification.description, enabledTypes: [.allUrl])
+            let accessibility = ChatVerifiedPeerTitlePanelVoiceOver.resolve(
+                strings: interfaceState.strings,
+                description: verification.description,
+                hasLink: entities.first != nil
+            )
+            
+            self.activateAreaNode.isAccessibilityElement = true
+            self.activateAreaNode.accessibilityLabel = accessibility.label
+            self.activateAreaNode.accessibilityHint = accessibility.hint
+            self.activateAreaNode.accessibilityTraits = accessibility.traits
+        } else {
+            self.activateAreaNode.isAccessibilityElement = false
+            self.activateAreaNode.accessibilityLabel = nil
+            self.activateAreaNode.accessibilityHint = nil
+        }
         
         return LayoutResult(backgroundHeight: initialPanelHeight, insetHeight: panelHeight, hitTestSlop: .zero)
     }
