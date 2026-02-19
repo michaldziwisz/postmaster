@@ -244,7 +244,20 @@ public class ItemListReactionItemNode: ListViewItemNode, ItemListItemNode {
                     strongSelf.activateArea.frame = CGRect(origin: CGPoint(x: params.leftInset, y: 0.0), size: CGSize(width: params.width - params.leftInset - params.rightInset, height: layout.contentSize.height))
                     strongSelf.activateArea.accessibilityLabel = item.title
                     
-                    strongSelf.activateArea.accessibilityTraits = []
+                    let resolved = ItemListRowVoiceOver.resolve(
+                        strings: item.presentationData.strings,
+                        kind: item.action != nil ? .action : .staticText,
+                        isEnabled: item.action != nil
+                    )
+                    strongSelf.activateArea.accessibilityHint = resolved.hint
+                    strongSelf.activateArea.accessibilityTraits = resolved.traits
+                    strongSelf.activateArea.activate = { [weak strongSelf] in
+                        guard let strongSelf, let item = strongSelf.item, let action = item.action else {
+                            return false
+                        }
+                        action()
+                        return true
+                    }
                     
                     if let icon = item.icon {
                         if strongSelf.iconNode.supernode == nil {
