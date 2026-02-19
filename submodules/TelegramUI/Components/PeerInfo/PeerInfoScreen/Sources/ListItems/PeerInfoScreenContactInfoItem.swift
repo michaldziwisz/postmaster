@@ -72,6 +72,9 @@ private final class PeerInfoScreenContactInfoItemNode: PeerInfoScreenItemNode {
     private var linkHighlightingNode: LinkHighlightingNode?
     
     private let activateArea: AccessibilityAreaNode
+    private let usernameActivateArea: AccessibilityAreaNode
+    private let phoneActivateArea: AccessibilityAreaNode
+    private let additionalTextActivateArea: AccessibilityAreaNode
     
     private var item: PeerInfoScreenContactInfoItem?
     private var theme: PresentationTheme?
@@ -112,6 +115,10 @@ private final class PeerInfoScreenContactInfoItemNode: PeerInfoScreenItemNode {
         self.bottomSeparatorNode.isLayerBacked = true
                                         
         self.activateArea = AccessibilityAreaNode()
+        self.activateArea.isAccessibilityElement = false
+        self.usernameActivateArea = AccessibilityAreaNode()
+        self.phoneActivateArea = AccessibilityAreaNode()
+        self.additionalTextActivateArea = AccessibilityAreaNode()
         
         super.init()
         
@@ -136,6 +143,24 @@ private final class PeerInfoScreenContactInfoItemNode: PeerInfoScreenItemNode {
         
        
         self.addSubnode(self.activateArea)
+        self.addSubnode(self.usernameActivateArea)
+        self.addSubnode(self.phoneActivateArea)
+        self.addSubnode(self.additionalTextActivateArea)
+
+        self.usernameActivateArea.activate = { [weak self] in
+            guard let self, let item = self.item, let action = item.usernameAction else {
+                return false
+            }
+            action(self.contextSourceNode)
+            return true
+        }
+        self.phoneActivateArea.activate = { [weak self] in
+            guard let self, let item = self.item, let action = item.phoneAction else {
+                return false
+            }
+            action(self.contextSourceNode)
+            return true
+        }
                 
         self.containerNode.activated = { [weak self] gesture, _ in
             guard let strongSelf = self, let item = strongSelf.item, let contextAction = item.contextAction else {
@@ -324,8 +349,33 @@ private final class PeerInfoScreenContactInfoItemNode: PeerInfoScreenItemNode {
         self.bottomSeparatorNode.isHidden = hasBottomCorners
         
         self.activateArea.frame = CGRect(origin: CGPoint(), size: CGSize(width: width, height: height))
-        self.activateArea.accessibilityLabel = item.username
-        self.activateArea.accessibilityValue = item.phoneNumber
+
+        self.usernameActivateArea.isAccessibilityElement = !item.username.isEmpty
+        self.usernameActivateArea.frame = usernameFrame.insetBy(dx: -10.0, dy: -10.0)
+        self.usernameActivateArea.accessibilityLabel = item.username
+        let usernameIsEnabled = item.usernameAction != nil
+        let usernameAccessibilityResolved = PeerInfoScreenListRowVoiceOver.resolve(strings: presentationData.strings, kind: usernameIsEnabled ? .action : .staticText, isEnabled: usernameIsEnabled)
+        self.usernameActivateArea.accessibilityHint = usernameAccessibilityResolved.hint
+        self.usernameActivateArea.accessibilityTraits = usernameAccessibilityResolved.traits
+
+        self.phoneActivateArea.isAccessibilityElement = !item.phoneNumber.isEmpty
+        self.phoneActivateArea.frame = phoneFrame.insetBy(dx: -10.0, dy: -10.0)
+        self.phoneActivateArea.accessibilityLabel = item.phoneNumber
+        let phoneIsEnabled = item.phoneAction != nil
+        let phoneAccessibilityResolved = PeerInfoScreenListRowVoiceOver.resolve(strings: presentationData.strings, kind: phoneIsEnabled ? .action : .staticText, isEnabled: phoneIsEnabled)
+        self.phoneActivateArea.accessibilityHint = phoneAccessibilityResolved.hint
+        self.phoneActivateArea.accessibilityTraits = phoneAccessibilityResolved.traits
+
+        if let additionalText = item.additionalText, !additionalText.isEmpty {
+            self.additionalTextActivateArea.isAccessibilityElement = true
+            self.additionalTextActivateArea.frame = additionalTextFrame.insetBy(dx: -10.0, dy: -10.0)
+            self.additionalTextActivateArea.accessibilityLabel = additionalText
+            let additionalTextAccessibilityResolved = PeerInfoScreenListRowVoiceOver.resolve(strings: presentationData.strings, kind: .staticText, isEnabled: true)
+            self.additionalTextActivateArea.accessibilityHint = additionalTextAccessibilityResolved.hint
+            self.additionalTextActivateArea.accessibilityTraits = additionalTextAccessibilityResolved.traits
+        } else {
+            self.additionalTextActivateArea.isAccessibilityElement = false
+        }
         
         let contentSize = CGSize(width: width, height: height)
         self.containerNode.frame = CGRect(origin: CGPoint(), size: contentSize)

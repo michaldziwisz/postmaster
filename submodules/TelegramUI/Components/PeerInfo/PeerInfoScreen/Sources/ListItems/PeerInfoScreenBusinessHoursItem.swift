@@ -203,6 +203,15 @@ private final class PeerInfoScreenBusinessHoursItemNode: PeerInfoScreenItemNode 
         self.contextSourceNode.contentNode.addSubnode(self.labelNode)
         
         self.addSubnode(self.activateArea)
+
+        self.activateArea.activate = { [weak self] in
+            guard let self, let item = self.item else {
+                return false
+            }
+            self.isExpanded.toggle()
+            item.requestLayout(true)
+            return true
+        }
         
         self.containerNode.isGestureEnabled = false
         
@@ -651,6 +660,9 @@ private final class PeerInfoScreenBusinessHoursItemNode: PeerInfoScreenItemNode 
         
         self.activateArea.frame = CGRect(origin: CGPoint(), size: CGSize(width: width, height: height))
         self.activateArea.accessibilityLabel = item.label
+        let accessibilityResolved = PeerInfoScreenListRowVoiceOver.resolve(strings: presentationData.strings, kind: .action, isEnabled: true)
+        self.activateArea.accessibilityHint = accessibilityResolved.hint
+        self.activateArea.accessibilityTraits = accessibilityResolved.traits
         
         let contentSize = CGSize(width: width, height: height)
         self.containerNode.frame = CGRect(origin: CGPoint(), size: contentSize)

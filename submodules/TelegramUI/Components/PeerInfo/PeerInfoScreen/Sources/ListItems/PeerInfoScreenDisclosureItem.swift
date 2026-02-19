@@ -137,6 +137,14 @@ private final class PeerInfoScreenDisclosureItemNode: PeerInfoScreenItemNode {
         self.addSubnode(self.textNode)
         self.addSubnode(self.arrowNode)
         self.addSubnode(self.activateArea)
+
+        self.activateArea.activate = { [weak self] in
+            guard let self, let item = self.item, let action = item.action else {
+                return false
+            }
+            action()
+            return true
+        }
     }
     
     deinit {
@@ -384,6 +392,10 @@ private final class PeerInfoScreenDisclosureItemNode: PeerInfoScreenItemNode {
         
         self.activateArea.accessibilityLabel = item.text
         self.activateArea.accessibilityValue = item.label.text
+        let isEnabled = item.action != nil
+        let accessibilityResolved = PeerInfoScreenListRowVoiceOver.resolve(strings: presentationData.strings, kind: isEnabled ? .open : .staticText, isEnabled: isEnabled)
+        self.activateArea.accessibilityHint = accessibilityResolved.hint
+        self.activateArea.accessibilityTraits = accessibilityResolved.traits
         
         transition.updateFrame(node: self.labelBadgeNode, frame: labelBadgeNodeFrame)
         if self.labelNode.bounds.size != labelFrame.size {

@@ -362,6 +362,14 @@ private final class PeerInfoScreenPersonalChannelItemNode: PeerInfoScreenItemNod
         self.contextSourceNode.contentNode.addSubnode(self.extractedBackgroundImageNode)
         
         self.addSubnode(self.activateArea)
+
+        self.activateArea.activate = { [weak self] in
+            guard let self, let item = self.item else {
+                return false
+            }
+            item.action()
+            return true
+        }
         
         self.containerNode.isGestureEnabled = false
         
@@ -712,6 +720,12 @@ private final class PeerInfoScreenPersonalChannelItemNode: PeerInfoScreenItemNod
         self.bottomSeparatorNode.isHidden = hasBottomCorners
         
         self.activateArea.frame = CGRect(origin: CGPoint(), size: CGSize(width: width, height: height))
+        let channelTitle = item.data.peer.peer?.displayTitle(strings: presentationData.strings, displayOrder: presentationData.nameDisplayOrder)
+        self.activateArea.accessibilityLabel = presentationData.strings.Profile_PersonalChannelSectionTitle
+        self.activateArea.accessibilityValue = channelTitle
+        let accessibilityResolved = PeerInfoScreenListRowVoiceOver.resolve(strings: presentationData.strings, kind: .open, isEnabled: true)
+        self.activateArea.accessibilityHint = accessibilityResolved.hint
+        self.activateArea.accessibilityTraits = accessibilityResolved.traits
         
         let contentSize = CGSize(width: width, height: height)
         self.containerNode.frame = CGRect(origin: CGPoint(), size: contentSize)

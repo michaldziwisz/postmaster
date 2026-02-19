@@ -91,6 +91,14 @@ private final class PeerInfoScreenAddressItemNode: PeerInfoScreenItemNode {
         self.contextSourceNode.contentNode.addSubnode(self.extractedBackgroundImageNode)
         
         self.addSubnode(self.activateArea)
+
+        self.activateArea.activate = { [weak self] in
+            guard let self, let item = self.item, let action = item.action else {
+                return false
+            }
+            action()
+            return true
+        }
         
         self.containerNode.isGestureEnabled = false
         
@@ -231,6 +239,11 @@ private final class PeerInfoScreenAddressItemNode: PeerInfoScreenItemNode {
         
         self.activateArea.frame = CGRect(origin: CGPoint(), size: CGSize(width: width, height: height))
         self.activateArea.accessibilityLabel = item.label
+        self.activateArea.accessibilityValue = item.text
+        let isEnabled = item.action != nil
+        let accessibilityResolved = PeerInfoScreenListRowVoiceOver.resolve(strings: presentationData.strings, kind: isEnabled ? .open : .staticText, isEnabled: isEnabled)
+        self.activateArea.accessibilityHint = accessibilityResolved.hint
+        self.activateArea.accessibilityTraits = accessibilityResolved.traits
         
         let contentSize = CGSize(width: width, height: height)
         self.containerNode.frame = CGRect(origin: CGPoint(), size: contentSize)

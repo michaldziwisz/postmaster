@@ -86,6 +86,14 @@ private final class PeerInfoScreenActionItemNode: PeerInfoScreenItemNode {
         self.addSubnode(self.textNode)
         
         self.addSubnode(self.activateArea)
+
+        self.activateArea.activate = { [weak self] in
+            guard let self, let item = self.item, let action = item.action else {
+                return false
+            }
+            action()
+            return true
+        }
     }
     
     deinit {
@@ -125,6 +133,10 @@ private final class PeerInfoScreenActionItemNode: PeerInfoScreenItemNode {
         self.textNode.maximumNumberOfLines = 1
         self.textNode.attributedText = NSAttributedString(string: item.text, font: titleFont, textColor: textColorValue)
         self.activateArea.accessibilityLabel = item.text
+        let isEnabled = item.action != nil
+        let accessibilityResolved = PeerInfoScreenListRowVoiceOver.resolve(strings: presentationData.strings, kind: isEnabled ? .action : .staticText, isEnabled: isEnabled)
+        self.activateArea.accessibilityHint = accessibilityResolved.hint
+        self.activateArea.accessibilityTraits = accessibilityResolved.traits
         
         let textSize = self.textNode.updateLayout(CGSize(width: width - (leftInset + rightInset), height: .greatestFiniteMagnitude))
         let height = textSize.height + 32.0
