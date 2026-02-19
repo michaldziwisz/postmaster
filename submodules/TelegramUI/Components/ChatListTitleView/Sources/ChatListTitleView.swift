@@ -54,6 +54,7 @@ public final class ChatListTitleView: UIView, NavigationBarTitleView, Navigation
     private weak var lockSnapshotView: UIView?
     private let activityIndicator: ActivityIndicator
     private let buttonView: HighlightTrackingButton
+    private let statusButton: HighlightTrackingButton
     private let proxyNode: ChatTitleProxyNode
     private let proxyButton: HighlightTrackingButton
     private var titleCredibilityIconView: ComponentHostView<Empty>?
@@ -233,6 +234,13 @@ public final class ChatListTitleView: UIView, NavigationBarTitleView, Navigation
                 self.buttonView.accessibilityLabel = buttonAccessibility.label
                 self.buttonView.accessibilityHint = buttonAccessibility.hint
                 self.buttonView.accessibilityTraits = buttonAccessibility.traits
+                
+                if let peerStatus = self.title.peerStatus, !self.title.activity {
+                    let statusAccessibility = ChatListTitleStatusButtonVoiceOver.resolve(strings: self.strings, status: peerStatus)
+                    self.statusButton.accessibilityLabel = statusAccessibility.label
+                    self.statusButton.accessibilityHint = statusAccessibility.hint
+                    self.statusButton.accessibilityTraits = statusAccessibility.traits
+                }
             }
         }
     }
@@ -267,6 +275,11 @@ public final class ChatListTitleView: UIView, NavigationBarTitleView, Navigation
         self.buttonView.isAccessibilityElement = true
         self.buttonView.accessibilityTraits = .header
         
+        self.statusButton = HighlightTrackingButton()
+        self.statusButton.isHidden = true
+        self.statusButton.isAccessibilityElement = false
+        self.statusButton.accessibilityTraits = .button
+        
         self.proxyButton = HighlightTrackingButton()
         self.proxyButton.isHidden = true
         self.proxyButton.isAccessibilityElement = true
@@ -282,6 +295,7 @@ public final class ChatListTitleView: UIView, NavigationBarTitleView, Navigation
         self.addSubnode(self.proxyNode)
         self.addSubview(self.lockView)
         self.addSubview(self.buttonView)
+        self.addSubview(self.statusButton)
         self.addSubview(self.proxyButton)
         
         self.buttonView.highligthedChanged = { [weak self] highlighted in
@@ -305,6 +319,7 @@ public final class ChatListTitleView: UIView, NavigationBarTitleView, Navigation
         }
         
         self.buttonView.addTarget(self, action: #selector(self.buttonPressed), for: .touchUpInside)
+        self.statusButton.addTarget(self, action: #selector(self.statusButtonPressed), for: .touchUpInside)
         
         self.proxyButton.highligthedChanged = { [weak self] highlighted in
             if let strongSelf = self {
@@ -440,6 +455,22 @@ public final class ChatListTitleView: UIView, NavigationBarTitleView, Navigation
             )
             titleCredibilityIconTransition.setFrame(view: titleCredibilityIconView, frame: CGRect(origin: CGPoint(x: titleFrame.maxX + 2.0, y: floorToScreenPixels(titleFrame.midY - titleIconSize.height / 2.0)), size: titleIconSize))
             titleCredibilityIconView.alpha = self.title.activity ? 0.0 : 1.0
+            
+            let isStatusVisible = !self.title.activity
+            self.statusButton.isHidden = !isStatusVisible
+            self.statusButton.isAccessibilityElement = isStatusVisible
+            self.statusButton.frame = titleCredibilityIconView.frame.insetBy(dx: -8.0, dy: -8.0)
+            self.statusButton.alpha = isStatusVisible ? 1.0 : 0.0
+            
+            if isStatusVisible {
+                let statusAccessibility = ChatListTitleStatusButtonVoiceOver.resolve(strings: self.strings, status: peerStatus)
+                self.statusButton.accessibilityLabel = statusAccessibility.label
+                self.statusButton.accessibilityHint = statusAccessibility.hint
+                self.statusButton.accessibilityTraits = statusAccessibility.traits
+            } else {
+                self.statusButton.accessibilityLabel = nil
+                self.statusButton.accessibilityHint = nil
+            }
         } else {
             if let titleCredibilityIconView = self.titleCredibilityIconView {
                 self.titleCredibilityIconView = nil
@@ -453,6 +484,11 @@ public final class ChatListTitleView: UIView, NavigationBarTitleView, Navigation
                     titleCredibilityIconView.removeFromSuperview()
                 }
             }
+            
+            self.statusButton.isHidden = true
+            self.statusButton.isAccessibilityElement = false
+            self.statusButton.accessibilityLabel = nil
+            self.statusButton.accessibilityHint = nil
         }
         
         var resultFrame = titleFrame
@@ -468,6 +504,10 @@ public final class ChatListTitleView: UIView, NavigationBarTitleView, Navigation
     
     @objc private func buttonPressed() {
         self.toggleIsLocked?()
+    }
+    
+    @objc private func statusButtonPressed() {
+        self.openEmojiStatusSetup()
     }
     
     @objc private func proxyButtonPressed() {
