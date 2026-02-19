@@ -612,6 +612,15 @@ public class ChatMessageFactCheckBubbleContentNode: ChatMessageBubbleContentNode
                             titleBadgeButton.isHidden = item.presentationData.isPreview
                             strongSelf.titleBadgeLabel.isHidden = item.presentationData.isPreview
                             
+                            let badgeAccessibility = ChatMessageFactCheckBubbleContentNodeVoiceOver.resolveBadge(
+                                strings: item.presentationData.strings,
+                                isEnabled: !item.presentationData.isPreview
+                            )
+                            titleBadgeButton.isAccessibilityElement = true
+                            titleBadgeButton.accessibilityLabel = badgeAccessibility.label
+                            titleBadgeButton.accessibilityHint = badgeAccessibility.hint
+                            titleBadgeButton.accessibilityTraits = badgeAccessibility.traits
+                            
                             if themeUpdated || titleBadgeButton.backgroundImage(for: .normal) == nil {
                                 titleBadgeButton.setBackgroundImage(generateFilledCircleImage(diameter: badgeBackgroundFrame.height, color: mainColor.withMultipliedAlpha(0.1))?.stretchableImage(withLeftCapWidth: Int(badgeBackgroundFrame.height / 2), topCapHeight: Int(badgeBackgroundFrame.height / 2)), for: .normal)
                             }
