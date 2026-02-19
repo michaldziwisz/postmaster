@@ -24,6 +24,8 @@ final class WebpagePreviewAccessoryPanelNode: AccessoryPanelNode {
     let textNode: TextNode
     private var textString: NSAttributedString?
     
+    private let actionArea: AccessibilityAreaNode
+    
     var theme: PresentationTheme
     var strings: PresentationStrings
     
@@ -36,6 +38,7 @@ final class WebpagePreviewAccessoryPanelNode: AccessoryPanelNode {
         self.strings = strings
         
         self.closeButton = HighlightableButtonNode()
+        self.closeButton.accessibilityLabel = strings.VoiceOver_DiscardPreparedContent
         self.closeButton.setImage(PresentationResourcesChat.chatInputPanelCloseIconImage(theme), for: [])
         self.closeButton.hitTestSlop = UIEdgeInsets(top: -8.0, left: -8.0, bottom: -8.0, right: -8.0)
         self.closeButton.displaysAsynchronously = false
@@ -55,6 +58,8 @@ final class WebpagePreviewAccessoryPanelNode: AccessoryPanelNode {
         self.textNode = TextNode()
         self.textNode.displaysAsynchronously = false
         
+        self.actionArea = AccessibilityAreaNode()
+        
         super.init()
         
         self.closeButton.addTarget(self, action: #selector(self.closePressed), forControlEvents: [.touchUpInside])
@@ -64,6 +69,12 @@ final class WebpagePreviewAccessoryPanelNode: AccessoryPanelNode {
         self.view.addSubview(self.iconView)
         self.addSubnode(self.titleNode)
         self.addSubnode(self.textNode)
+        self.addSubnode(self.actionArea)
+        
+        self.actionArea.activate = { [weak self] in
+            self?.presentLinkOptions()
+            return true
+        }
         
         self.updateWebpage()
     }
@@ -165,6 +176,24 @@ final class WebpagePreviewAccessoryPanelNode: AccessoryPanelNode {
         self.titleString = NSAttributedString(string: authorName, font: Font.medium(15.0), textColor: self.theme.chat.inputPanel.panelControlAccentColor)
         self.textString = NSAttributedString(string: text, font: Font.regular(15.0), textColor: self.theme.chat.inputPanel.primaryTextColor)
         
+        let accessibility = WebpagePreviewAccessoryPanelVoiceOver.resolve(strings: self.strings, title: authorName, text: text)
+        self.actionArea.accessibilityLabel = accessibility.label
+        self.actionArea.accessibilityValue = accessibility.value
+        self.actionArea.accessibilityHint = accessibility.hint
+        self.actionArea.accessibilityTraits = accessibility.traits
+        self.actionArea.accessibilityCustomActions = accessibility.customActions.map { action in
+            UIAccessibilityCustomAction(name: action.name, actionHandler: { [weak self] _ in
+                guard let self else {
+                    return false
+                }
+                switch action.kind {
+                case .close:
+                    self.dismiss?()
+                    return true
+                }
+            })
+        }
+        
         if let (size, inset, interfaceState) = self.validLayout {
             self.updateState(size: size, inset: inset, interfaceState: interfaceState)
         }
@@ -184,7 +213,10 @@ final class WebpagePreviewAccessoryPanelNode: AccessoryPanelNode {
         let textRightInset: CGFloat = 20.0
         
         let closeButtonSize = CGSize(width: 44.0, height: bounds.height)
-        self.closeButton.frame = CGRect(origin: CGPoint(x: bounds.size.width - closeButtonSize.width - inset, y: 2.0), size: closeButtonSize)
+        let closeButtonFrame = CGRect(origin: CGPoint(x: bounds.size.width - closeButtonSize.width - inset, y: 2.0), size: closeButtonSize)
+        self.closeButton.frame = closeButtonFrame
+        
+        self.actionArea.frame = CGRect(origin: CGPoint(x: leftInset, y: 2.0), size: CGSize(width: closeButtonFrame.minX - leftInset, height: bounds.height))
         
         self.lineNode.frame = CGRect(origin: CGPoint(x: leftInset, y: 8.0), size: CGSize(width: 2.0, height: bounds.size.height - 10.0))
         
@@ -217,17 +249,19 @@ final class WebpagePreviewAccessoryPanelNode: AccessoryPanelNode {
     private var previousTapTimestamp: Double?
     @objc private func tapGesture(_ recognizer: UITapGestureRecognizer) {
         if case .ended = recognizer.state {
-            let timestamp = CFAbsoluteTimeGetCurrent()
-            if let previousTapTimestamp = self.previousTapTimestamp, previousTapTimestamp + 1.0 > timestamp {
-                return
-            }
-            self.previousTapTimestamp = CFAbsoluteTimeGetCurrent()
-            self.interfaceInteraction?.presentLinkOptions(self.view)
-            Queue.mainQueue().after(1.5) {
-                self.updateThemeAndStrings(theme: self.theme, strings: self.strings, force: true)
-            }
-            
-            //let _ = ApplicationSpecificNotice.incrementChatReplyOptionsTip(accountManager: self.context.sharedContext.accountManager, count: 3).start()
+            self.presentLinkOptions()
+        }
+    }
+    
+    private func presentLinkOptions() {
+        let timestamp = CFAbsoluteTimeGetCurrent()
+        if let previousTapTimestamp = self.previousTapTimestamp, previousTapTimestamp + 1.0 > timestamp {
+            return
+        }
+        self.previousTapTimestamp = CFAbsoluteTimeGetCurrent()
+        self.interfaceInteraction?.presentLinkOptions(self.view)
+        Queue.mainQueue().after(1.5) {
+            self.updateThemeAndStrings(theme: self.theme, strings: self.strings, force: true)
         }
     }
 }
