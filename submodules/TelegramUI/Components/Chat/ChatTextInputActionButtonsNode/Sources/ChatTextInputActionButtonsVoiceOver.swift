@@ -23,5 +23,12 @@ public enum ChatTextInputActionButtonsVoiceOver {
             return Resolved(label: strings.MediaPicker_Send, hint: nil)
         }
     }
+    
+    public static func resolveExpandButton(strings: PresentationStrings, isExpanded: Bool) -> Resolved {
+        if isExpanded {
+            return Resolved(label: strings.VoiceOver_Chat_CollapseInput, hint: nil)
+        } else {
+            return Resolved(label: strings.VoiceOver_Chat_ExpandInput, hint: nil)
+        }
+    }
 }
-

@@ -152,6 +152,8 @@ public final class ChatTextInputActionButtonsNode: ASDisplayNode, ChatSendMessag
     public let expandMediaInputButtonBackgroundView: GlassBackgroundView
     private let expandMediaInputButtonIcon: GlassBackgroundView.ContentImageView
     
+    private var isMediaInputExpandedForAccessibility: Bool = false
+    
     private var effectBadgeView: EffectBadgeView?
     
     public var sendButtonLongPressed: ((ASDisplayNode, ContextGesture) -> Void)?
@@ -298,6 +300,7 @@ public final class ChatTextInputActionButtonsNode: ASDisplayNode, ChatSendMessag
     
     public func updateLayout(size: CGSize, isMediaInputExpanded: Bool, showTitle: Bool, currentMessageEffectId: Int64?, transition: ContainedViewLayoutTransition, interfaceState: ChatPresentationInterfaceState) -> CGSize {
         self.validLayout = size
+        self.isMediaInputExpandedForAccessibility = isMediaInputExpanded
         
         var innerSize = size
         innerSize.width = 40.0 + 3.0 * 2.0
@@ -449,6 +452,7 @@ public final class ChatTextInputActionButtonsNode: ASDisplayNode, ChatSendMessag
     
     public func updateAccessibility() {
         let isMicVisible = !self.micButton.alpha.isZero
+        let isExpandButtonVisible = self.expandMediaInputButtonBackgroundView.alpha > 0.01
         
         var isVideoMode = false
         if isMicVisible {
@@ -476,7 +480,14 @@ public final class ChatTextInputActionButtonsNode: ASDisplayNode, ChatSendMessag
         self.sendButton.accessibilityLabel = isMicVisible ? nil : resolved.label
         self.sendButton.accessibilityHint = isMicVisible ? nil : resolved.hint
         
-        self.expandMediaInputButton.isAccessibilityElement = false
+        let expandResolved = ChatTextInputActionButtonsVoiceOver.resolveExpandButton(
+            strings: self.strings,
+            isExpanded: self.isMediaInputExpandedForAccessibility
+        )
+        self.expandMediaInputButton.isAccessibilityElement = isExpandButtonVisible
+        self.expandMediaInputButton.accessibilityTraits = [.button]
+        self.expandMediaInputButton.accessibilityLabel = isExpandButtonVisible ? expandResolved.label : nil
+        self.expandMediaInputButton.accessibilityHint = isExpandButtonVisible ? expandResolved.hint : nil
     }
     
     public func makeCustomContents() -> UIView? {

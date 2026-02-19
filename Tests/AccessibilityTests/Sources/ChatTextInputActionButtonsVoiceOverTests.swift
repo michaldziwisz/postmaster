@@ -35,5 +35,24 @@ final class ChatTextInputActionButtonsVoiceOverTests: XCTestCase {
         XCTAssertEqual(resolved.label, defaultPresentationStrings.VoiceOver_Chat_RecordModeVideoMessage)
         XCTAssertEqual(resolved.hint, defaultPresentationStrings.VoiceOver_Chat_RecordModeVideoMessageInfo)
     }
+    
+    func testResolveExpandButtonUsesExpandLabelWhenCollapsed() {
+        let resolved = ChatTextInputActionButtonsVoiceOver.resolveExpandButton(
+            strings: defaultPresentationStrings,
+            isExpanded: false
+        )
+        
+        XCTAssertEqual(resolved.label, defaultPresentationStrings.VoiceOver_Chat_ExpandInput)
+        XCTAssertNil(resolved.hint)
+    }
+    
+    func testResolveExpandButtonUsesCollapseLabelWhenExpanded() {
+        let resolved = ChatTextInputActionButtonsVoiceOver.resolveExpandButton(
+            strings: defaultPresentationStrings,
+            isExpanded: true
+        )
+        
+        XCTAssertEqual(resolved.label, defaultPresentationStrings.VoiceOver_Chat_CollapseInput)
+        XCTAssertNil(resolved.hint)
+    }
 }
-
