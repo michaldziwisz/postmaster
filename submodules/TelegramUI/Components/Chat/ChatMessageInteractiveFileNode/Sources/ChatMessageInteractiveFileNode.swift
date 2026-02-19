@@ -145,6 +145,13 @@ public final class ChatMessageInteractiveFileNode: ASDisplayNode {
     private var playbackAudioLevelNode: VoiceBlobNode?
     private var streamingStatusNode: SemanticStatusNode?
     private var tapRecognizer: UITapGestureRecognizer?
+
+    private let playbackAccessibilityArea: AccessibilityAreaNode
+    private let waveformAccessibilityArea: AccessibilityAreaNode
+    private var voiceOverWaveformFrame: CGRect?
+    private var voiceOverFallbackDuration: Double?
+    private var isPlaybackAccessibilityEnabled: Bool = false
+    private var isWaveformAccessibilityEnabled: Bool = false
     
     private let statusDisposable = MetaDisposable()
     private let playbackStatusDisposable = MetaDisposable()
@@ -216,6 +223,11 @@ public final class ChatMessageInteractiveFileNode: ASDisplayNode {
     private var hapticFeedback: HapticFeedback?
     
     override public init() {
+        self.playbackAccessibilityArea = AccessibilityAreaNode()
+        self.playbackAccessibilityArea.isAccessibilityElement = false
+        self.waveformAccessibilityArea = AccessibilityAreaNode()
+        self.waveformAccessibilityArea.isAccessibilityElement = false
+        
         self.titleNode = TextNode()
         self.titleNode.displaysAsynchronously = false
         self.titleNode.isUserInteractionEnabled = false
@@ -271,6 +283,26 @@ public final class ChatMessageInteractiveFileNode: ASDisplayNode {
         self.addSubnode(self.fetchingTextNode)
         self.addSubnode(self.fetchingCompactTextNode)
         self.addSubnode(self.statusContainerNode)
+        self.addSubnode(self.playbackAccessibilityArea)
+        self.addSubnode(self.waveformAccessibilityArea)
+        
+        self.playbackAccessibilityArea.activate = { [weak self] in
+            guard let self else {
+                return false
+            }
+            guard ChatMessageInteractiveFileNodeVoiceOver.shouldActivate(isEnabled: self.isPlaybackAccessibilityEnabled) else {
+                return false
+            }
+            self.progressPressed()
+            return true
+        }
+        
+        self.waveformAccessibilityArea.increment = { [weak self] in
+            self?.accessibilitySeekWaveform(direction: 1)
+        }
+        self.waveformAccessibilityArea.decrement = { [weak self] in
+            self?.accessibilitySeekWaveform(direction: -1)
+        }
     }
     
     deinit {
@@ -346,6 +378,51 @@ public final class ChatMessageInteractiveFileNode: ASDisplayNode {
                 self.progressPressed()
             }
         }
+    }
+    
+    private func accessibilitySeekWaveform(direction: Int) {
+        guard self.isWaveformAccessibilityEnabled else {
+            return
+        }
+        guard let context = self.context, let message = self.message, let type = peerMessageMediaPlayerType(EngineMessage(message)) else {
+            return
+        }
+        guard let playerStatus = self.playerStatus else {
+            return
+        }
+        
+        let duration = (playerStatus.duration > 0.0 ? playerStatus.duration : (self.voiceOverFallbackDuration ?? 0.0))
+        guard duration > 0.0 else {
+            return
+        }
+        
+        let timestamp = ChatMessageInteractiveFileNodeVoiceOver.effectiveTimestamp(status: playerStatus)
+        let step = ChatMessageInteractiveFileNodeVoiceOver.seekStep(duration: duration)
+        let updatedTimestamp = ChatMessageInteractiveFileNodeVoiceOver.adjustedTimestamp(
+            timestamp: timestamp,
+            duration: duration,
+            step: step,
+            direction: direction
+        )
+        
+        let isPlaying: Bool
+        switch playerStatus.status {
+        case .playing:
+            isPlaying = true
+        default:
+            isPlaying = false
+        }
+        
+        let resolved = ChatMessageInteractiveFileNodeVoiceOver.resolveWaveform(
+            label: "Timeline",
+            timestamp: updatedTimestamp,
+            duration: duration,
+            isEnabled: true,
+            isPlaying: isPlaying
+        )
+        self.waveformAccessibilityArea.accessibilityValue = resolved.value
+        
+        context.sharedContext.mediaManager.playlistControl(.seek(updatedTimestamp), type: type)
     }
     
     private func transcribe() {
@@ -1342,6 +1419,10 @@ public final class ChatMessageInteractiveFileNode: ASDisplayNode {
                                 animation.animator.updateFrame(layer: waveformView.layer, frame: scrubbingFrame, completion: nil)
                                 animation.animator.updateFrame(layer: waveformView.componentView!.layer, frame: CGRect(origin: CGPoint(), size: scrubbingFrame.size), completion: nil)
                                 
+                                strongSelf.voiceOverWaveformFrame = scrubbingFrame
+                                strongSelf.voiceOverFallbackDuration = Double(audioDuration)
+                                strongSelf.waveformAccessibilityArea.frame = scrubbingFrame
+                                
                                 if displayTranscribe {
                                     var added = false
                                     let audioTranscriptionButton: ComponentHostView<Empty>
@@ -1398,6 +1479,12 @@ public final class ChatMessageInteractiveFileNode: ASDisplayNode {
                                     strongSelf.audioTranscriptionButton = nil
                                     audioTranscriptionButton.removeFromSuperview()
                                 }
+                                strongSelf.voiceOverWaveformFrame = nil
+                                strongSelf.waveformAccessibilityArea.isAccessibilityElement = false
+                                strongSelf.waveformAccessibilityArea.accessibilityLabel = nil
+                                strongSelf.waveformAccessibilityArea.accessibilityValue = nil
+                                strongSelf.waveformAccessibilityArea.accessibilityHint = nil
+                                strongSelf.waveformAccessibilityArea.accessibilityTraits = []
                             }
                             
                             if let iconFrame = iconFrame {
@@ -1472,6 +1559,7 @@ public final class ChatMessageInteractiveFileNode: ASDisplayNode {
                             strongSelf.statusContainerNode.frame = progressFrame
                             strongSelf.statusContainerNode.contentRect = CGRect(origin: CGPoint(), size: progressFrame.size)
                             strongSelf.statusContainerNode.contentNode.frame = CGRect(origin: CGPoint(), size: progressFrame.size)
+                            strongSelf.playbackAccessibilityArea.frame = progressFrame
 
                             strongSelf.playbackAudioLevelNode?.frame = progressFrame.insetBy(dx: -12.0, dy: -12.0)
                             strongSelf.progressFrame = progressFrame
@@ -1593,6 +1681,142 @@ public final class ChatMessageInteractiveFileNode: ASDisplayNode {
                 })
             }
         }
+    }
+    
+    private func updateVoiceOverAccessibility(
+        strings: PresentationStrings,
+        message: Message,
+        resourceStatus: FileMediaResourceStatus,
+        isVoice: Bool,
+        isViewOnceMessage: Bool,
+        audioDuration: Int32?,
+        isSelecting: Bool,
+        progressFrame: CGRect
+    ) {
+        let shouldExposeControls = isVoice && !isSelecting
+        
+        if !shouldExposeControls {
+            self.isPlaybackAccessibilityEnabled = false
+            self.playbackAccessibilityArea.isAccessibilityElement = false
+            self.playbackAccessibilityArea.accessibilityLabel = nil
+            self.playbackAccessibilityArea.accessibilityValue = nil
+            self.playbackAccessibilityArea.accessibilityHint = nil
+            self.playbackAccessibilityArea.accessibilityTraits = []
+            
+            self.isWaveformAccessibilityEnabled = false
+            self.waveformAccessibilityArea.isAccessibilityElement = false
+            self.waveformAccessibilityArea.accessibilityLabel = nil
+            self.waveformAccessibilityArea.accessibilityValue = nil
+            self.waveformAccessibilityArea.accessibilityHint = nil
+            self.waveformAccessibilityArea.accessibilityTraits = []
+            
+            self.voiceOverFallbackDuration = nil
+            return
+        }
+        
+        self.playbackAccessibilityArea.frame = progressFrame
+        
+        let playbackResolved: ChatMessageInteractiveFileNodeVoiceOver.Resolved
+        switch resourceStatus.mediaStatus {
+        case let .playbackStatus(playbackStatus):
+            playbackResolved = ChatMessageInteractiveFileNodeVoiceOver.resolvePlaybackButton(
+                strings: strings,
+                isPlaying: playbackStatus == .playing,
+                isEnabled: true
+            )
+        case var .fetchStatus(fetchStatus):
+            if message.forwardInfo != nil {
+                fetchStatus = resourceStatus.fetchStatus
+            }
+            
+            switch fetchStatus {
+            case .Local:
+                playbackResolved = ChatMessageInteractiveFileNodeVoiceOver.resolvePlaybackButton(
+                    strings: strings,
+                    isPlaying: false,
+                    isEnabled: true
+                )
+            default:
+                let isFetching: Bool
+                if case .Fetching = fetchStatus {
+                    isFetching = true
+                } else {
+                    isFetching = false
+                }
+                playbackResolved = ChatMessageInteractiveFileNodeVoiceOver.resolveDownloadButton(
+                    strings: strings,
+                    isFetching: isFetching,
+                    isEnabled: true
+                )
+            }
+        }
+        
+        self.isPlaybackAccessibilityEnabled = true
+        self.playbackAccessibilityArea.isAccessibilityElement = true
+        self.playbackAccessibilityArea.accessibilityLabel = playbackResolved.label
+        self.playbackAccessibilityArea.accessibilityValue = playbackResolved.value
+        self.playbackAccessibilityArea.accessibilityHint = playbackResolved.hint
+        self.playbackAccessibilityArea.accessibilityTraits = playbackResolved.traits
+        
+        self.voiceOverFallbackDuration = audioDuration.flatMap(Double.init)
+        
+        guard let waveformFrame = self.voiceOverWaveformFrame else {
+            self.isWaveformAccessibilityEnabled = false
+            self.waveformAccessibilityArea.isAccessibilityElement = false
+            self.waveformAccessibilityArea.accessibilityLabel = nil
+            self.waveformAccessibilityArea.accessibilityValue = nil
+            self.waveformAccessibilityArea.accessibilityHint = nil
+            self.waveformAccessibilityArea.accessibilityTraits = []
+            return
+        }
+        
+        let durationFromFile = audioDuration.flatMap(Double.init) ?? 0.0
+        let durationFromPlayer = self.playerStatus?.duration ?? 0.0
+        let duration = durationFromPlayer > 0.0 ? durationFromPlayer : durationFromFile
+        guard duration > 0.0 else {
+            self.isWaveformAccessibilityEnabled = false
+            self.waveformAccessibilityArea.isAccessibilityElement = false
+            self.waveformAccessibilityArea.accessibilityLabel = nil
+            self.waveformAccessibilityArea.accessibilityValue = nil
+            self.waveformAccessibilityArea.accessibilityHint = nil
+            self.waveformAccessibilityArea.accessibilityTraits = []
+            return
+        }
+        
+        let isPlaying: Bool
+        if let playerStatus = self.playerStatus {
+            switch playerStatus.status {
+            case .playing:
+                isPlaying = true
+            default:
+                isPlaying = false
+            }
+        } else {
+            isPlaying = false
+        }
+        
+        let timestamp: Double
+        if let playerStatus = self.playerStatus {
+            timestamp = ChatMessageInteractiveFileNodeVoiceOver.effectiveTimestamp(status: playerStatus)
+        } else {
+            timestamp = 0.0
+        }
+        
+        self.waveformAccessibilityArea.frame = waveformFrame
+        let waveformResolved = ChatMessageInteractiveFileNodeVoiceOver.resolveWaveform(
+            label: "Timeline",
+            timestamp: timestamp,
+            duration: duration,
+            isEnabled: !isViewOnceMessage,
+            isPlaying: isPlaying
+        )
+        
+        self.isWaveformAccessibilityEnabled = !isViewOnceMessage
+        self.waveformAccessibilityArea.isAccessibilityElement = true
+        self.waveformAccessibilityArea.accessibilityLabel = waveformResolved.label
+        self.waveformAccessibilityArea.accessibilityValue = waveformResolved.value
+        self.waveformAccessibilityArea.accessibilityHint = waveformResolved.hint
+        self.waveformAccessibilityArea.accessibilityTraits = waveformResolved.traits
     }
     
     private func updateStatus(animated: Bool) {
@@ -1986,6 +2210,17 @@ public final class ChatMessageInteractiveFileNode: ASDisplayNode {
         self.fetchingTextNode.frame = CGRect(origin: self.descriptionNode.frame.origin, size: fetchingInfo.size)
         self.fetchingCompactTextNode.frame = CGRect(origin: self.descriptionNode.frame.origin, size: fetchingCompactSize)
         self.countNode.frame = CGRect(origin: self.descriptionNode.frame.origin, size: countSize)
+        
+        self.updateVoiceOverAccessibility(
+            strings: presentationData.strings,
+            message: message,
+            resourceStatus: resourceStatus,
+            isVoice: isVoice,
+            isViewOnceMessage: isViewOnceMessage,
+            audioDuration: audioDuration,
+            isSelecting: arguments.messageSelection != nil,
+            progressFrame: progressFrame
+        )
     }
     
     public typealias Apply = (Bool, ListViewItemUpdateAnimation, ListViewItemApply?) -> ChatMessageInteractiveFileNode
