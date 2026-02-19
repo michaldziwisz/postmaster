@@ -1381,6 +1381,29 @@ public final class EmojiPagerContentComponent: Component {
             case groupActionButton(groupId: AnyHashable)
         }
         
+        private final class ItemAccessibilityView: UIView {
+            var activateAction: (() -> Void)?
+            
+            override init(frame: CGRect) {
+                super.init(frame: frame)
+                
+                self.isUserInteractionEnabled = false
+                self.backgroundColor = .clear
+            }
+            
+            required init?(coder: NSCoder) {
+                fatalError("init(coder:) has not been implemented")
+            }
+            
+            override func accessibilityActivate() -> Bool {
+                guard let activateAction = self.activateAction else {
+                    return false
+                }
+                activateAction()
+                return true
+            }
+        }
+        
         private let shimmerHostView: PortalSourceView?
         private let standaloneShimmerEffect: StandaloneShimmerEffect?
         
@@ -1413,6 +1436,7 @@ public final class EmojiPagerContentComponent: Component {
         private var visibleFillPlaceholdersViews: [Int: ItemPlaceholderView] = [:]
         private var visibleItemSelectionLayers: [EmojiKeyboardItemLayer.Key: ItemSelectionLayer] = [:]
         private var visibleItemLayers: [EmojiKeyboardItemLayer.Key: EmojiKeyboardItemLayer] = [:]
+        private var visibleItemAccessibilityViews: [EmojiKeyboardItemLayer.Key: ItemAccessibilityView] = [:]
         private var visibleGroupHeaders: [AnyHashable: GroupHeaderLayer] = [:]
         private var visibleGroupBorders: [AnyHashable: GroupBorderLayer] = [:]
         private var visibleGroupPremiumButtons: [AnyHashable: ComponentView<Empty>] = [:]
@@ -3614,6 +3638,45 @@ public final class EmojiPagerContentComponent: Component {
                             }
                         }
                         
+                        let itemAccessibilityView: ItemAccessibilityView
+                        if let current = self.visibleItemAccessibilityViews[itemId] {
+                            itemAccessibilityView = current
+                        } else {
+                            itemAccessibilityView = ItemAccessibilityView(frame: baseItemFrame)
+                            self.visibleItemAccessibilityViews[itemId] = itemAccessibilityView
+                            self.scrollView.addSubview(itemAccessibilityView)
+                        }
+                        
+                        itemTransition.setFrame(view: itemAccessibilityView, frame: baseItemFrame)
+                        
+                        itemAccessibilityView.isAccessibilityElement = !itemLayer.displayPlaceholder
+                        let voiceOver = EmojiPagerContentItemVoiceOver.resolve(
+                            strings: keyboardChildEnvironment.strings,
+                            item: item,
+                            isSelected: isSelected
+                        )
+                        itemAccessibilityView.accessibilityLabel = voiceOver.label
+                        itemAccessibilityView.accessibilityHint = voiceOver.hint
+                        itemAccessibilityView.accessibilityTraits = voiceOver.traits
+                        itemAccessibilityView.accessibilityValue = nil
+                        
+                        itemAccessibilityView.activateAction = { [weak self] in
+                            guard let self, let component = self.component else {
+                                return
+                            }
+                            guard let itemLayer = self.visibleItemLayers[itemId], !itemLayer.displayPlaceholder else {
+                                return
+                            }
+                            component.inputInteractionHolder.inputInteraction?.performItemAction(
+                                itemId.groupId,
+                                item,
+                                self,
+                                self.scrollView.convert(itemLayer.frame, to: self),
+                                itemLayer,
+                                false
+                            )
+                        }
+                        
                         if isSelected {
                             let itemSelectionLayer: ItemSelectionLayer
                             if let current = self.visibleItemSelectionLayers[itemId] {
@@ -3732,6 +3795,11 @@ public final class EmojiPagerContentComponent: Component {
             for (id, itemLayer) in self.visibleItemLayers {
                 if !validIds.contains(id) {
                     removedIds.append(id)
+                    
+                    if let itemAccessibilityView = self.visibleItemAccessibilityViews[id] {
+                        self.visibleItemAccessibilityViews.removeValue(forKey: id)
+                        itemAccessibilityView.removeFromSuperview()
+                    }
                     
                     let itemSelectionLayer = self.visibleItemSelectionLayers[id]
                     
