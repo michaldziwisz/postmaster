@@ -161,10 +161,11 @@ private final class ChatManagingBotTitlePanelComponent: Component {
                 maxTextWidth -= actionButtonSize.width - actionAndSettingsButtonsSpacing
             }
             
+            let titleText = component.peer.displayTitle(strings: component.strings, displayOrder: .firstLast)
             let titleSize = self.title.update(
                 transition: .immediate,
                 component: AnyComponent(MultilineTextComponent(
-                    text: .plain(NSAttributedString(string: component.peer.displayTitle(strings: component.strings, displayOrder: .firstLast), font: Font.semibold(16.0), textColor: component.theme.rootController.navigationBar.primaryTextColor))
+                    text: .plain(NSAttributedString(string: titleText, font: Font.semibold(16.0), textColor: component.theme.rootController.navigationBar.primaryTextColor))
                 )),
                 environment: {},
                 containerSize: CGSize(width: maxTextWidth, height: 100.0)
@@ -194,6 +195,12 @@ private final class ChatManagingBotTitlePanelComponent: Component {
                 }
                 titleView.bounds = CGRect(origin: CGPoint(), size: titleFrame.size)
                 transition.setPosition(view: titleView, position: titleFrame.origin)
+                
+                let accessibility = ChatManagingBotTitlePanelVoiceOver.resolveTitle(titleText)
+                titleView.isAccessibilityElement = true
+                titleView.accessibilityLabel = accessibility.label
+                titleView.accessibilityHint = accessibility.hint
+                titleView.accessibilityTraits = accessibility.traits
             }
             
             let textFrame = CGRect(origin: CGPoint(x: titleFrame.minX, y: titleFrame.maxY + titleTextSpacing), size: textSize)
@@ -204,6 +211,12 @@ private final class ChatManagingBotTitlePanelComponent: Component {
                 }
                 textView.bounds = CGRect(origin: CGPoint(), size: textFrame.size)
                 transition.setPosition(view: textView, position: textFrame.origin)
+                
+                let accessibility = ChatManagingBotTitlePanelVoiceOver.resolveStatus(textValue)
+                textView.isAccessibilityElement = true
+                textView.accessibilityLabel = accessibility.label
+                textView.accessibilityHint = accessibility.hint
+                textView.accessibilityTraits = accessibility.traits
             }
             
             let avatarFrame = CGRect(origin: CGPoint(x: leftInset, y: floor((size.height - avatarDiameter) * 0.5)), size: CGSize(width: avatarDiameter, height: avatarDiameter))
@@ -218,6 +231,7 @@ private final class ChatManagingBotTitlePanelComponent: Component {
             avatarNode.frame = avatarFrame
             avatarNode.updateSize(size: avatarFrame.size)
             avatarNode.setPeer(context: component.context, theme: component.theme, peer: component.peer)
+            avatarNode.view.isAccessibilityElement = false
             
             let settingsButtonFrame = CGRect(origin: CGPoint(x: availableSize.width - rightInset - settingsButtonSize.width, y: floor((size.height - settingsButtonSize.height) * 0.5)), size: settingsButtonSize)
             if let settingsButtonView = self.settingsButton.view {
@@ -225,6 +239,16 @@ private final class ChatManagingBotTitlePanelComponent: Component {
                     self.addSubview(settingsButtonView)
                 }
                 transition.setFrame(view: settingsButtonView, frame: settingsButtonFrame)
+                
+                let accessibility = ChatManagingBotTitlePanelVoiceOver.resolveSettingsButton(
+                    strings: component.strings,
+                    isEnabled: (settingsButtonView as? UIControl)?.isEnabled ?? true
+                )
+                settingsButtonView.isAccessibilityElement = true
+                settingsButtonView.accessibilityLabel = accessibility.label
+                settingsButtonView.accessibilityHint = accessibility.hint
+                settingsButtonView.accessibilityTraits = accessibility.traits
+                settingsButtonView.accessibilityElementsHidden = true
             }
             
             let actionButtonFrame = CGRect(origin: CGPoint(x: settingsButtonFrame.minX - actionAndSettingsButtonsSpacing - actionButtonSize.width, y: floor((size.height - actionButtonSize.height) * 0.5)), size: actionButtonSize)
@@ -234,6 +258,24 @@ private final class ChatManagingBotTitlePanelComponent: Component {
                 }
                 transition.setFrame(view: actionButtonView, frame: actionButtonFrame)
                 transition.setAlpha(view: actionButtonView, alpha: component.managesChat ? 1.0 : 0.0)
+                
+                if component.managesChat {
+                    let accessibility = ChatManagingBotTitlePanelVoiceOver.resolveActionButton(
+                        strings: component.strings,
+                        isPaused: component.isPaused,
+                        isEnabled: (actionButtonView as? UIControl)?.isEnabled ?? true
+                    )
+                    actionButtonView.isAccessibilityElement = true
+                    actionButtonView.accessibilityLabel = accessibility.label
+                    actionButtonView.accessibilityHint = accessibility.hint
+                    actionButtonView.accessibilityTraits = accessibility.traits
+                    actionButtonView.accessibilityElementsHidden = true
+                } else {
+                    actionButtonView.isAccessibilityElement = false
+                    actionButtonView.accessibilityLabel = nil
+                    actionButtonView.accessibilityHint = nil
+                    actionButtonView.accessibilityCustomActions = nil
+                }
             }
             
             return size
