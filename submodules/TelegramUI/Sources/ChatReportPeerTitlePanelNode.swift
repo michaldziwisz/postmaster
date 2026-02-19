@@ -348,11 +348,13 @@ final class ChatReportPeerTitlePanelNode: ChatTitleAccessoryPanelNode {
     private let closeButton: HighlightableButtonNode
     private var buttons: [(ChatReportPeerTitleButton, UIButton)] = []
     private let textNode: ImmediateTextNode
+    private let activateAreaNode: AccessibilityAreaNode
     private var emojiStatusTextNode: ImmediateTextNodeWithEntities?
     private let emojiSeparatorNode: ASDisplayNode
     
     private var theme: PresentationTheme?
     private var presentationInterfaceState: ChatPresentationInterfaceState?
+    private var isAdminInfoMode: Bool = false
     
     private var inviteInfoNode: ChatInfoTitlePanelInviteInfoNode?
     private var peerNearbyInfoNode: ChatInfoTitlePanelPeerNearbyInfoNode?
@@ -384,12 +386,20 @@ final class ChatReportPeerTitlePanelNode: ChatTitleAccessoryPanelNode {
         self.textNode.maximumNumberOfLines = 3
         self.textNode.truncationType = .middle
         self.textNode.textAlignment = .center
+        self.textNode.isAccessibilityElement = false
+        
+        self.activateAreaNode = AccessibilityAreaNode()
+        self.activateAreaNode.isAccessibilityElement = false
+        self.activateAreaNode.activate = { [weak self] in
+            return self?.activateAdminInfoIfAvailable() ?? false
+        }
         
         super.init()
 
         self.addSubnode(self.separatorNode)
         self.addSubnode(self.emojiSeparatorNode)
         self.addSubnode(self.textNode)
+        self.addSubnode(self.activateAreaNode)
         
         self.closeButton.addTarget(self, action: #selector(self.closePressed), forControlEvents: [.touchUpInside])
         self.addSubnode(self.closeButton)
@@ -410,6 +420,14 @@ final class ChatReportPeerTitlePanelNode: ChatTitleAccessoryPanelNode {
     
     @objc func tapped() {
         self.interfaceInteraction?.presentChatRequestAdminInfo()
+    }
+    
+    private func activateAdminInfoIfAvailable() -> Bool {
+        guard self.isAdminInfoMode else {
+            return false
+        }
+        self.tapped()
+        return true
     }
     
     private func openPremiumEmojiStatusDemo() {
@@ -485,6 +503,9 @@ final class ChatReportPeerTitlePanelNode: ChatTitleAccessoryPanelNode {
                 let view = UIButton()
                 view.setTitle(button.title(strings: interfaceState.strings), for: [])
                 view.titleLabel?.font = Font.regular(16.0)
+                view.isAccessibilityElement = true
+                view.accessibilityTraits = [.button]
+                view.accessibilityLabel = button.title(strings: interfaceState.strings)
                 switch button {
                     case .block, .reportSpam, .reportUserSpam:
                     view.setTitleColor(interfaceState.theme.chat.inputPanel.panelControlDestructiveColor, for: [])
@@ -563,9 +584,24 @@ final class ChatReportPeerTitlePanelNode: ChatTitleAccessoryPanelNode {
             
             for (_, view) in self.buttons {
                 transition.updateAlpha(layer: view.layer, alpha: 0.0)
+                view.isAccessibilityElement = false
+                view.accessibilityLabel = nil
+                view.accessibilityHint = nil
+                view.accessibilityCustomActions = nil
             }
             
             self.tapGestureRecognizer?.isEnabled = true
+            self.isAdminInfoMode = true
+            
+            let accessibility = ChatReportPeerTitlePanelVoiceOver.resolveAdminInfo(
+                strings: interfaceState.strings,
+                text: text.string,
+                isEnabled: true
+            )
+            self.activateAreaNode.isAccessibilityElement = true
+            self.activateAreaNode.accessibilityLabel = accessibility.label
+            self.activateAreaNode.accessibilityHint = accessibility.hint
+            self.activateAreaNode.accessibilityTraits = accessibility.traits
             
             panelHeight += max(15.0, textSize.height - 19.0)
         } else {
@@ -573,9 +609,17 @@ final class ChatReportPeerTitlePanelNode: ChatTitleAccessoryPanelNode {
             
             for (_, view) in self.buttons {
                 transition.updateAlpha(layer: view.layer, alpha: 1.0)
+                view.isAccessibilityElement = true
+                view.accessibilityLabel = view.title(for: []) ?? ""
+                view.accessibilityHint = nil
+                view.accessibilityTraits = [.button]
             }
             
             self.tapGestureRecognizer?.isEnabled = false
+            self.isAdminInfoMode = false
+            self.activateAreaNode.isAccessibilityElement = false
+            self.activateAreaNode.accessibilityLabel = nil
+            self.activateAreaNode.accessibilityHint = nil
         }
         
         let closeButtonSize = self.closeButton.measure(CGSize(width: 100.0, height: 100.0))
@@ -584,6 +628,18 @@ final class ChatReportPeerTitlePanelNode: ChatTitleAccessoryPanelNode {
             self.closeButton.isHidden = true
         } else {
             self.closeButton.isHidden = false
+        }
+        
+        if self.closeButton.isHidden {
+            self.closeButton.isAccessibilityElement = false
+            self.closeButton.accessibilityLabel = nil
+            self.closeButton.accessibilityHint = nil
+        } else {
+            let accessibility = ChatReportPeerTitlePanelVoiceOver.resolveCloseButton(strings: interfaceState.strings, isEnabled: true)
+            self.closeButton.isAccessibilityElement = true
+            self.closeButton.accessibilityLabel = accessibility.label
+            self.closeButton.accessibilityHint = accessibility.hint
+            self.closeButton.accessibilityTraits = accessibility.traits
         }
         
         var emojiStatus: PeerEmojiStatus?
@@ -706,6 +762,7 @@ final class ChatReportPeerTitlePanelNode: ChatTitleAccessoryPanelNode {
 
         let initialPanelHeight = panelHeight
         transition.updateFrame(node: self.separatorNode, frame: CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: width, height: UIScreenPixel)))
+        self.activateAreaNode.frame = CGRect(origin: .zero, size: CGSize(width: width, height: initialPanelHeight))
         
         var panelInset: CGFloat = 0.0
         if let _ = interfaceState.translationState {
