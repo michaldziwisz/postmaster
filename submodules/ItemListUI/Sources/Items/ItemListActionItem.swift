@@ -212,21 +212,46 @@ public class ItemListActionItemNode: ListViewItemNode, ItemListItemNode {
                 if let strongSelf = self {
                     strongSelf.item = item
                     
-                    strongSelf.activateArea.frame = CGRect(origin: CGPoint(x: params.leftInset, y: 0.0), size: CGSize(width: params.width - params.leftInset - params.rightInset, height: layout.contentSize.height))
-                    strongSelf.activateArea.accessibilityLabel = item.title
-                    
-                    var accessibilityTraits: UIAccessibilityTraits = .button
-                    switch item.kind {
-                        case .disabled:
-                            accessibilityTraits.insert(.notEnabled)
-                        default:
-                            break
-                    }
-                    strongSelf.activateArea.accessibilityTraits = accessibilityTraits
-                    
-                    if let _ = updatedTheme {
-                        strongSelf.topStripeNode.backgroundColor = itemSeparatorColor
-                        strongSelf.bottomStripeNode.backgroundColor = itemSeparatorColor
+	                    strongSelf.activateArea.frame = CGRect(origin: CGPoint(x: params.leftInset, y: 0.0), size: CGSize(width: params.width - params.leftInset - params.rightInset, height: layout.contentSize.height))
+	                    strongSelf.activateArea.accessibilityLabel = item.title
+	                    strongSelf.activateArea.accessibilityValue = nil
+	                    strongSelf.activateArea.accessibilityHint = nil
+	                    
+	                    var accessibilityTraits: UIAccessibilityTraits = .button
+	                    let isEnabled: Bool
+	                    switch item.kind {
+	                        case .disabled:
+	                            isEnabled = false
+	                            accessibilityTraits.insert(.notEnabled)
+	                        default:
+	                            isEnabled = true
+	                            break
+	                    }
+	                    strongSelf.activateArea.accessibilityTraits = accessibilityTraits
+	                    strongSelf.activateArea.activate = { [weak strongSelf] in
+	                        guard let strongSelf, let item = strongSelf.item, item.kind != .disabled else {
+	                            return false
+	                        }
+	                        item.action()
+	                        return true
+	                    }
+	                    if isEnabled, item.longTapAction != nil {
+	                        strongSelf.activateArea.accessibilityCustomActions = [
+	                            UIAccessibilityCustomAction(name: item.presentationData.strings.Common_More, actionHandler: { [weak strongSelf] in
+	                                guard let strongSelf, let item = strongSelf.item, item.kind != .disabled else {
+	                                    return false
+	                                }
+	                                item.longTapAction?()
+	                                return true
+	                            })
+	                        ]
+	                    } else {
+	                        strongSelf.activateArea.accessibilityCustomActions = nil
+	                    }
+	                    
+	                    if let _ = updatedTheme {
+	                        strongSelf.topStripeNode.backgroundColor = itemSeparatorColor
+	                        strongSelf.bottomStripeNode.backgroundColor = itemSeparatorColor
                         strongSelf.backgroundNode.backgroundColor = itemBackgroundColor
                         strongSelf.highlightedBackgroundNode.backgroundColor = item.presentationData.theme.list.itemHighlightedBackgroundColor
                         strongSelf.highlightNode.backgroundColor = item.presentationData.theme.list.itemSearchHighlightColor

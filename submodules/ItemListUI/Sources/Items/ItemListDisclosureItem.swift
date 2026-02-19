@@ -556,18 +556,29 @@ public class ItemListDisclosureItemNode: ListViewItemNode, ItemListItemNode {
                 if let strongSelf = self {
                     strongSelf.item = item
                     
-                    strongSelf.activateArea.frame = CGRect(origin: CGPoint(x: params.leftInset, y: 0.0), size: CGSize(width: params.width - params.leftInset - params.rightInset, height: layout.contentSize.height))
-                    strongSelf.activateArea.accessibilityLabel = item.title
-                    strongSelf.activateArea.accessibilityValue = item.label
-                    if item.enabled {
-                        strongSelf.activateArea.accessibilityTraits = [.button]
-                    } else {
-                        strongSelf.activateArea.accessibilityTraits = [.button, .notEnabled]
-                    }
-                    
-                    if let icon = item.icon {
-                        if strongSelf.iconNode.supernode == nil {
-                            strongSelf.addSubnode(strongSelf.iconNode)
+	                    strongSelf.activateArea.frame = CGRect(origin: CGPoint(x: params.leftInset, y: 0.0), size: CGSize(width: params.width - params.leftInset - params.rightInset, height: layout.contentSize.height))
+	                    strongSelf.activateArea.accessibilityLabel = item.title
+	                    strongSelf.activateArea.accessibilityValue = item.label
+	                    let hasAction = item.action != nil
+	                    let isEnabled = item.enabled && hasAction
+	                    let resolved = ItemListRowVoiceOver.resolve(
+	                        strings: item.presentationData.strings,
+	                        kind: hasAction ? .open : .staticText,
+	                        isEnabled: isEnabled
+	                    )
+	                    strongSelf.activateArea.accessibilityHint = resolved.hint
+	                    strongSelf.activateArea.accessibilityTraits = resolved.traits
+	                    strongSelf.activateArea.activate = { [weak strongSelf] in
+	                        guard let strongSelf, let item = strongSelf.item, item.enabled, let action = item.action else {
+	                            return false
+	                        }
+	                        action()
+	                        return true
+	                    }
+	                    
+	                    if let icon = item.icon {
+	                        if strongSelf.iconNode.supernode == nil {
+	                            strongSelf.addSubnode(strongSelf.iconNode)
                         }
                         if updateIcon {
                             strongSelf.iconNode.image = icon
