@@ -2164,6 +2164,7 @@ private final class CameraScreenComponent: CombinedComponent {
             if let flashButtonPosition, state.displayingFlashTint {
                 let flashTintControl = flashTintControl.update(
                     component: FlashTintControlComponent(
+                        strings: environment.strings,
                         position: flashButtonPosition.offsetBy(dx: 0.0, dy: 27.0),
                         tint: component.cameraState.flashTint,
                         size: component.cameraState.flashTintSize,

@@ -4742,6 +4742,8 @@ Sorry for the inconvenience.";
 "VoiceOver.Camera.SwitchCamera" = "Switch camera";
 "VoiceOver.Camera.Flash" = "Flash";
 "VoiceOver.Camera.FlashTint" = "Flash tint";
+"VoiceOver.Camera.FlashTintSize" = "Flash tint size";
+"VoiceOver.Camera.FlashTintSizeHint" = "Swipe up or down to adjust";
 "VoiceOver.Camera.Collage" = "Collage";
 "VoiceOver.Camera.DisableCollage" = "Disable collage";
 "VoiceOver.Camera.DualCamera" = "Dual camera";

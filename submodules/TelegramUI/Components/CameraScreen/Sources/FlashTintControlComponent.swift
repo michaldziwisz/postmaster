@@ -4,24 +4,31 @@ import Display
 import AsyncDisplayKit
 import ComponentFlow
 import RoundedRectWithTailPath
+import TelegramPresentationData
 
 private final class FlashColorComponent: Component {
     let tint: CameraState.FlashTint?
     let isSelected: Bool
+    let accessibilityLabel: String
+    let accessibilityValue: String?
     let action: () -> Void
     
     init(
         tint: CameraState.FlashTint?,
         isSelected: Bool,
+        accessibilityLabel: String,
+        accessibilityValue: String?,
         action: @escaping () -> Void
     ) {
         self.tint = tint
         self.isSelected = isSelected
+        self.accessibilityLabel = accessibilityLabel
+        self.accessibilityValue = accessibilityValue
         self.action = action
     }
     
     static func == (lhs: FlashColorComponent, rhs: FlashColorComponent) -> Bool {
-        return lhs.tint == rhs.tint && lhs.isSelected == rhs.isSelected
+        return lhs.tint == rhs.tint && lhs.isSelected == rhs.isSelected && lhs.accessibilityLabel == rhs.accessibilityLabel && lhs.accessibilityValue == rhs.accessibilityValue
     }
     
     final class View: UIButton {
@@ -84,6 +91,15 @@ private final class FlashColorComponent: Component {
             self.component = component
             let contentSize = CGSize(width: 30.0, height: 30.0)
             self.contentView.frame = CGRect(origin: .zero, size: contentSize)
+
+            self.isAccessibilityElement = true
+            self.accessibilityLabel = component.accessibilityLabel
+            self.accessibilityValue = component.accessibilityValue
+            var accessibilityTraits: UIAccessibilityTraits = [.button]
+            if component.isSelected {
+                accessibilityTraits.insert(.selected)
+            }
+            self.accessibilityTraits = accessibilityTraits
             
             let bounds = CGRect(origin: .zero, size: contentSize)
             self.layer.allowsGroupOpacity = true
@@ -137,6 +153,7 @@ private final class FlashColorComponent: Component {
 }
 
 final class FlashTintControlComponent: Component {
+    let strings: PresentationStrings
     let position: CGPoint
     let tint: CameraState.FlashTint
     let size: CGFloat
@@ -145,6 +162,7 @@ final class FlashTintControlComponent: Component {
     let dismiss: () -> Void
     
     init(
+        strings: PresentationStrings,
         position: CGPoint,
         tint: CameraState.FlashTint,
         size: CGFloat,
@@ -152,6 +170,7 @@ final class FlashTintControlComponent: Component {
         updateSize: @escaping (CGFloat) -> Void,
         dismiss: @escaping () -> Void
     ) {
+        self.strings = strings
         self.position = position
         self.tint = tint
         self.size = size
@@ -161,7 +180,7 @@ final class FlashTintControlComponent: Component {
     }
     
     static func == (lhs: FlashTintControlComponent, rhs: FlashTintControlComponent) -> Bool {
-        return lhs.position == rhs.position && lhs.tint == rhs.tint && lhs.size == rhs.size
+        return lhs.strings === rhs.strings && lhs.position == rhs.position && lhs.tint == rhs.tint && lhs.size == rhs.size
     }
     
     final class View: UIButton {
@@ -185,6 +204,7 @@ final class FlashTintControlComponent: Component {
             super.init(frame: frame)
             
             self.containerView.layer.anchorPoint = CGPoint(x: 0.8, y: 0.0)
+            self.containerView.accessibilityViewIsModal = true
             
             self.addSubview(self.dismissView)
             self.addSubview(self.containerView)
@@ -204,6 +224,11 @@ final class FlashTintControlComponent: Component {
             fatalError("init(coder:) has not been implemented")
         }
         
+        override func accessibilityPerformEscape() -> Bool {
+            self.component?.dismiss()
+            return true
+        }
+        
         @objc private func dismissTapped() {
             self.component?.dismiss()
         }
@@ -211,6 +236,10 @@ final class FlashTintControlComponent: Component {
         func update(component: FlashTintControlComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
             let isFirstTime = self.component == nil
             self.component = component
+            
+            self.isAccessibilityElement = false
+            self.dismissView.isAccessibilityElement = false
+            self.containerView.isAccessibilityElement = false
             
             let size = CGSize(width: 184.0, height: 92.0)
             
@@ -223,6 +252,24 @@ final class FlashTintControlComponent: Component {
                 self.maskLayer.frame = CGRect(origin: .zero, size: CGSize(width: size.width, height: size.height + 7.0))
                 self.effectView.layer.mask = self.maskLayer
             }
+
+            let sliderAccessibility = CameraFlashTintVoiceOver.resolveSlider(strings: component.strings, value: component.size)
+            self.sliderView.isAccessibilityElement = true
+            self.sliderView.accessibilityTraits = sliderAccessibility.traits
+            self.sliderView.accessibilityLabel = sliderAccessibility.label
+            self.sliderView.accessibilityValue = sliderAccessibility.value
+            self.sliderView.accessibilityHint = sliderAccessibility.hint
+            self.sliderView.accessibilityCustomActions = [
+                UIAccessibilityCustomAction(name: component.strings.Common_Close, actionHandler: { [weak self] _ in
+                    self?.component?.dismiss()
+                    return true
+                })
+            ]
+            
+            let offAccessibility = CameraFlashTintVoiceOver.resolveSwatch(strings: component.strings, swatch: .off, isSelected: false)
+            let whiteAccessibility = CameraFlashTintVoiceOver.resolveSwatch(strings: component.strings, swatch: .white, isSelected: component.tint == .white)
+            let yellowAccessibility = CameraFlashTintVoiceOver.resolveSwatch(strings: component.strings, swatch: .yellow, isSelected: component.tint == .yellow)
+            let blueAccessibility = CameraFlashTintVoiceOver.resolveSwatch(strings: component.strings, swatch: .blue, isSelected: component.tint == .blue)
             
             let swatchesSize = self.swatches.update(
                 transition: transition,
@@ -235,6 +282,8 @@ final class FlashTintControlComponent: Component {
                                     FlashColorComponent(
                                         tint: nil,
                                         isSelected: false,
+                                        accessibilityLabel: offAccessibility.label,
+                                        accessibilityValue: offAccessibility.value,
                                         action: {
                                             component.update(nil)
                                             component.dismiss()
@@ -248,6 +297,8 @@ final class FlashTintControlComponent: Component {
                                     FlashColorComponent(
                                         tint: .white,
                                         isSelected: component.tint == .white,
+                                        accessibilityLabel: whiteAccessibility.label,
+                                        accessibilityValue: whiteAccessibility.value,
                                         action: {
                                             component.update(.white)
                                         }
@@ -260,6 +311,8 @@ final class FlashTintControlComponent: Component {
                                     FlashColorComponent(
                                         tint: .yellow,
                                         isSelected: component.tint == .yellow,
+                                        accessibilityLabel: yellowAccessibility.label,
+                                        accessibilityValue: yellowAccessibility.value,
                                         action: {
                                             component.update(.yellow)
                                         }
@@ -272,6 +325,8 @@ final class FlashTintControlComponent: Component {
                                     FlashColorComponent(
                                         tint: .blue,
                                         isSelected: component.tint == .blue,
+                                        accessibilityLabel: blueAccessibility.label,
+                                        accessibilityValue: blueAccessibility.value,
                                         action: {
                                             component.update(.blue)
                                         }
@@ -302,6 +357,10 @@ final class FlashTintControlComponent: Component {
             if isFirstTime {
                 self.containerView.layer.animateScale(from: 0.0, to: 1.0, duration: 0.35, timingFunction: kCAMediaTimingFunctionSpring)
                 self.containerView.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.2)
+                
+                if UIAccessibility.isVoiceOverRunning {
+                    UIAccessibility.post(notification: .screenChanged, argument: self.sliderView)
+                }
             }
             
             return availableSize
@@ -339,6 +398,8 @@ private final class SliderView: UIView {
     private let valueChanged: (CGFloat, Bool) -> Void
     
     private let hapticFeedback = HapticFeedback()
+    
+    private let accessibilityStep: CGFloat = 0.1
 
     init(minValue: CGFloat, maxValue: CGFloat, value: CGFloat, valueChanged: @escaping (CGFloat, Bool) -> Void) {
         self.minValue = minValue
@@ -352,6 +413,9 @@ private final class SliderView: UIView {
         self.knobView = UIImageView(image: generateFilledCircleImage(diameter: 30.0, color: .white))
         
         super.init(frame: .zero)
+        
+        self.isAccessibilityElement = true
+        self.accessibilityTraits = [.adjustable]
                
         self.backgroundColor = UIColor(rgb: 0x3e3e3e)
         self.clipsToBounds = true
@@ -382,6 +446,35 @@ private final class SliderView: UIView {
         
         transition.setFrame(view: self.foregroundView, frame: CGRect(origin: CGPoint(), size: CGSize(width: 15.0 + value * (width - 30.0), height: 30.0)))
         transition.setFrame(view: self.knobView, frame: CGRect(origin: CGPoint(x: (width - 30.0) * value, y: 0.0), size: CGSize(width: 30.0, height: 30.0)))
+        self.accessibilityValue = self.accessibilityValueString()
+    }
+
+    private func accessibilityValueString() -> String {
+        let range = self.maxValue - self.minValue
+        if range <= 0.0 {
+            return ""
+        }
+        let normalized = (self.value - self.minValue) / range
+        let percent = Int((normalized * 100.0).rounded())
+        return "\(percent)%"
+    }
+    
+    private func setValue(_ value: CGFloat, finished: Bool) {
+        let previousValue = self.value
+        self.value = max(self.minValue, min(self.maxValue, value))
+        if abs(previousValue - self.value) >= 0.001 {
+            self.valueChanged(self.value, finished)
+        }
+    }
+    
+    override func accessibilityIncrement() {
+        let range = self.maxValue - self.minValue
+        self.setValue(self.value + self.accessibilityStep * range, finished: true)
+    }
+    
+    override func accessibilityDecrement() {
+        let range = self.maxValue - self.minValue
+        self.setValue(self.value - self.accessibilityStep * range, finished: true)
     }
     
     @objc private func panGesture(_ gestureRecognizer: UIPanGestureRecognizer) {
