@@ -14,6 +14,7 @@ swift_library(
         "//submodules/ChatPresentationInterfaceState",
         "//submodules/ChatListUI",
         "//submodules/TelegramUI",
+        "//submodules/TelegramUI/Components/AudioTranscriptionButtonComponent",
         "//submodules/TelegramUI/Components/CameraScreen",
         "//submodules/TelegramUI/Components/ChatTitleView",
         "//submodules/TelegramUI/Components/ChatListTitleView",

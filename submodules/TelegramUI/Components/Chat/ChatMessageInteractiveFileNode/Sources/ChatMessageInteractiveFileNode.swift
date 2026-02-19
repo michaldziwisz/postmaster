@@ -1362,6 +1362,7 @@ public final class ChatMessageInteractiveFileNode: ASDisplayNode {
                                     let audioTranscriptionButtonSize = audioTranscriptionButton.update(
                                         transition: animation.isAnimated ? .easeInOut(duration: 0.3) : .immediate,
                                         component: AnyComponent(AudioTranscriptionButtonComponent(
+                                            strings: arguments.presentationData.strings,
                                             theme: buttonTheme,
                                             transcriptionState: effectiveAudioTranscriptionState,
                                             pressed: {
@@ -2227,4 +2228,3 @@ public final class FileMessageSelectionNode: ASDisplayNode {
         self.checkNode.frame = CGRect(origin: checkOrigin, size: checkSize)
     }
 }
-

@@ -44,21 +44,27 @@ public final class AudioTranscriptionButtonComponent: Component {
         case locked
     }
     
+    public let strings: PresentationStrings
     public let theme: AudioTranscriptionButtonComponent.Theme
     public let transcriptionState: TranscriptionState
     public let pressed: () -> Void
     
     public init(
+        strings: PresentationStrings,
         theme: AudioTranscriptionButtonComponent.Theme,
         transcriptionState: TranscriptionState,
         pressed: @escaping () -> Void
     ) {
+        self.strings = strings
         self.theme = theme
         self.transcriptionState = transcriptionState
         self.pressed = pressed
     }
     
     public static func ==(lhs: AudioTranscriptionButtonComponent, rhs: AudioTranscriptionButtonComponent) -> Bool {
+        if lhs.strings !== rhs.strings {
+            return false
+        }
         if lhs.theme != rhs.theme {
             return false
         }
@@ -242,6 +248,12 @@ public final class AudioTranscriptionButtonComponent: Component {
             self.backgroundLayer.backgroundColor = backgroundColor.cgColor
             
             self.component = component
+            
+            let accessibility = AudioTranscriptionButtonComponentVoiceOver.resolve(strings: component.strings, state: component.transcriptionState)
+            self.accessibilityLabel = accessibility.label
+            self.accessibilityValue = accessibility.value
+            self.accessibilityHint = accessibility.hint
+            self.accessibilityTraits = accessibility.traits
             
             self.backgroundLayer.frame = CGRect(origin: CGPoint(), size: size)
             if let progressAnimationView = self.progressAnimationView {
