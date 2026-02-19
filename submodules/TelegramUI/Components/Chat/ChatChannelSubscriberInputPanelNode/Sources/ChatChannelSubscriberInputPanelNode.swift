@@ -497,9 +497,67 @@ public final class ChatChannelSubscriberInputPanelNode: ChatInputPanelNode {
             }
             transition.updateFrame(view: self.panelContainer, frame: panelFrame)
             transition.updateFrame(view: panelView, frame: CGRect(origin: CGPoint(), size: panelFrame.size))
+
+            if let panelView = panelView as? GlassControlPanelComponent.View {
+                self.updateVoiceOverAccessibility(
+                    panelView: panelView,
+                    strings: interfaceState.strings,
+                    centerActionTitle: centerAction?.title
+                )
+            }
         }
         
         return panelHeight
+    }
+
+    private func updateVoiceOverAccessibility(panelView: GlassControlPanelComponent.View, strings: PresentationStrings, centerActionTitle: String?) {
+        if let giftView = panelView.leftItemView?.itemView(id: AnyHashable("gift")) {
+            let resolved = ChatChannelSubscriberInputPanelVoiceOver.resolveGiftButton(
+                strings: strings,
+                isEnabled: (giftView as? UIControl)?.isEnabled ?? true
+            )
+            self.applyVoiceOverAccessibility(resolved: resolved, to: giftView)
+        }
+
+        if let suggestPostView = panelView.leftItemView?.itemView(id: AnyHashable("suggestPost")) {
+            let resolved = ChatChannelSubscriberInputPanelVoiceOver.resolveSuggestPostButton(
+                strings: strings,
+                isEnabled: (suggestPostView as? UIControl)?.isEnabled ?? true
+            )
+            self.applyVoiceOverAccessibility(resolved: resolved, to: suggestPostView)
+        }
+
+        if let helpView = panelView.leftItemView?.itemView(id: AnyHashable("help")) {
+            let resolved = ChatChannelSubscriberInputPanelVoiceOver.resolveHelpButton(
+                strings: strings,
+                isEnabled: (helpView as? UIControl)?.isEnabled ?? true
+            )
+            self.applyVoiceOverAccessibility(resolved: resolved, to: helpView)
+        }
+
+        if let searchView = panelView.rightItemView?.itemView(id: AnyHashable("search")) {
+            let resolved = ChatChannelSubscriberInputPanelVoiceOver.resolveSearchButton(
+                strings: strings,
+                isEnabled: (searchView as? UIControl)?.isEnabled ?? true
+            )
+            self.applyVoiceOverAccessibility(resolved: resolved, to: searchView)
+        }
+
+        if let centerActionTitle, let centerActionView = panelView.centerItemView?.itemView(id: AnyHashable(0)) {
+            let resolved = ChatChannelSubscriberInputPanelVoiceOver.resolveCenterAction(
+                title: centerActionTitle,
+                isEnabled: (centerActionView as? UIControl)?.isEnabled ?? true
+            )
+            self.applyVoiceOverAccessibility(resolved: resolved, to: centerActionView)
+        }
+    }
+
+    private func applyVoiceOverAccessibility(resolved: ChatChannelSubscriberInputPanelVoiceOver.Resolved, to view: UIView) {
+        view.isAccessibilityElement = !resolved.label.isEmpty
+        view.accessibilityLabel = resolved.label
+        view.accessibilityHint = resolved.hint
+        view.accessibilityTraits = resolved.traits
+        view.accessibilityElementsHidden = true
     }
     
     override public func minimalHeight(interfaceState: ChatPresentationInterfaceState, metrics: LayoutMetrics) -> CGFloat {
