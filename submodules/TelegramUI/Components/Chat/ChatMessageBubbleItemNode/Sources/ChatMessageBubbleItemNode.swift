@@ -4174,6 +4174,13 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
                                
                 iconNode.image = PresentationResourcesChat.chatBubbleCloseIcon(item.presentationData.theme.theme)
                 
+                let closeAccessibility = ChatMessageBubbleItemNodeVoiceOver.resolveAdCloseButton(strings: item.presentationData.strings)
+                buttonNode.isAccessibilityElement = true
+                buttonNode.accessibilityLabel = closeAccessibility.label
+                buttonNode.accessibilityHint = closeAccessibility.hint
+                buttonNode.accessibilityTraits = closeAccessibility.traits
+                iconNode.isAccessibilityElement = false
+                
                 let closeButtonSize = CGSize(width: 32.0, height: 32.0)
                 let closeIconSize = CGSize(width: 12.0, height: 12.0)
                 let closeButtonFrame = CGRect(origin: CGPoint(x: contentUpperRightCorner.x - closeButtonSize.width, y: layoutConstants.bubble.contentInsets.top), size: closeButtonSize)
