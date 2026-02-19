@@ -251,6 +251,29 @@ public final class GifPagerContentComponent: Component {
             case media(MediaId)
             case placeholder(Int)
         }
+
+        private final class ItemAccessibilityView: UIView {
+            var activateAction: (() -> Void)?
+
+            override init(frame: CGRect) {
+                super.init(frame: frame)
+
+                self.isUserInteractionEnabled = false
+                self.backgroundColor = .clear
+            }
+
+            required init?(coder: NSCoder) {
+                fatalError("init(coder:) has not been implemented")
+            }
+
+            override func accessibilityActivate() -> Bool {
+                guard let activateAction = self.activateAction else {
+                    return false
+                }
+                activateAction()
+                return true
+            }
+        }
         
         fileprivate final class ItemLayer: GifVideoLayer {
             let item: Item?
@@ -478,11 +501,13 @@ public final class GifPagerContentComponent: Component {
         private let mirrorSearchHeaderContainer: UIView
         private var visibleItemPlaceholderViews: [ItemKey: ItemPlaceholderView] = [:]
         private var visibleItemLayers: [ItemKey: ItemLayer] = [:]
+        private var visibleItemAccessibilityViews: [ItemKey: ItemAccessibilityView] = [:]
         private var ignoreScrolling: Bool = false
         
         private var component: GifPagerContentComponent?
         private var pagerEnvironment: PagerComponentChildEnvironment?
         private var theme: PresentationTheme?
+        private var strings: PresentationStrings?
         private var itemLayout: ItemLayout?
         private var batchVideoContext: BatchVideoRenderingContext?
         
@@ -712,7 +737,7 @@ public final class GifPagerContentComponent: Component {
         }
         
         private func updateVisibleItems(attemptSynchronousLoads: Bool, transition: ComponentTransition, fromScrolling: Bool) {
-            guard let component = self.component, let itemLayout = self.itemLayout else {
+            guard let component = self.component, let itemLayout = self.itemLayout, let strings = self.strings else {
                 return
             }
             
@@ -837,6 +862,40 @@ public final class GifPagerContentComponent: Component {
                             itemLayer.onUpdateDisplayPlaceholder(false, 0.2)
                         }
                     }
+
+                    if let item {
+                        let itemAccessibilityView: ItemAccessibilityView
+                        if let current = self.visibleItemAccessibilityViews[itemId] {
+                            itemAccessibilityView = current
+                        } else {
+                            itemAccessibilityView = ItemAccessibilityView(frame: itemFrame)
+                            self.visibleItemAccessibilityViews[itemId] = itemAccessibilityView
+                            self.scrollView.addSubview(itemAccessibilityView)
+                        }
+
+                        itemTransition.setFrame(view: itemAccessibilityView, frame: itemFrame)
+
+                        itemAccessibilityView.isAccessibilityElement = !itemLayer.displayPlaceholder
+                        let voiceOver = GifPagerContentItemVoiceOver.resolve(
+                            strings: strings,
+                            title: item.contextResult?.1.title,
+                            description: item.contextResult?.1.description
+                        )
+                        itemAccessibilityView.accessibilityLabel = voiceOver.label
+                        itemAccessibilityView.accessibilityValue = voiceOver.value
+                        itemAccessibilityView.accessibilityHint = voiceOver.hint
+                        itemAccessibilityView.accessibilityTraits = voiceOver.traits
+
+                        itemAccessibilityView.activateAction = { [weak self] in
+                            guard let self, let component = self.component else {
+                                return
+                            }
+                            guard let itemLayer = self.visibleItemLayers[itemId], !itemLayer.displayPlaceholder else {
+                                return
+                            }
+                            component.inputInteraction.performItemAction(item, self, self.scrollView.convert(itemLayer.frame, to: self))
+                        }
+                    }
                 }
             }
 
@@ -847,6 +906,9 @@ public final class GifPagerContentComponent: Component {
                     itemLayer.removeFromSuperlayer()
                     
                     if let view = self.visibleItemPlaceholderViews.removeValue(forKey: id) {
+                        view.removeFromSuperview()
+                    }
+                    if let view = self.visibleItemAccessibilityViews.removeValue(forKey: id) {
                         view.removeFromSuperview()
                     }
                 }
@@ -895,6 +957,7 @@ public final class GifPagerContentComponent: Component {
             
             self.component = component
             self.theme = keyboardChildEnvironment.theme
+            self.strings = keyboardChildEnvironment.strings
             
             let pagerEnvironment = environment[PagerComponentChildEnvironment.self].value
             self.pagerEnvironment = pagerEnvironment
