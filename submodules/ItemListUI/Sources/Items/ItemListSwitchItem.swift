@@ -366,14 +366,10 @@ public class ItemListSwitchItemNode: ListViewItemNode, ItemListItemNode {
                     strongSelf.activateArea.frame = CGRect(origin: CGPoint(x: params.leftInset, y: 0.0), size: CGSize(width: params.width - params.leftInset - params.rightInset, height: layout.contentSize.height))
                     
                     strongSelf.activateArea.accessibilityLabel = item.title
-                    strongSelf.activateArea.accessibilityValue = item.value ? item.presentationData.strings.VoiceOver_Common_On : item.presentationData.strings.VoiceOver_Common_Off
-                    strongSelf.activateArea.accessibilityHint = item.presentationData.strings.VoiceOver_Common_SwitchHint
-                    var accessibilityTraits = UIAccessibilityTraits()
-                    if item.enabled {
-                    } else {
-                        accessibilityTraits.insert(.notEnabled)
-                    }
-                    strongSelf.activateArea.accessibilityTraits = accessibilityTraits
+                    let resolved = ItemListToggleVoiceOver.resolve(strings: item.presentationData.strings, isOn: item.value, isEnabled: item.enabled)
+                    strongSelf.activateArea.accessibilityValue = resolved.value
+                    strongSelf.activateArea.accessibilityHint = resolved.hint
+                    strongSelf.activateArea.accessibilityTraits = resolved.traits
                     
                     if let icon = item.icon {
                         var iconTransition = transition

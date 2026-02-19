@@ -5,6 +5,7 @@ import Display
 import TelegramPresentationData
 import AppBundle
 import AccountContext
+import ItemListUI
 
 final class PeerInfoScreenSwitchItem: PeerInfoScreenItem {
     let id: AnyHashable
@@ -83,12 +84,18 @@ private final class PeerInfoScreenSwitchItemNode: PeerInfoScreenItemNode {
         }
         
         self.activateArea.activate = { [weak self] in
-            guard let strongSelf = self, let item = strongSelf.item else {
+            guard let strongSelf = self, let item = strongSelf.item, let toggled = item.toggled else {
                 return false
             }
-            let value = !strongSelf.switchNode.isOn
-            item.toggled?(value)
-            return true
+            
+            if item.isLocked {
+                toggled(strongSelf.switchNode.isOn)
+                return true
+            } else {
+                let value = !strongSelf.switchNode.isOn
+                toggled(value)
+                return true
+            }
         }
     }
     
@@ -162,8 +169,11 @@ private final class PeerInfoScreenSwitchItemNode: PeerInfoScreenItemNode {
         self.textNode.attributedText = NSAttributedString(string: item.text, font: Font.regular(17.0), textColor: textColorValue)
         
         self.activateArea.accessibilityLabel = item.text
-        self.activateArea.accessibilityValue = item.value ? presentationData.strings.VoiceOver_Common_On : presentationData.strings.VoiceOver_Common_Off
-        self.activateArea.accessibilityHint = presentationData.strings.VoiceOver_Common_SwitchHint
+        let isEnabled = item.toggled != nil
+        let resolved = PeerInfoScreenSwitchItemVoiceOver.resolve(strings: presentationData.strings, isOn: item.value, isLocked: item.isLocked, isEnabled: isEnabled)
+        self.activateArea.accessibilityValue = resolved.value
+        self.activateArea.accessibilityHint = resolved.hint
+        self.activateArea.accessibilityTraits = resolved.traits
         
         let textSize = self.textNode.updateLayout(CGSize(width: width - leftInset - rightInset, height: .greatestFiniteMagnitude))
         let textFrame = CGRect(origin: CGPoint(x: leftInset, y: 16.0), size: textSize)
