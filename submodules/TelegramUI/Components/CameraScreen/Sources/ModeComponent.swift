@@ -140,6 +140,38 @@ final class ModeComponent: Component {
             preconditionFailure()
         }
         
+        override func accessibilityIncrement() {
+            guard let component = self.component else {
+                return
+            }
+            guard let index = component.availableModes.firstIndex(of: component.currentMode) else {
+                return
+            }
+            let nextIndex = index + 1
+            guard nextIndex < component.availableModes.count else {
+                return
+            }
+            let nextMode = component.availableModes[nextIndex]
+            component.updatedMode(nextMode)
+            self.accessibilityValue = nextMode.title(strings: component.strings)
+        }
+        
+        override func accessibilityDecrement() {
+            guard let component = self.component else {
+                return
+            }
+            guard let index = component.availableModes.firstIndex(of: component.currentMode) else {
+                return
+            }
+            let previousIndex = index - 1
+            guard previousIndex >= 0 else {
+                return
+            }
+            let previousMode = component.availableModes[previousIndex]
+            component.updatedMode(previousMode)
+            self.accessibilityValue = previousMode.title(strings: component.strings)
+        }
+        
         private var animatedOut = false
         func animateOutToEditor(transition: ComponentTransition) {
             self.animatedOut = true
@@ -338,6 +370,13 @@ final class ModeComponent: Component {
             transition.setFrame(view: liquidLensView, frame: CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: containerFrame.size))
             liquidLensView.update(size: containerFrame.size, cornerRadius: cornerRadius, selectionOrigin: CGPoint(x: max(0.0, min(lensSelection.origin.x, containerFrame.size.width - lensSelection.size.width)), y: lensSelection.origin.y), selectionSize: lensSelection.size, inset: 3.0, isDark: true, isLifted: self.selectionGestureState != nil && !isTablet, isCollapsed: false, transition: transition)
             self.backgroundContainer.update(size: containerFrame.size, isDark: true, transition: .immediate)
+            
+            let resolved = CameraModeControlVoiceOver.resolve(strings: component.strings, modeTitle: component.currentMode.title(strings: component.strings))
+            self.isAccessibilityElement = true
+            self.accessibilityLabel = resolved.label
+            self.accessibilityValue = resolved.value
+            self.accessibilityHint = resolved.hint
+            self.accessibilityTraits = [.adjustable]
             
             return size
         }

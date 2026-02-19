@@ -4748,6 +4748,8 @@ Sorry for the inconvenience.";
 "VoiceOver.Camera.LockRecording" = "Lock recording";
 "VoiceOver.Camera.StartVideoRecording" = "Record video";
 "VoiceOver.Camera.StopVideoRecording" = "Stop recording";
+"VoiceOver.Camera.Mode" = "Camera mode";
+"VoiceOver.Camera.ModeHint" = "Swipe up or down to change mode";
 "VoiceOver.Stories.OpenHint" = "Double-tap to open story.";
 "VoiceOver.Stories.AddHint" = "Double-tap to add a story.";
 "VoiceOver.Stories.NewStories_0" = "%@ new stories";
