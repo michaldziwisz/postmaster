@@ -335,6 +335,25 @@ class GiftOptionItemNode: ItemListRevealOptionsItemNode {
                     strongSelf.activateArea.frame = CGRect(origin: CGPoint(x: params.leftInset, y: 0.0), size: CGSize(width: params.width - params.leftInset - params.rightInset, height: layout.contentSize.height))
                     strongSelf.activateArea.accessibilityLabel = titleAttributedString.string
                     strongSelf.activateArea.accessibilityValue = statusAttributedString.string
+                    let isEnabled = item.action != nil
+                    let resolvedAccessibility = GiftOptionItemVoiceOver.resolve(
+                        strings: item.presentationData.strings,
+                        isEnabled: isEnabled,
+                        isSelected: item.isSelected ?? false
+                    )
+                    strongSelf.activateArea.accessibilityHint = resolvedAccessibility.hint
+                    strongSelf.activateArea.accessibilityTraits = resolvedAccessibility.traits
+                    if isEnabled {
+                        strongSelf.activateArea.activate = { [weak strongSelf] in
+                            guard let strongSelf, let item = strongSelf.layoutParams?.0 else {
+                                return false
+                            }
+                            item.action?()
+                            return true
+                        }
+                    } else {
+                        strongSelf.activateArea.activate = nil
+                    }
                     
                     if let _ = updatedTheme {
                         strongSelf.topStripeNode.backgroundColor = item.presentationData.theme.list.itemBlocksSeparatorColor
