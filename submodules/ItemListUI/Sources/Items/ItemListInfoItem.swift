@@ -291,6 +291,32 @@ public class InfoItemNode: ListViewItemNode {
                     strongSelf.accessibilityLabel = "\(item.title)\n\(attributedText.string)"
                     strongSelf.activateArea.frame = CGRect(origin: CGPoint(x: params.leftInset, y: 0.0), size: CGSize(width: params.width - params.leftInset - params.rightInset, height: layout.contentSize.height))
                     strongSelf.activateArea.accessibilityLabel = strongSelf.accessibilityLabel
+
+                    let urlAttributeKey = NSAttributedString.Key(rawValue: TelegramTextAttributes.URL)
+                    var firstUrl: String?
+                    attributedText.enumerateAttribute(urlAttributeKey, in: NSRange(location: 0, length: attributedText.length), options: []) { value, _, stop in
+                        if let value = value as? String {
+                            firstUrl = value
+                            stop.pointee = true
+                        }
+                    }
+                    
+                    let containsLink = firstUrl != nil && item.linkAction != nil
+                    let resolvedAccessibility = ItemListLinkableTextVoiceOver.resolve(strings: item.presentationData.strings, containsLink: containsLink)
+                    strongSelf.activateArea.accessibilityHint = resolvedAccessibility.hint
+                    strongSelf.activateArea.accessibilityTraits = resolvedAccessibility.traits
+                    
+                    if let firstUrl, containsLink {
+                        strongSelf.activateArea.activate = { [weak strongSelf] in
+                            guard let strongSelf, let item = strongSelf.item else {
+                                return false
+                            }
+                            item.linkAction?(.tap(firstUrl))
+                            return true
+                        }
+                    } else {
+                        strongSelf.activateArea.activate = nil
+                    }
                 
                     if let _ = updatedTheme {
                         strongSelf.topStripeNode.backgroundColor = itemSeparatorColor
