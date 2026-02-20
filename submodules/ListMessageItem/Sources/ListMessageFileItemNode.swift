@@ -548,7 +548,7 @@ public final class ListMessageFileItemNode: ListMessageNode {
     }
     
     override func setupItem(_ item: ListMessageItem) {
-        self.item = item
+        super.setupItem(item)
     }
     
     override public func layoutForParams(_ params: ListViewItemLayoutParams, item: ListViewItem, previousItem: ListViewItem?, nextItem: ListViewItem?) {

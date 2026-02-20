@@ -210,7 +210,31 @@ public final class ListMessageSnippetItemNode: ListMessageNode {
     }
     
     override func setupItem(_ item: ListMessageItem) {
-        self.item = item
+        super.setupItem(item)
+        self.updateVoiceOverCustomActions()
+    }
+
+    private func updateVoiceOverCustomActions() {
+        guard let item = self.item, item.message != nil, self.currentPrimaryUrl != nil else {
+            self.accessibilityCustomActions = nil
+            if self.isNodeLoaded {
+                self.view.accessibilityCustomActions = nil
+            }
+            return
+        }
+        
+        let openLinkAction = UIAccessibilityCustomAction(
+            name: item.presentationData.strings.Conversation_OpenLink,
+            actionHandler: { [weak self] _ in
+                self?.activateMedia()
+                return true
+            }
+        )
+        
+        self.accessibilityCustomActions = [openLinkAction]
+        if self.isNodeLoaded {
+            self.view.accessibilityCustomActions = [openLinkAction]
+        }
     }
     
     override public func layoutForParams(_ params: ListViewItemLayoutParams, item: ListViewItem, previousItem: ListViewItem?, nextItem: ListViewItem?) {
@@ -708,6 +732,7 @@ public final class ListMessageSnippetItemNode: ListMessageNode {
                     strongSelf.currentMedia = selectedMedia
                     strongSelf.currentPrimaryUrl = primaryUrl
                     strongSelf.currentIsInstantView = isInstantView
+                    strongSelf.updateVoiceOverCustomActions()
                     
                     if let _ = updatedTheme {
                         strongSelf.separatorNode.backgroundColor = item.presentationData.theme.theme.list.itemPlainSeparatorColor
