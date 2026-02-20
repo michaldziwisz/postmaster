@@ -13,6 +13,7 @@ import SwiftSignalKit
 import ChatControllerInteraction
 import ChatMessageItemCommon
 import TextFormat
+import UrlEscaping
 import ChatMessageItem
 import ChatMessageTransitionNode
 import AnimatedStickerNode
@@ -87,12 +88,14 @@ public final class ChatMessageAccessibilityData {
     public let traits: UIAccessibilityTraits
     public let customActions: [ChatMessageAccessibilityCustomAction]?
     public let firstUrl: String?
+    public let firstUrlConcealed: Bool?
     public let singleUrl: String?
     
     public init(item: ChatMessageItem, isSelected: Bool?) {
         var hint: String?
         var traits: UIAccessibilityTraits = []
         var firstUrl: String?
+        var firstUrlConcealed: Bool?
         var singleUrl: String?
         
         var customActions: [ChatMessageAccessibilityCustomAction] = []
@@ -522,6 +525,7 @@ public final class ChatMessageAccessibilityData {
                                 let url = String(item.message.text[range])
                                 if firstUrl == nil {
                                     firstUrl = url
+                                    firstUrlConcealed = false
                                 }
                                 urlCount += 1
                                 if urlCount == 1 {
@@ -534,6 +538,12 @@ public final class ChatMessageAccessibilityData {
                         case let .TextUrl(url):
                             if firstUrl == nil {
                                 firstUrl = url
+                                if let range = Range<String.Index>(NSRange(location: entity.range.lowerBound, length: entity.range.count), in: item.message.text) {
+                                    let attributeText = String(item.message.text[range])
+                                    firstUrlConcealed = !doesUrlMatchText(url: url, text: attributeText, fullText: item.message.text)
+                                } else {
+                                    firstUrlConcealed = true
+                                }
                             }
                             urlCount += 1
                             if urlCount == 1 {
@@ -622,6 +632,7 @@ public final class ChatMessageAccessibilityData {
         self.traits = traits
         self.customActions = customActions.isEmpty ? nil : customActions
         self.firstUrl = firstUrl
+        self.firstUrlConcealed = firstUrlConcealed
         self.singleUrl = singleUrl
     }
     
