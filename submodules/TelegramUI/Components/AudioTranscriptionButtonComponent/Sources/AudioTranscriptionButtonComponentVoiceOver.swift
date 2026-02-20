@@ -21,7 +21,7 @@ public enum AudioTranscriptionButtonComponentVoiceOver {
         let label = strings.GroupBoost_AudioTranscription
         
         var value: String?
-        var hint: String?
+        let hint: String? = nil
         var traits: UIAccessibilityTraits = [.button]
         
         switch state {
@@ -42,4 +42,3 @@ public enum AudioTranscriptionButtonComponentVoiceOver {
         return Resolved(label: label, value: value, hint: hint, traits: traits)
     }
 }
-
