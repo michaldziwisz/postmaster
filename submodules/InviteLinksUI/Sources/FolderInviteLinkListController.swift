@@ -165,7 +165,7 @@ private enum InviteLinksListEntry: ItemListNodeEntry {
         let arguments = arguments as! FolderInviteLinkListControllerArguments
         switch self {
         case let .header(text):
-            return InviteLinkHeaderItem(context: arguments.context, theme: presentationData.theme, text: text, animationName: "ChatListCloudFolderLink", sectionId: self.section)
+            return InviteLinkHeaderItem(context: arguments.context, strings: presentationData.strings, theme: presentationData.theme, text: text, animationName: "ChatListCloudFolderLink", sectionId: self.section)
         case let .mainLinkHeader(text):
             return ItemListSectionHeaderItem(presentationData: presentationData, text: text, sectionId: self.section)
         case let .mainLink(link, isGenerating):

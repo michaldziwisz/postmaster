@@ -15,6 +15,7 @@ import TextNodeWithEntities
 
 public class InviteLinkHeaderItem: ListViewItem, ItemListItem {
     public let context: AccountContext
+    public let strings: PresentationStrings
     public let theme: PresentationTheme
     public let title: String?
     public let text: NSAttributedString
@@ -23,8 +24,9 @@ public class InviteLinkHeaderItem: ListViewItem, ItemListItem {
     public let sectionId: ItemListSectionId
     public let linkAction: ((ItemListTextItemLinkAction) -> Void)?
     
-    public init(context: AccountContext, theme: PresentationTheme, title: String? = nil, text: NSAttributedString, animationName: String, hideOnSmallScreens: Bool = false, sectionId: ItemListSectionId, linkAction: ((ItemListTextItemLinkAction) -> Void)? = nil) {
+    public init(context: AccountContext, strings: PresentationStrings, theme: PresentationTheme, title: String? = nil, text: NSAttributedString, animationName: String, hideOnSmallScreens: Bool = false, sectionId: ItemListSectionId, linkAction: ((ItemListTextItemLinkAction) -> Void)? = nil) {
         self.context = context
+        self.strings = strings
         self.theme = theme
         self.title = title
         self.text = text
@@ -78,6 +80,7 @@ class InviteLinkHeaderItemNode: ListViewItemNode {
     private let titleNode: TextNode
     private let textNode: TextNodeWithEntities
     private var animationNode: AnimatedStickerNode
+    private let activateArea: AccessibilityAreaNode
     
     private var item: InviteLinkHeaderItem?
     
@@ -94,11 +97,14 @@ class InviteLinkHeaderItemNode: ListViewItemNode {
         
         self.animationNode = DefaultAnimatedStickerNodeImpl()
         
+        self.activateArea = AccessibilityAreaNode()
+        
         super.init(layerBacked: false)
         
         self.addSubnode(self.titleNode)
         self.addSubnode(self.textNode.textNode)
         self.addSubnode(self.animationNode)
+        self.addSubnode(self.activateArea)
     }
     
     override public func didLoad() {
@@ -169,7 +175,39 @@ class InviteLinkHeaderItemNode: ListViewItemNode {
                         strongSelf.animationNode.visibility = true
                     }
                     strongSelf.item = item
-                    strongSelf.accessibilityLabel = attributedText.string
+                    
+                    strongSelf.activateArea.frame = CGRect(origin: .zero, size: layout.size)
+                    
+                    let urlAttributeKey = NSAttributedString.Key(rawValue: TelegramTextAttributes.URL)
+                    var firstUrl: String?
+                    attributedText.enumerateAttribute(urlAttributeKey, in: NSRange(location: 0, length: attributedText.length), options: []) { value, _, stop in
+                        if let value = value as? String {
+                            firstUrl = value
+                            stop.pointee = true
+                        }
+                    }
+                    
+                    let containsLink = firstUrl != nil && item.linkAction != nil
+                    let resolvedAccessibility = InviteLinkHeaderItemVoiceOver.resolve(
+                        strings: item.strings,
+                        title: item.title,
+                        text: attributedText.string,
+                        containsLink: containsLink
+                    )
+                    strongSelf.activateArea.accessibilityLabel = resolvedAccessibility.label
+                    strongSelf.activateArea.accessibilityHint = resolvedAccessibility.hint
+                    strongSelf.activateArea.accessibilityTraits = resolvedAccessibility.traits
+                    if let firstUrl, containsLink {
+                        strongSelf.activateArea.activate = { [weak strongSelf] in
+                            guard let strongSelf, let item = strongSelf.item else {
+                                return false
+                            }
+                            item.linkAction?(.tap(firstUrl))
+                            return true
+                        }
+                    } else {
+                        strongSelf.activateArea.activate = nil
+                    }
                                         
                     strongSelf.animationNode.frame = CGRect(origin: CGPoint(x: floor((layout.size.width - iconSize.width) / 2.0), y: -10.0), size: iconSize)
                     strongSelf.animationNode.updateLayout(size: iconSize)

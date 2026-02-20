@@ -211,7 +211,7 @@ private enum InviteLinksListEntry: ItemListNodeEntry {
         let arguments = arguments as! InviteLinkListControllerArguments
         switch self {
             case let .header(theme, text):
-                return InviteLinkHeaderItem(context: arguments.context, theme: theme, text: text, animationName: "Invite", sectionId: self.section)
+                return InviteLinkHeaderItem(context: arguments.context, strings: presentationData.strings, theme: theme, text: text, animationName: "Invite", sectionId: self.section)
             case let .mainLinkHeader(_, text):
                 return ItemListSectionHeaderItem(presentationData: presentationData, text: text, sectionId: self.section)
             case let .mainLink(_, invite, peers, importersCount, isPublic):

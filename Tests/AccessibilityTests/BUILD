@@ -51,6 +51,7 @@ swift_library(
         "//submodules/HorizontalPeerItem",
         "//submodules/CountrySelectionUI",
         "//submodules/AuthorizationUI",
+        "//submodules/InviteLinksUI",
         "//submodules/ListMessageItem",
         "//submodules/MediaPickerUI",
         "//submodules/MediaPlayer:UniversalMediaPlayer",
