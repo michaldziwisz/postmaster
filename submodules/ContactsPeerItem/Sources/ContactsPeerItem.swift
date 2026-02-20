@@ -849,7 +849,6 @@ public class ContactsPeerItemNode: ItemListRevealOptionsItemNode {
             }
             
             let updatedSelectionNode: CheckNode?
-            var isSelected = false
             switch item.selection {
             case .none:
                 updatedSelectionNode = nil
@@ -860,7 +859,6 @@ public class ContactsPeerItemNode: ItemListRevealOptionsItemNode {
                     case .right:
                         rightInset += 38.0
                 }
-                isSelected = selected
                 
                 let selectionNode: CheckNode
                 if let current = currentSelectionNode {
