@@ -11,6 +11,14 @@ on:
         required: false
         default: false
         type: boolean
+      build_configuration:
+        description: 'Build configuration'
+        required: false
+        default: debug_arm64
+        type: choice
+        options:
+          - debug_arm64
+          - release_arm64
 
 jobs:
   build:
@@ -71,6 +79,10 @@ jobs:
           echo "BUILD_NUMBER=$(echo $BUILD_NUMBER)" >> $GITHUB_ENV
           echo "APP_VERSION=$(echo $APP_VERSION)" >> $GITHUB_ENV
 
+          BUILD_CONFIGURATION="${{ inputs.build_configuration }}"
+          BUILD_CONFIGURATION="${BUILD_CONFIGURATION:-debug_arm64}"
+          echo "BUILD_CONFIGURATION=$(echo $BUILD_CONFIGURATION)" >> $GITHUB_ENV
+
           python3 scripts/generate_ci_configuration.py \
             --input build-system/appstore-configuration.json \
             --output build-system/ci-configuration.json
@@ -95,22 +107,26 @@ jobs:
             build \
             --configurationPath="build-system/ci-configuration.json" \
             --codesigningInformationPath=build-system/fake-codesigning \
-            --configuration=release_arm64 \
+            --configuration="$BUILD_CONFIGURATION" \
             --disableExtensions \
             --disablePushNotifications \
             --buildNumber="$BUILD_NUMBER"
 
           # collect ipa
+          shopt -s nullglob
           OUTPUT_PATH="build/artifacts"
           rm -rf "$OUTPUT_PATH"
           mkdir -p "$OUTPUT_PATH"
-          for f in bazel-out/applebin_ios-ios_arm*-opt-ST-*/bin/Telegram/Telegram.ipa; do
-            cp "$f" "$OUTPUT_PATH/Postmaster.ipa"
-          done
+          IPA_FILES=(bazel-out/applebin_ios-ios_arm*-*-ST-*/bin/Telegram/Telegram.ipa)
+          if [ ${#IPA_FILES[@]} -eq 0 ]; then
+            echo "No IPA files found in bazel-out."
+            exit 1
+          fi
+          cp "${IPA_FILES[0]}" "$OUTPUT_PATH/Postmaster.ipa"
 
           # collect dsym
           mkdir -p build/DSYMs
-          for f in bazel-out/applebin_ios-ios_arm*-opt-ST-*/bin/Telegram/*.dSYM; do
+          for f in bazel-out/applebin_ios-ios_arm*-*-ST-*/bin/Telegram/*.dSYM; do
             cp -R "$f" build/DSYMs/
           done
           zip -r "./$OUTPUT_PATH/Telegram.DSYMs.zip" build/DSYMs 1>/dev/null
@@ -118,7 +134,7 @@ jobs:
       - name: Upload workflow artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: Postmaster-${{ env.APP_VERSION }}-${{ env.BUILD_NUMBER }}
+          name: Postmaster-${{ env.APP_VERSION }}-${{ env.BUILD_NUMBER }}-${{ env.BUILD_CONFIGURATION }}
           path: |
             /Users/Shared/telegram-ios/build/artifacts/Postmaster.ipa
             /Users/Shared/telegram-ios/build/artifacts/Telegram.DSYMs.zip
@@ -132,9 +148,9 @@ jobs:
           SOURCE_DIR=/Users/Shared/telegram-ios
           cd "$SOURCE_DIR"
 
-          TAG="build-${BUILD_NUMBER}"
-          TITLE="Postmaster ${APP_VERSION} (${BUILD_NUMBER})"
-          NOTES="An unsigned build of Postmaster for iOS ${APP_VERSION} (${BUILD_NUMBER})"
+          TAG="build-${BUILD_NUMBER}-${BUILD_CONFIGURATION}"
+          TITLE="Postmaster ${APP_VERSION} (${BUILD_NUMBER}, ${BUILD_CONFIGURATION})"
+          NOTES="An unsigned build of Postmaster for iOS ${APP_VERSION} (${BUILD_NUMBER}, ${BUILD_CONFIGURATION})"
 
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release edit "$TAG" --title "$TITLE" --notes "$NOTES"
