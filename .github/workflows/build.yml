@@ -8,18 +8,31 @@ on:
 
 jobs:
   build:
-    runs-on: macos-13
+    runs-on: macos-latest
+    permissions:
+      contents: write
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
         with:
           submodules: 'recursive'
           fetch-depth: '0'
 
-      - name: Set active Xcode path
+      - name: Select Xcode (best effort)
         run: |
-          XCODE_VERSION=$(cat versions.json | python3 -c 'import json,sys;obj=json.load(sys.stdin);print(obj["xcode"]);')
-          sudo xcode-select -s /Applications/Xcode_$XCODE_VERSION.app/Contents/Developer
+          set -euo pipefail
+
+          XCODE_VERSION="$(python3 -c 'import json;print(json.load(open("versions.json"))["xcode"])')"
+          DESIRED="/Applications/Xcode_${XCODE_VERSION}.app/Contents/Developer"
+
+          if [ -d "$DESIRED" ]; then
+            sudo xcode-select -s "$DESIRED"
+          else
+            echo "Desired Xcode_${XCODE_VERSION}.app not found, using the default Xcode."
+          fi
+
+          xcode-select -p
+          xcodebuild -version
 
       - name: Create canonical source directory
         run: |
@@ -29,6 +42,9 @@ jobs:
           mv /Users/Shared/$(basename $GITHUB_WORKSPACE) /Users/Shared/telegram-ios
 
       - name: Build the App
+        env:
+          POSTMASTER_API_ID: ${{ secrets.POSTMASTER_API_ID }}
+          POSTMASTER_API_HASH: ${{ secrets.POSTMASTER_API_HASH }}
         run: |
           set -x
 
@@ -49,20 +65,28 @@ jobs:
           echo "BUILD_NUMBER=$(echo $BUILD_NUMBER)" >> $GITHUB_ENV
           echo "APP_VERSION=$(echo $APP_VERSION)" >> $GITHUB_ENV
 
+          python3 scripts/generate_ci_configuration.py \
+            --input build-system/appstore-configuration.json \
+            --output build-system/ci-configuration.json
+
           python3 build-system/Make/ImportCertificates.py --path build-system/fake-codesigning/certs
 
           python3 -u build-system/Make/Make.py \
+            --overrideXcodeVersion \
             --bazelUserRoot="$BAZEL_USER_ROOT" \
             test \
-            --configurationPath="build-system/appstore-configuration.json" \
+            --configurationPath="build-system/ci-configuration.json" \
             --codesigningInformationPath=build-system/fake-codesigning
 
           python3 -u build-system/Make/Make.py \
+            --overrideXcodeVersion \
             --bazelUserRoot="$BAZEL_USER_ROOT" \
             build \
-            --configurationPath="build-system/appstore-configuration.json" \
+            --configurationPath="build-system/ci-configuration.json" \
             --codesigningInformationPath=build-system/fake-codesigning \
             --configuration=release_arm64 \
+            --disableExtensions \
+            --disablePushNotifications \
             --buildNumber="$BUILD_NUMBER"
 
           # collect ipa
@@ -70,7 +94,7 @@ jobs:
           rm -rf "$OUTPUT_PATH"
           mkdir -p "$OUTPUT_PATH"
           for f in bazel-out/applebin_ios-ios_arm*-opt-ST-*/bin/Telegram/Telegram.ipa; do
-            cp "$f" $OUTPUT_PATH/
+            cp "$f" "$OUTPUT_PATH/Postmaster.ipa"
           done
 
           # collect dsym
@@ -80,37 +104,32 @@ jobs:
           done
           zip -r "./$OUTPUT_PATH/Telegram.DSYMs.zip" build/DSYMs 1>/dev/null
 
-      - name: Create Release
-        id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Upload workflow artifacts
+        uses: actions/upload-artifact@v4
         with:
-          tag_name: build-${{ env.BUILD_NUMBER }}
-          release_name: Telegram ${{ env.APP_VERSION }} (${{ env.BUILD_NUMBER }})
-          body: |
-            An unsigned build of Telegram for iOS ${{ env.APP_VERSION }} (${{ env.BUILD_NUMBER }})
-          draft: false
-          prerelease: false
+          name: Postmaster-${{ env.APP_VERSION }}-${{ env.BUILD_NUMBER }}
+          path: |
+            /Users/Shared/telegram-ios/build/artifacts/Postmaster.ipa
+            /Users/Shared/telegram-ios/build/artifacts/Telegram.DSYMs.zip
 
-      - name: Upload Release IPA
-        id: upload-release-ipa 
-        uses: actions/upload-release-asset@v1
+      - name: Create or update GitHub Release
+        if: github.ref == 'refs/heads/master'
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: /Users/Shared/telegram-ios/build/artifacts/Telegram.ipa
-          asset_name: Telegram.ipa
-          asset_content_type: application/zip
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          SOURCE_DIR=/Users/Shared/telegram-ios
+          cd "$SOURCE_DIR"
 
-      - name: Upload Release DSYM
-        id: upload-release-dsym 
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: /Users/Shared/telegram-ios/build/artifacts/Telegram.DSYMs.zip
-          asset_name: Telegram.DSYMs.zip
-          asset_content_type: application/zip
+          TAG="build-${BUILD_NUMBER}"
+          TITLE="Postmaster ${APP_VERSION} (${BUILD_NUMBER})"
+          NOTES="An unsigned build of Postmaster for iOS ${APP_VERSION} (${BUILD_NUMBER})"
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release edit "$TAG" --title "$TITLE" --notes "$NOTES"
+          else
+            gh release create "$TAG" --title "$TITLE" --notes "$NOTES"
+          fi
+
+          gh release upload "$TAG" "build/artifacts/Postmaster.ipa#Postmaster.ipa" --clobber
+          gh release upload "$TAG" "build/artifacts/Telegram.DSYMs.zip#Telegram.DSYMs.zip" --clobber

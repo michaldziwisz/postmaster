@@ -72,6 +72,27 @@ python3 build-system/Make/Make.py \
     --configuration=release_arm64
 ```
 
+# Postmaster: GitHub Actions IPA (no Mac required)
+
+This fork includes a GitHub Actions workflow that builds an unsigned `Postmaster.ipa` and publishes it as both:
+- a workflow artifact
+- a GitHub Release asset
+
+## One-time setup
+
+Add these repository secrets:
+- `POSTMASTER_API_ID`
+- `POSTMASTER_API_HASH`
+
+## Build
+
+Push to `master` (or run the `CI` workflow via **Actions → CI → Run workflow**).
+
+## Download
+
+- **Actions artifact**: open the workflow run → **Artifacts** → download `Postmaster-<APP_VERSION>-<BUILD_NUMBER>`
+- **Release asset**: open **Releases** → download `Postmaster.ipa`
+
 # FAQ
 
 ## Xcode is stuck at "build-request.json not updated yet"

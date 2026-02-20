@@ -78,3 +78,5 @@ xcode-files
 .bsp/**
 /.claude/
 /buildbox/*
+postmaster_api.txt
+build-system/ci-configuration.json
