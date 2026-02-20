@@ -31,6 +31,7 @@ private func generateBorderImage(theme: PresentationTheme, bordered: Bool) -> UI
 
 class UpdateInfoItem: ListViewItem, ItemListItem {
     let theme: PresentationTheme
+    let strings: PresentationStrings
     let appIcon: PresentationAppIcon?
     let title: String
     let text: String
@@ -43,8 +44,9 @@ class UpdateInfoItem: ListViewItem, ItemListItem {
     
     let selectable: Bool = false
     
-    init(theme: PresentationTheme, appIcon: PresentationAppIcon?, title: String, text: String, entities: [MessageTextEntity], sectionId: ItemListSectionId, style: ItemListStyle, linkItemAction: ((TextLinkItemActionType, TextLinkItem) -> Void)? = nil, tag: Any? = nil) {
+    init(theme: PresentationTheme, strings: PresentationStrings, appIcon: PresentationAppIcon?, title: String, text: String, entities: [MessageTextEntity], sectionId: ItemListSectionId, style: ItemListStyle, linkItemAction: ((TextLinkItemActionType, TextLinkItem) -> Void)? = nil, tag: Any? = nil) {
         self.theme = theme
+        self.strings = strings
         self.appIcon = appIcon
         self.title = title
         self.text = text
@@ -242,7 +244,43 @@ class UpdateInfoItemNode: ListViewItemNode {
                     strongSelf.item = item
                     
                     strongSelf.activateArea.frame = CGRect(origin: CGPoint(x: params.leftInset, y: 0.0), size: CGSize(width: params.width - params.leftInset - params.rightInset, height: layout.contentSize.height))
-                    strongSelf.activateArea.accessibilityLabel = item.text
+                    
+                    var firstLinkItem: TextLinkItem?
+                    string.enumerateAttributes(in: NSRange(location: 0, length: string.length), options: []) { attributes, _, stop in
+                        if let url = attributes[NSAttributedString.Key(rawValue: TelegramTextAttributes.URL)] as? String {
+                            firstLinkItem = .url(url: url, concealed: false)
+                            stop.pointee = true
+                        } else if let peerName = attributes[NSAttributedString.Key(rawValue: TelegramTextAttributes.PeerTextMention)] as? String {
+                            firstLinkItem = .mention(peerName)
+                            stop.pointee = true
+                        } else if let hashtag = attributes[NSAttributedString.Key(rawValue: TelegramTextAttributes.Hashtag)] as? TelegramHashtag {
+                            firstLinkItem = .hashtag(hashtag.peerName, hashtag.hashtag)
+                            stop.pointee = true
+                        }
+                    }
+                    
+                    let containsLink = firstLinkItem != nil && item.linkItemAction != nil
+                    let resolvedAccessibility = UpdateInfoItemVoiceOver.resolve(
+                        strings: item.strings,
+                        title: item.title,
+                        text: item.text,
+                        containsLink: containsLink
+                    )
+                    strongSelf.activateArea.accessibilityLabel = resolvedAccessibility.label
+                    strongSelf.activateArea.accessibilityHint = resolvedAccessibility.hint
+                    strongSelf.activateArea.accessibilityTraits = resolvedAccessibility.traits
+                    
+                    if let firstLinkItem, containsLink {
+                        strongSelf.activateArea.activate = { [weak strongSelf] in
+                            guard let strongSelf, let item = strongSelf.item else {
+                                return false
+                            }
+                            item.linkItemAction?(.tap, firstLinkItem)
+                            return true
+                        }
+                    } else {
+                        strongSelf.activateArea.activate = nil
+                    }
                     
                     if let _ = updatedTheme {
                         strongSelf.topStripeNode.backgroundColor = itemSeparatorColor
