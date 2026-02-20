@@ -16,7 +16,7 @@ public enum InviteLinkHeaderItemVoiceOver {
     
     public static func resolve(strings: PresentationStrings, title: String?, text: String, containsLink: Bool) -> Resolved {
         let rawParts: [String?] = [title, text]
-        let parts = rawParts.compactMap { value in
+        let parts: [String] = rawParts.compactMap { value -> String? in
             guard let value else {
                 return nil
             }
