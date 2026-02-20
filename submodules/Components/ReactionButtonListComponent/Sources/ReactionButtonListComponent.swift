@@ -1044,11 +1044,12 @@ public final class ReactionButtonAsyncNode: ContextControllerSourceView {
         
         self.iconView = ReactionIconView()
         self.iconView?.isUserInteractionEnabled = false
+        
+        super.init(frame: frame)
+        
         self.iconView?.fileDidUpdate = { [weak self] _ in
             self?.updateAccessibility()
         }
-        
-        super.init(frame: frame)
         
         self.targetViewForActivationProgress = self.containerView.contentView
         
