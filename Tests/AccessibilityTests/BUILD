@@ -42,6 +42,7 @@ swift_library(
         "//submodules/TelegramUI/Components/Chat/ChatRecordingPreviewInputPanelNode",
         "//submodules/TelegramUI/Components/Chat/ChatTextInputActionButtonsNode",
         "//submodules/TelegramUI/Components/Chat/ChatTextInputPanelNode",
+        "//submodules/TelegramUI/Components/Chat/AccessoryPanelNode",
         "//submodules/TelegramUI/Components/ChatScheduleTimeController",
         "//submodules/TelegramUI/Components/EntityKeyboard",
         "//submodules/TelegramUI/Components/MediaScrubberComponent",

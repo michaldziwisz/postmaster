@@ -1,5 +1,5 @@
 import TelegramPresentationData
-import TelegramUI
+import AccessoryPanelNode
 import UIKit
 import XCTest
 
@@ -51,4 +51,3 @@ final class ChatPreparedContentAccessoryPanelVoiceOverTests: XCTestCase {
         XCTAssertEqual(resolved.customActions[1].name, defaultPresentationStrings.VoiceOver_Chat_GoToOriginalMessage)
     }
 }
-
