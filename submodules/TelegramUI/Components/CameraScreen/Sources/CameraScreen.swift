@@ -1842,6 +1842,8 @@ private final class CameraScreenComponent: CombinedComponent {
 	                            flashAccessibilityValue = environment.strings.Camera_FlashOn
 	                        case .auto:
 	                            flashAccessibilityValue = environment.strings.Camera_FlashAuto
+	                        @unknown default:
+	                            flashAccessibilityValue = environment.strings.Camera_FlashOff
 	                        }
 	                        
 	                        let flashButton = flashButton.update(

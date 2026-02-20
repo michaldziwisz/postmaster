@@ -1470,8 +1470,8 @@ final class CaptureControlsComponent: Component {
 	                                updateOffsetY: self.shutterUpdateOffsetY
 	                            )
 	                        ),
-	                        automaticHighlight: false,
 	                        isEnabled: component.hasAccess,
+	                        automaticHighlight: false,
 	                        action: { [weak self] in
 	                            self?.hapticFeedback.impact(.light)
 	                            self?.shutterUpdateOffsetX.invoke((0.0, .immediate))
