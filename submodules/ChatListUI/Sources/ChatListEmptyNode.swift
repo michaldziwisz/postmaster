@@ -36,6 +36,7 @@ final class ChatListEmptyNode: ASDisplayNode {
     private let textNode: ImmediateTextNode
     private let descriptionNode: ImmediateTextNode
     private let animationNode: AnimatedStickerNode
+    private let animationAccessibilityArea: AccessibilityAreaNode
     private let buttonNode: SolidRoundedButtonNode
     private let secondaryButtonNode: HighlightableButtonNode
     private let activityIndicator: ActivityIndicator
@@ -64,6 +65,8 @@ final class ChatListEmptyNode: ASDisplayNode {
         self.isLoading = isLoading
         
         self.animationNode = DefaultAnimatedStickerNodeImpl()
+        self.animationAccessibilityArea = AccessibilityAreaNode()
+        self.animationAccessibilityArea.accessibilityTraits = .button
         
         self.textNode = ImmediateTextNode()
         self.textNode.displaysAsynchronously = false
@@ -112,6 +115,7 @@ final class ChatListEmptyNode: ASDisplayNode {
         if case .archive = subject {
         } else {
             self.addSubnode(self.animationNode)
+            self.addSubnode(self.animationAccessibilityArea)
             self.addSubnode(self.textNode)
             self.addSubnode(self.descriptionNode)
             self.addSubnode(self.accessibilityArea)
@@ -124,6 +128,7 @@ final class ChatListEmptyNode: ASDisplayNode {
         }
         
         self.animationNode.isHidden = self.isLoading
+        self.animationAccessibilityArea.isHidden = self.isLoading
         self.textNode.isHidden = self.isLoading
         self.descriptionNode.isHidden = self.isLoading
         self.buttonNode.isHidden = self.buttonIsHidden || self.isLoading
@@ -140,6 +145,10 @@ final class ChatListEmptyNode: ASDisplayNode {
         self.updateThemeAndStrings(theme: theme, strings: strings)
         
         self.animationNode.view.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(self.animationTapGesture(_:))))
+        self.animationAccessibilityArea.activate = { [weak self] in
+            self?.restartAnimation()
+            return true
+        }
         
         if case .archive = subject {
             let _ = self.context.engine.privacy.updateGlobalPrivacySettings().startStandalone()
@@ -213,6 +222,11 @@ final class ChatListEmptyNode: ASDisplayNode {
         self.descriptionNode.attributedText = descriptionString
         self.accessibilityArea.accessibilityLabel = ChatListEmptyNodeVoiceOver.resolve(title: text, description: descriptionText.isEmpty ? nil : descriptionText)
         
+        let resolvedAnimationAccessibility = ChatListEmptyNodeVoiceOver.resolveAnimation(strings: strings)
+        self.animationAccessibilityArea.accessibilityLabel = resolvedAnimationAccessibility.label
+        self.animationAccessibilityArea.accessibilityHint = resolvedAnimationAccessibility.hint
+        self.animationAccessibilityArea.accessibilityTraits = resolvedAnimationAccessibility.traits
+        
         if let buttonText {
             self.buttonNode.title = buttonText
             self.buttonNode.isHidden = false
@@ -237,6 +251,7 @@ final class ChatListEmptyNode: ASDisplayNode {
         }
         self.isLoading = isLoading
         self.animationNode.isHidden = self.isLoading
+        self.animationAccessibilityArea.isHidden = self.isLoading
         self.textNode.isHidden = self.isLoading
         self.descriptionNode.isHidden = self.isLoading
         self.buttonNode.isHidden = self.buttonIsHidden || self.isLoading
@@ -273,9 +288,11 @@ final class ChatListEmptyNode: ASDisplayNode {
         if size.height - insets.top - insets.bottom < contentHeight + threshold {
             contentOffset = -self.animationSize.height - animationSpacing + 44.0
             transition.updateAlpha(node: self.animationNode, alpha: 0.0)
+            transition.updateAlpha(node: self.animationAccessibilityArea, alpha: 0.0)
         } else {
             contentOffset = -40.0
             transition.updateAlpha(node: self.animationNode, alpha: 1.0)
+            transition.updateAlpha(node: self.animationAccessibilityArea, alpha: 1.0)
         }
         
         let animationFrame = CGRect(origin: CGPoint(x: floor((size.width - self.animationSize.width) / 2.0), y: insets.top + floor((size.height - insets.top - insets.bottom - contentHeight) / 2.0) + contentOffset), size: self.animationSize)
@@ -286,6 +303,7 @@ final class ChatListEmptyNode: ASDisplayNode {
             self.animationNode.updateLayout(size: self.animationSize)
             transition.updateFrame(node: self.animationNode, frame: animationFrame)
         }
+        transition.updateFrame(node: self.animationAccessibilityArea, frame: animationFrame)
         
         transition.updateFrame(node: self.textNode, frame: textFrame)
         transition.updateFrame(node: self.descriptionNode, frame: descriptionFrame)
