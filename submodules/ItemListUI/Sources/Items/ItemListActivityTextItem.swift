@@ -74,6 +74,7 @@ public class ItemListActivityTextItem: ListViewItem, ItemListItem {
 public class ItemListActivityTextItemNode: ListViewItemNode {
     private let titleNode: TextNode
     private let activityIndicator: ActivityIndicator
+    private let activateArea: AccessibilityAreaNode
     
     private var item: ItemListActivityTextItem?
     
@@ -85,10 +86,14 @@ public class ItemListActivityTextItemNode: ListViewItemNode {
         
         self.activityIndicator = ActivityIndicator(type: ActivityIndicatorType.custom(.black, 16.0, 2.0, false))
         
+        self.activateArea = AccessibilityAreaNode()
+        self.activateArea.accessibilityTraits = .staticText
+        
         super.init(layerBacked: false)
         
         self.addSubnode(self.titleNode)
         self.addSubnode(self.activityIndicator)
+        self.addSubnode(self.activateArea)
     }
     
     override public func didLoad() {
@@ -149,6 +154,35 @@ public class ItemListActivityTextItemNode: ListViewItemNode {
                     
                     strongSelf.titleNode.frame = CGRect(origin: CGPoint(x: leftInset, y: verticalInset), size: titleLayout.size)
                     strongSelf.activityIndicator.frame = CGRect(origin: CGPoint(x: leftInset, y: floor((contentSize.height - 16.0) / 2.0)), size: CGSize(width: 16.0, height: 16.0))
+                    
+                    strongSelf.activateArea.frame = CGRect(origin: CGPoint(x: params.leftInset, y: 0.0), size: CGSize(width: params.width - params.leftInset - params.rightInset, height: contentSize.height))
+                    strongSelf.activateArea.accessibilityLabel = attributedString.string
+                    
+                    let urlAttributeKey = NSAttributedString.Key(rawValue: TelegramTextAttributes.URL)
+                    var firstUrl: String?
+                    attributedString.enumerateAttribute(urlAttributeKey, in: NSRange(location: 0, length: attributedString.length), options: []) { value, _, stop in
+                        if let value = value as? String {
+                            firstUrl = value
+                            stop.pointee = true
+                        }
+                    }
+                    
+                    let containsLink = firstUrl != nil && item.linkAction != nil
+                    let resolvedAccessibility = ItemListLinkableTextVoiceOver.resolve(strings: item.presentationData.strings, containsLink: containsLink)
+                    strongSelf.activateArea.accessibilityHint = resolvedAccessibility.hint
+                    strongSelf.activateArea.accessibilityTraits = resolvedAccessibility.traits
+                    
+                    if let firstUrl, containsLink {
+                        strongSelf.activateArea.activate = { [weak strongSelf] in
+                            guard let strongSelf, let item = strongSelf.item else {
+                                return false
+                            }
+                            item.linkAction?(.tap(firstUrl))
+                            return true
+                        }
+                    } else {
+                        strongSelf.activateArea.activate = nil
+                    }
                     
                     strongSelf.activityIndicator.type = .custom(item.presentationData.theme.list.itemAccentColor, 16.0, 2.0, false)
                     
