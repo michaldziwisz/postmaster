@@ -122,6 +122,32 @@ private final class PeerInfoScreenCommentItemNode: PeerInfoScreenItemNode {
         self.textNode.visibility = true
         self.textNode.lineSpacing = 0.12
         self.activateArea.accessibilityLabel = attributedText.string
+
+        let urlAttributeKey = NSAttributedString.Key(rawValue: TelegramTextAttributes.URL)
+        var firstUrl: String?
+        attributedText.enumerateAttribute(urlAttributeKey, in: NSRange(location: 0, length: attributedText.length), options: []) { value, _, stop in
+            if let value = value as? String {
+                firstUrl = value
+                stop.pointee = true
+            }
+        }
+        
+        let containsLink = firstUrl != nil && item.linkAction != nil
+        let resolvedAccessibility = PeerInfoScreenCommentItemVoiceOver.resolve(strings: presentationData.strings, containsLink: containsLink)
+        self.activateArea.accessibilityHint = resolvedAccessibility.hint
+        self.activateArea.accessibilityTraits = resolvedAccessibility.traits
+        
+        if let firstUrl, containsLink {
+            self.activateArea.activate = { [weak self] in
+                guard let self, let item = self.item else {
+                    return false
+                }
+                item.linkAction?(.tap(firstUrl))
+                return true
+            }
+        } else {
+            self.activateArea.activate = nil
+        }
         
         let textSize = self.textNode.updateLayout(CGSize(width: width - sideInset * 2.0, height: .greatestFiniteMagnitude))
         
