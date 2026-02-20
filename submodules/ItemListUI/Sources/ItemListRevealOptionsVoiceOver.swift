@@ -12,7 +12,7 @@ public enum ItemListRevealOptionsVoiceOver {
             guard !option.title.isEmpty else {
                 continue
             }
-            actions.append(UIAccessibilityCustomAction(name: option.title, actionHandler: {
+            actions.append(UIAccessibilityCustomAction(name: option.title, actionHandler: { _ in
                 perform(option)
             }))
         }
@@ -21,7 +21,7 @@ public enum ItemListRevealOptionsVoiceOver {
             guard !option.title.isEmpty else {
                 continue
             }
-            actions.append(UIAccessibilityCustomAction(name: option.title, actionHandler: {
+            actions.append(UIAccessibilityCustomAction(name: option.title, actionHandler: { _ in
                 perform(option)
             }))
         }
@@ -29,4 +29,3 @@ public enum ItemListRevealOptionsVoiceOver {
         return actions
     }
 }
-
