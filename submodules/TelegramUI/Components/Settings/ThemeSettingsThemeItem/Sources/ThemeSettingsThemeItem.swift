@@ -332,7 +332,7 @@ private final class ThemeSettingsThemeItemIconNode : ListViewItemNode {
 	                    }
 	                    if let contextAction = item.contextAction {
 	                        strongSelf.activateAreaNode.accessibilityCustomActions = [
-	                            UIAccessibilityCustomAction(name: item.context.sharedContext.currentPresentationData.with { $0 }.strings.Common_More, actionHandler: { [weak strongSelf] in
+	                            UIAccessibilityCustomAction(name: item.context.sharedContext.currentPresentationData.with { $0 }.strings.Common_More, actionHandler: { [weak strongSelf] _ in
 	                                guard let strongSelf, let item = strongSelf.item else {
 	                                    return false
 	                                }

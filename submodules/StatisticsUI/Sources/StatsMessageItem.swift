@@ -491,7 +491,7 @@ final class StatsMessageItemNode: ListViewItemNode, ItemListItemNode {
 	                    }
 	                    if item.contextAction != nil {
 	                        strongSelf.activateArea.accessibilityCustomActions = [
-	                            UIAccessibilityCustomAction(name: item.presentationData.strings.Common_More, actionHandler: { [weak strongSelf] in
+	                            UIAccessibilityCustomAction(name: item.presentationData.strings.Common_More, actionHandler: { [weak strongSelf] _ in
 	                                guard let strongSelf, let item = strongSelf.item, let contextAction = item.contextAction else {
 	                                    return false
 	                                }

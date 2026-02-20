@@ -192,7 +192,7 @@ final class CommandChatInputPanelItemNode: ListViewItemNode {
 	                        return true
 	                    }
 	                    strongSelf.activateAreaNode.accessibilityCustomActions = [
-	                        UIAccessibilityCustomAction(name: item.presentationData.strings.Common_More, actionHandler: { [weak strongSelf] in
+	                        UIAccessibilityCustomAction(name: item.presentationData.strings.Common_More, actionHandler: { [weak strongSelf] _ in
 	                            guard let strongSelf, let item = strongSelf.item else {
 	                                return false
 	                            }

@@ -237,7 +237,7 @@ public class ItemListActionItemNode: ListViewItemNode, ItemListItemNode {
 	                    }
 	                    if isEnabled, item.longTapAction != nil {
 	                        strongSelf.activateArea.accessibilityCustomActions = [
-	                            UIAccessibilityCustomAction(name: item.presentationData.strings.Common_More, actionHandler: { [weak strongSelf] in
+	                            UIAccessibilityCustomAction(name: item.presentationData.strings.Common_More, actionHandler: { [weak strongSelf] _ in
 	                                guard let strongSelf, let item = strongSelf.item, item.kind != .disabled else {
 	                                    return false
 	                                }

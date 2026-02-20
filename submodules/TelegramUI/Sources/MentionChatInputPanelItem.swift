@@ -234,7 +234,7 @@ final class MentionChatInputPanelItemNode: ListViewItemNode {
 	                    
 	                    if let peer = item.peer as? TelegramUser, let _ = peer.botInfo {
 	                        strongSelf.activateAreaNode.accessibilityCustomActions = [
-	                            UIAccessibilityCustomAction(name: item.presentationData.strings.Common_Delete, actionHandler: { [weak strongSelf] in
+	                            UIAccessibilityCustomAction(name: item.presentationData.strings.Common_Delete, actionHandler: { [weak strongSelf] _ in
 	                                guard let strongSelf, let item = strongSelf.item else {
 	                                    return false
 	                                }

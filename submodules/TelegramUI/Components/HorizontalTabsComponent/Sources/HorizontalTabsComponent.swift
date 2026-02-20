@@ -1049,7 +1049,7 @@ private final class ItemComponent: Component {
                 self.accessibilityCustomActions = voiceOver.customActions.compactMap { customAction in
                     switch customAction {
                     case let .more(name):
-                        return UIAccessibilityCustomAction(name: name, actionHandler: { [weak self] in
+                        return UIAccessibilityCustomAction(name: name, actionHandler: { [weak self] _ in
                             guard let self, let component = self.component else {
                                 return false
                             }
@@ -1057,7 +1057,7 @@ private final class ItemComponent: Component {
                             return true
                         })
                     case let .delete(name):
-                        return UIAccessibilityCustomAction(name: name, actionHandler: { [weak self] in
+                        return UIAccessibilityCustomAction(name: name, actionHandler: { [weak self] _ in
                             guard let self, let component = self.component else {
                                 return false
                             }

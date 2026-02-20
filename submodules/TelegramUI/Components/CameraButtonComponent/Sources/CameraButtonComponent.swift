@@ -245,7 +245,7 @@ public final class CameraButton: Component {
             
             if let accessibilityLongPressActionName = component.accessibilityLongPressActionName, component.longTapAction != nil {
                 self.accessibilityCustomActions = [
-                    UIAccessibilityCustomAction(name: accessibilityLongPressActionName, actionHandler: { [weak self] in
+                    UIAccessibilityCustomAction(name: accessibilityLongPressActionName, actionHandler: { [weak self] _ in
                         self?.component?.longTapAction?()
                         return true
                     })

@@ -500,7 +500,7 @@ private final class ThemeCarouselThemeItemIconNode: ListViewItemNode {
 	                    }
 	                    if let themeReference = item.themeReference, let contextAction = item.contextAction {
 	                        strongSelf.activateAreaNode.accessibilityCustomActions = [
-	                            UIAccessibilityCustomAction(name: strings.Common_More, actionHandler: { [weak strongSelf] in
+	                            UIAccessibilityCustomAction(name: strings.Common_More, actionHandler: { [weak strongSelf] _ in
 	                                guard let strongSelf else {
 	                                    return false
 	                                }

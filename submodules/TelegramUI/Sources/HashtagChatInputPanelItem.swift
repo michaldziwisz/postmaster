@@ -289,7 +289,7 @@ final class HashtagChatInputPanelItemNode: ListViewItemNode {
 	                        return true
 	                    }
 	                    strongSelf.activateAreaNode.accessibilityCustomActions = [
-	                        UIAccessibilityCustomAction(name: item.presentationData.strings.Common_Delete, actionHandler: { [weak strongSelf] in
+	                        UIAccessibilityCustomAction(name: item.presentationData.strings.Common_Delete, actionHandler: { [weak strongSelf] _ in
 	                            guard let strongSelf, let item = strongSelf.item else {
 	                                return false
 	                            }
