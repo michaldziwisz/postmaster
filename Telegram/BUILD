@@ -46,6 +46,7 @@ load(
     "telegram_bundle_id",
     "telegram_aps_environment",
     "telegram_team_id",
+    "telegram_is_appstore_build",
     "telegram_enable_icloud",
     "telegram_enable_siri",
 )
@@ -453,7 +454,7 @@ store_bundle_ids = [
     "ph.telegra.Telegraph",
 ]
 
-apple_pay_merchants = official_apple_pay_merchants if telegram_bundle_id == "ph.telegra.Telegraph" else []
+apple_pay_merchants = official_apple_pay_merchants if telegram_bundle_id == "ph.telegra.Telegraph" and telegram_is_appstore_build == "true" else []
 
 apple_pay_merchants_fragment = "" if apple_pay_merchants == [] else """
 <key>com.apple.developer.in-app-payments</key>
@@ -468,13 +469,13 @@ official_unrestricted_voip_fragment = """
 <key>com.apple.developer.pushkit.unrestricted-voip</key>
 <true/>
 """
-unrestricted_voip_fragment = official_unrestricted_voip_fragment if telegram_bundle_id in official_bundle_ids else ""
+unrestricted_voip_fragment = official_unrestricted_voip_fragment if telegram_bundle_id in official_bundle_ids and telegram_is_appstore_build == "true" else ""
 
 official_carplay_fragment = """
 <key>com.apple.developer.carplay-messaging</key>
 <true/>
 """
-carplay_fragment = official_carplay_fragment if telegram_bundle_id in official_bundle_ids else ""
+carplay_fragment = official_carplay_fragment if telegram_bundle_id in official_bundle_ids and telegram_is_appstore_build == "true" else ""
 
 icloud_fragment = "" if not telegram_enable_icloud else """
 <key>com.apple.developer.icloud-services</key>
@@ -496,7 +497,7 @@ icloud_fragment = "" if not telegram_enable_icloud else """
     telegram_icloud_environment="Production" if telegram_aps_environment == "production" else "Development"
 )
 
-associated_domains_fragment = "" if telegram_bundle_id not in official_bundle_ids else """
+associated_domains_fragment = "" if telegram_bundle_id not in official_bundle_ids or telegram_is_appstore_build != "true" else """
 <key>com.apple.developer.associated-domains</key>
 <array>
     <string>applinks:telegram.me</string>
@@ -533,13 +534,13 @@ official_communication_notifications_fragment = """
 <key>com.apple.developer.usernotifications.communication</key>
 <true/>
 """
-communication_notifications_fragment = official_communication_notifications_fragment if telegram_bundle_id in official_bundle_ids else ""
+communication_notifications_fragment = official_communication_notifications_fragment if telegram_bundle_id in official_bundle_ids and telegram_is_appstore_build == "true" else ""
 
 official_notification_filtering_fragment = """
 <key>com.apple.developer.usernotifications.filtering</key>
 <true/>
 """
-notification_filtering_fragment = official_notification_filtering_fragment if telegram_bundle_id == "ph.telegra.Telegraph" else ""
+notification_filtering_fragment = official_notification_filtering_fragment if telegram_bundle_id == "ph.telegra.Telegraph" and telegram_is_appstore_build == "true" else ""
 
 store_signin_fragment = """
 <key>com.apple.developer.applesignin</key>
@@ -547,24 +548,28 @@ store_signin_fragment = """
     <string>Default</string>
 </array>
 """
-signin_fragment = store_signin_fragment if telegram_bundle_id in store_bundle_ids else ""
+signin_fragment = store_signin_fragment if telegram_bundle_id in store_bundle_ids and telegram_is_appstore_build == "true" else ""
+
+entitlements_template_base = "".join([
+    aps_fragment,
+    siri_fragment,
+    associated_domains_fragment,
+    icloud_fragment,
+    apple_pay_merchants_fragment,
+    unrestricted_voip_fragment,
+    carplay_fragment,
+    communication_notifications_fragment,
+    notification_filtering_fragment,
+    signin_fragment,
+])
 
 plist_fragment(
     name = "TelegramEntitlements",
     extension = "entitlements",
-    template = "".join([
-        aps_fragment,
-        app_groups_fragment,
-        siri_fragment,
-        associated_domains_fragment,
-        icloud_fragment,
-        apple_pay_merchants_fragment,
-        unrestricted_voip_fragment,
-        carplay_fragment,
-        communication_notifications_fragment,
-        notification_filtering_fragment,
-        signin_fragment,
-    ])
+    template = select({
+        ":disableExtensionsSetting": entitlements_template_base,
+        "//conditions:default": entitlements_template_base + app_groups_fragment,
+    }),
 )
 
 plist_fragment(

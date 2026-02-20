@@ -45,6 +45,7 @@ class BazelCommandLine:
         self.continue_on_error = False
         self.show_actions = False
         self.enable_sandbox = False
+        self.disable_extensions = False
         self.disable_provisioning_profiles = False
         self.profile_swift = False
 
@@ -136,6 +137,9 @@ class BazelCommandLine:
 
     def set_disable_provisioning_profiles(self):
         self.disable_provisioning_profiles = True
+
+    def set_disable_extensions(self):
+        self.disable_extensions = True
 
     def set_profile_swift(self, value):
         self.profile_swift = value
@@ -277,6 +281,9 @@ class BazelCommandLine:
 
         if self.enable_sandbox:
             combined_arguments += ['--spawn_strategy=sandboxed']
+
+        if self.disable_extensions:
+            combined_arguments += ['--//Telegram:disableExtensions']
 
         if self.disable_provisioning_profiles:
             combined_arguments += ['--//Telegram:disableProvisioningProfiles']
@@ -499,6 +506,10 @@ def resolve_configuration(base_path, bazel_command_line: BazelCommandLine, argum
         provisioning_profiles_path=provisioning_path,
         additional_codesigning_output_path=additional_codesigning_output_path
     )
+
+    if getattr(arguments, "disablePushNotifications", False):
+        codesigning_data.aps_environment = ""
+
     if codesigning_data.aps_environment is None:
         print('Could not find a valid aps-environment entitlement in the provided provisioning profiles')
         sys.exit(1)
@@ -620,6 +631,8 @@ def build(bazel, arguments):
     bazel_command_line.set_show_actions(arguments.showActions)
     bazel_command_line.set_enable_sandbox(arguments.sandbox)
     bazel_command_line.set_profile_swift(arguments.profileSwift)
+    if getattr(arguments, "disableExtensions", False):
+        bazel_command_line.set_disable_extensions()
 
     bazel_command_line.set_split_swiftmodules(arguments.enableParallelSwiftmoduleGeneration)
 
@@ -954,6 +967,18 @@ if __name__ == '__main__':
         metavar='number'
     )
     add_project_and_build_common_arguments(buildParser)
+    buildParser.add_argument(
+        '--disableExtensions',
+        action='store_true',
+        default=False,
+        help='Build without app extensions (sideload-friendly).'
+    )
+    buildParser.add_argument(
+        '--disablePushNotifications',
+        action='store_true',
+        default=False,
+        help='Build without push notification entitlements (sideload-friendly).'
+    )
     buildParser.add_argument(
         '--configuration',
         choices=[
