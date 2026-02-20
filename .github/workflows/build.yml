@@ -30,7 +30,7 @@ jobs:
     permissions:
       contents: write
     env:
-      BAZEL_CACHE_DIR: ${{ github.workspace }}/.bazel-disk-cache
+      BAZEL_CACHE_DIR: /private/var/tmp/postmaster-bazel-disk-cache
 
     steps:
       - uses: actions/checkout@v4
