@@ -1124,7 +1124,7 @@ final class ChatItemGalleryFooterContentNode: GalleryFooterContentNode, ASScroll
             if index < attributedText.length {
                 let attributes = attributedText.attributes(at: index, effectiveRange: nil)
                 primaryAction = self.actionForAttributes(attributes, index)
-                stop.pointee = primaryAction != nil
+                stop.pointee = ObjCBool(primaryAction != nil)
             }
         }
         
@@ -1133,7 +1133,7 @@ final class ChatItemGalleryFooterContentNode: GalleryFooterContentNode, ASScroll
                 let index = range.location
                 if index < attributedText.length, let action = self.actionForAttributes(attributes, index) {
                     primaryAction = action
-                    stop.pointee = true
+                    stop.pointee = ObjCBool(true)
                 }
             }
         }
