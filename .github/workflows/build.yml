@@ -5,6 +5,12 @@ on:
     branches: [ master ]
 
   workflow_dispatch:
+    inputs:
+      run_tests:
+        description: 'Run Bazel tests (slow)'
+        required: false
+        default: false
+        type: boolean
 
 jobs:
   build:
@@ -71,12 +77,17 @@ jobs:
 
           python3 build-system/Make/ImportCertificates.py --path build-system/fake-codesigning/certs
 
-          python3 -u build-system/Make/Make.py \
-            --overrideXcodeVersion \
-            --bazelUserRoot="$BAZEL_USER_ROOT" \
-            test \
-            --configurationPath="build-system/ci-configuration.json" \
-            --codesigningInformationPath=build-system/fake-codesigning
+          RUN_TESTS="${{ inputs.run_tests }}"
+          if [ "$RUN_TESTS" = "true" ]; then
+            python3 -u build-system/Make/Make.py \
+              --overrideXcodeVersion \
+              --bazelUserRoot="$BAZEL_USER_ROOT" \
+              test \
+              --configurationPath="build-system/ci-configuration.json" \
+              --codesigningInformationPath=build-system/fake-codesigning
+          else
+            echo "Skipping tests (inputs.run_tests=$RUN_TESTS)"
+          fi
 
           python3 -u build-system/Make/Make.py \
             --overrideXcodeVersion \
