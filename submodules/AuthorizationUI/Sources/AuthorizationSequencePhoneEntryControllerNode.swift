@@ -671,7 +671,7 @@ final class AuthorizationSequencePhoneEntryControllerNode: ASDisplayNode {
             noticeText.enumerateAttribute(urlAttributeKey, in: NSRange(location: 0, length: noticeText.length), options: []) { value, _, stop in
                 if value != nil {
                     hasLink = true
-                    stop.pointee = true
+                    stop.pointee = ObjCBool(true)
                 }
             }
         }

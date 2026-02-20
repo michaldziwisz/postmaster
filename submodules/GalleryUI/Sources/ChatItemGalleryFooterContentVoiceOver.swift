@@ -78,7 +78,7 @@ public enum ChatItemGalleryFooterContentVoiceOver {
                     || attributes[hashtagKey] is TelegramHashtag
                     || attributes[timecodeKey] is TelegramTimecode {
                     hasAction = true
-                    stop.pointee = true
+                    stop.pointee = ObjCBool(true)
                 }
             }
             actionKind = hasAction ? .other : nil
@@ -108,4 +108,3 @@ public enum ChatItemGalleryFooterContentVoiceOver {
         )
     }
 }
-

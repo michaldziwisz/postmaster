@@ -183,7 +183,7 @@ class InviteLinkHeaderItemNode: ListViewItemNode {
                     attributedText.enumerateAttribute(urlAttributeKey, in: NSRange(location: 0, length: attributedText.length), options: []) { value, _, stop in
                         if let value = value as? String {
                             firstUrl = value
-                            stop.pointee = true
+                            stop.pointee = ObjCBool(true)
                         }
                     }
                     

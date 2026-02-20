@@ -249,19 +249,19 @@ public final class ChatBotInfoItemNode: ListViewItemNode {
                     let attributeText = (attributedText.string as NSString).substring(with: range)
                     let concealed = !doesUrlMatchText(url: url, text: attributeText, fullText: attributedText.string)
                     primaryAction = .url(url: url, concealed: concealed)
-                    stop.pointee = true
+                    stop.pointee = ObjCBool(true)
                 } else if let peerMention = attributes[NSAttributedString.Key(rawValue: TelegramTextAttributes.PeerMention)] as? TelegramPeerMention {
                     primaryAction = .peerMention(peerId: peerMention.peerId, mention: peerMention.mention)
-                    stop.pointee = true
+                    stop.pointee = ObjCBool(true)
                 } else if let peerName = attributes[NSAttributedString.Key(rawValue: TelegramTextAttributes.PeerTextMention)] as? String {
                     primaryAction = .textMention(peerName)
-                    stop.pointee = true
+                    stop.pointee = ObjCBool(true)
                 } else if let botCommand = attributes[NSAttributedString.Key(rawValue: TelegramTextAttributes.BotCommand)] as? String {
                     primaryAction = .botCommand(botCommand)
-                    stop.pointee = true
+                    stop.pointee = ObjCBool(true)
                 } else if let hashtag = attributes[NSAttributedString.Key(rawValue: TelegramTextAttributes.Hashtag)] as? TelegramHashtag {
                     primaryAction = .hashtag(hashtag.peerName, hashtag.hashtag)
-                    stop.pointee = true
+                    stop.pointee = ObjCBool(true)
                 }
             }
             

@@ -32,22 +32,22 @@ public enum TelegramTextAttributesVoiceOver {
                 let attributeText = (attributedText.string as NSString).substring(with: range)
                 let concealed = !doesUrlMatchText(url: url, text: attributeText, fullText: attributedText.string)
                 result = .url(url: url, concealed: concealed)
-                stop.pointee = true
+                stop.pointee = ObjCBool(true)
             } else if let peerMention = attributes[peerMentionKey] as? TelegramPeerMention {
                 result = .peerMention(peerId: peerMention.peerId, mention: peerMention.mention)
-                stop.pointee = true
+                stop.pointee = ObjCBool(true)
             } else if let peerName = attributes[peerTextMentionKey] as? String {
                 result = .textMention(peerName)
-                stop.pointee = true
+                stop.pointee = ObjCBool(true)
             } else if let botCommand = attributes[botCommandKey] as? String {
                 result = .botCommand(botCommand)
-                stop.pointee = true
+                stop.pointee = ObjCBool(true)
             } else if let hashtag = attributes[hashtagKey] as? TelegramHashtag {
                 result = .hashtag(hashtag.peerName, hashtag.hashtag)
-                stop.pointee = true
+                stop.pointee = ObjCBool(true)
             } else if let timecode = attributes[timecodeKey] as? TelegramTimecode {
                 result = .timecode(timecode.time, timecode.text)
-                stop.pointee = true
+                stop.pointee = ObjCBool(true)
             }
         }
         

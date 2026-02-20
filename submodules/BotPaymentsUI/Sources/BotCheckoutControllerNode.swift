@@ -624,7 +624,7 @@ private final class RecurrentConfirmationNode: ASDisplayNode {
         attributedText.enumerateAttribute(urlAttributeKey, in: NSRange(location: 0, length: attributedText.length), options: []) { value, _, stop in
             if value != nil {
                 containsLink = true
-                stop.pointee = true
+                stop.pointee = ObjCBool(true)
             }
         }
         

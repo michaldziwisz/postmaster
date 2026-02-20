@@ -249,13 +249,13 @@ class UpdateInfoItemNode: ListViewItemNode {
                     string.enumerateAttributes(in: NSRange(location: 0, length: string.length), options: []) { attributes, _, stop in
                         if let url = attributes[NSAttributedString.Key(rawValue: TelegramTextAttributes.URL)] as? String {
                             firstLinkItem = .url(url: url, concealed: false)
-                            stop.pointee = true
+                            stop.pointee = ObjCBool(true)
                         } else if let peerName = attributes[NSAttributedString.Key(rawValue: TelegramTextAttributes.PeerTextMention)] as? String {
                             firstLinkItem = .mention(peerName)
-                            stop.pointee = true
+                            stop.pointee = ObjCBool(true)
                         } else if let hashtag = attributes[NSAttributedString.Key(rawValue: TelegramTextAttributes.Hashtag)] as? TelegramHashtag {
                             firstLinkItem = .hashtag(hashtag.peerName, hashtag.hashtag)
-                            stop.pointee = true
+                            stop.pointee = ObjCBool(true)
                         }
                     }
                     

@@ -39,7 +39,7 @@ public enum AlertCheckComponentVoiceOver {
         attributedText.enumerateAttribute(urlKey, in: fullRange, options: []) { value, _, stop in
             if value != nil {
                 containsLink = true
-                stop.pointee = true
+                stop.pointee = ObjCBool(true)
             }
         }
         
@@ -55,4 +55,3 @@ public enum AlertCheckComponentVoiceOver {
         )
     }
 }
-

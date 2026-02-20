@@ -29,7 +29,7 @@ public enum SecretChatKeyControllerNodeVoiceOver {
                 return
             }
             url = value
-            stop.pointee = true
+            stop.pointee = ObjCBool(true)
         }
         
         var traits: UIAccessibilityTraits = [.staticText]
@@ -44,4 +44,3 @@ public enum SecretChatKeyControllerNodeVoiceOver {
         return Resolved(label: label, hint: hint, traits: traits, url: url)
     }
 }
-

@@ -163,7 +163,7 @@ public class ItemListActivityTextItemNode: ListViewItemNode {
                     attributedString.enumerateAttribute(urlAttributeKey, in: NSRange(location: 0, length: attributedString.length), options: []) { value, _, stop in
                         if let value = value as? String {
                             firstUrl = value
-                            stop.pointee = true
+                            stop.pointee = ObjCBool(true)
                         }
                     }
                     

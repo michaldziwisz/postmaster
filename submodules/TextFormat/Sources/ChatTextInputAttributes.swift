@@ -86,7 +86,7 @@ public func expandedInputStateAttributedString(_ text: NSAttributedString) -> NS
                 let updatedBlockString = NSMutableAttributedString(attributedString: value)
                 updatedBlockString.addAttribute(ChatTextInputAttributes.block, value: ChatTextInputTextQuoteAttribute(kind: .quote, isCollapsed: true), range: NSRange(location: 0, length: updatedBlockString.length))
                 sourceString.replaceCharacters(in: range, with: updatedBlockString)
-                stop.pointee = true
+                stop.pointee = ObjCBool(true)
                 found = true
             }
         })
@@ -105,11 +105,11 @@ public func stateAttributedStringForText(_ text: NSAttributedString) -> NSAttrib
         sourceString.enumerateAttribute(NSAttributedString.Key.attachment, in: fullRange, options: [.longestEffectiveRangeNotRequired], using: { value, range, stop in
             if let value = value as? EmojiTextAttachment {
                 sourceString.replaceCharacters(in: range, with: NSAttributedString(string: value.text, attributes: [ChatTextInputAttributes.customEmoji: value.emoji]))
-                stop.pointee = true
+                stop.pointee = ObjCBool(true)
                 found = true
             } else if let value = value as? ChatInputTextCollapsedQuoteAttachment {
                 sourceString.replaceCharacters(in: range, with: NSAttributedString(string: " ", attributes: [ChatTextInputAttributes.collapsedBlock: value.text]))
-                stop.pointee = true
+                stop.pointee = ObjCBool(true)
                 found = true
             }
         })
@@ -210,7 +210,7 @@ public func textAttributedStringForStateText(context: AnyObject, stateText: NSAt
             if let value = value as? NSAttributedString {
                 if let makeCollapsedQuoteAttachment {
                     found = true
-                    stop.pointee = true
+                    stop.pointee = ObjCBool(true)
                     
                     stateText.replaceCharacters(in: range, with: "")
                     stateText.insert(NSAttributedString(attachment: makeCollapsedQuoteAttachment(value, quoteAttributes)), at: range.lowerBound)

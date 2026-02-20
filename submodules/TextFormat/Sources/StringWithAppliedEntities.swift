@@ -67,7 +67,7 @@ public func chatInputStateStringWithAppliedEntities(_ text: String, entities: [M
                 string.insert(NSAttributedString(string: " ", attributes: [
                     ChatTextInputAttributes.collapsedBlock: blockString
                 ]), at: range.lowerBound)
-                stop.pointee = true
+                stop.pointee = ObjCBool(true)
             }
         })
         if !found {

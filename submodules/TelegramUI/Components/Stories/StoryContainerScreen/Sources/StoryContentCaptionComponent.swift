@@ -843,7 +843,7 @@ final class StoryContentCaptionComponent: Component {
                 let attributeText = (attributedText.string as NSString).substring(with: range)
                 let concealed = !doesUrlMatchText(url: url, text: attributeText, fullText: attributedText.string)
                 firstUrl = (url, concealed)
-                stop.pointee = true
+                stop.pointee = ObjCBool(true)
             }
             
             let resolvedCaptionAccessibility = StoryContentCaptionVoiceOver.resolve(
