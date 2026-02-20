@@ -50,6 +50,7 @@ swift_library(
         "//submodules/Components/ReactionButtonListComponent",
         "//submodules/HorizontalPeerItem",
         "//submodules/CountrySelectionUI",
+        "//submodules/AuthorizationUI",
         "//submodules/ListMessageItem",
         "//submodules/MediaPickerUI",
         "//submodules/MediaPlayer:UniversalMediaPlayer",

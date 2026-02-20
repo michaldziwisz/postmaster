@@ -664,6 +664,33 @@ final class AuthorizationSequencePhoneEntryControllerNode: ASDisplayNode {
         
         self.titleActivateAreaNode.frame = self.titleNode.frame
         self.noticeActivateAreaNode.accessibilityLabel = self.noticeNode.attributedText?.string ?? ""
+
+        let urlAttributeKey = NSAttributedString.Key(rawValue: "URL")
+        var hasLink = false
+        if let noticeText = self.noticeNode.attributedText {
+            noticeText.enumerateAttribute(urlAttributeKey, in: NSRange(location: 0, length: noticeText.length), options: []) { value, _, stop in
+                if value != nil {
+                    hasLink = true
+                    stop.pointee = true
+                }
+            }
+        }
+        
+        let isEnabled = hasLink && self.retryPasskey != nil
+        let resolvedAccessibility = AuthorizationSequencePhoneEntryNoticeVoiceOver.resolve(strings: self.strings, hasLink: hasLink, isEnabled: isEnabled)
+        self.noticeActivateAreaNode.accessibilityHint = resolvedAccessibility.hint
+        self.noticeActivateAreaNode.accessibilityTraits = resolvedAccessibility.traits
+        if isEnabled {
+            self.noticeActivateAreaNode.activate = { [weak self] in
+                guard let self else {
+                    return false
+                }
+                self.retryPasskey?()
+                return true
+            }
+        } else {
+            self.noticeActivateAreaNode.activate = nil
+        }
         self.noticeActivateAreaNode.frame = self.noticeNode.frame
     }
     
