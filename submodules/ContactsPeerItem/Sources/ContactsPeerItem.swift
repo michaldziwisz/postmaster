@@ -563,7 +563,7 @@ public class ContactsPeerItemNode: ItemListRevealOptionsItemNode {
                 }
                 item.deletePeer?(peer.id)
                 return true
-            case let .thread(peer, _, _, _, _):
+            case let .thread(peer, _, _, _):
                 item.deletePeer?(peer.id)
                 return true
             case .deviceContact:
@@ -852,7 +852,7 @@ public class ContactsPeerItemNode: ItemListRevealOptionsItemNode {
             switch item.selection {
             case .none:
                 updatedSelectionNode = nil
-            case let .selectable(selected):
+            case .selectable(_):
                 switch item.selectionPosition {
                     case .left:
                         leftInset += 38.0
