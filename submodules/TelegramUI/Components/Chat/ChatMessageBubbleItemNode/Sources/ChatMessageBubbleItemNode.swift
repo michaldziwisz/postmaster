@@ -856,8 +856,8 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
                 }
             }
             
-            if let singleUrl = accessibilityData.singleUrl {
-                strongSelf.item?.controllerInteraction.openUrl(ChatControllerInteraction.OpenUrl(url: singleUrl, concealed: false, external: false, message: strongSelf.item?.content.firstMessage))
+            if let url = accessibilityData.firstUrl {
+                strongSelf.item?.controllerInteraction.openUrl(ChatControllerInteraction.OpenUrl(url: url, concealed: false, external: false, message: strongSelf.item?.content.firstMessage))
                 return true
             }
             

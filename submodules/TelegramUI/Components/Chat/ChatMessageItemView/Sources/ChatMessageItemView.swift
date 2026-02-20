@@ -86,11 +86,13 @@ public final class ChatMessageAccessibilityData {
     public let hint: String?
     public let traits: UIAccessibilityTraits
     public let customActions: [ChatMessageAccessibilityCustomAction]?
+    public let firstUrl: String?
     public let singleUrl: String?
     
     public init(item: ChatMessageItem, isSelected: Bool?) {
         var hint: String?
         var traits: UIAccessibilityTraits = []
+        var firstUrl: String?
         var singleUrl: String?
         
         var customActions: [ChatMessageAccessibilityCustomAction] = []
@@ -512,26 +514,33 @@ public final class ChatMessageAccessibilityData {
         
         for attribute in item.message.attributes {
             if let attribute = attribute as? TextEntitiesMessageAttribute {
-                var hasUrls = false
+                var urlCount = 0
                 loop: for entity in attribute.entities {
                     switch entity.type {
                         case .Url:
-                            if hasUrls {
-                                singleUrl = nil
-                                break loop
-                            } else {
-                                if let range = Range<String.Index>(NSRange(location: entity.range.lowerBound, length: entity.range.count), in: item.message.text) {
-                                    singleUrl = String(item.message.text[range])
-                                    hasUrls = true
+                            if let range = Range<String.Index>(NSRange(location: entity.range.lowerBound, length: entity.range.count), in: item.message.text) {
+                                let url = String(item.message.text[range])
+                                if firstUrl == nil {
+                                    firstUrl = url
+                                }
+                                urlCount += 1
+                                if urlCount == 1 {
+                                    singleUrl = url
+                                } else {
+                                    singleUrl = nil
+                                    break loop
                                 }
                             }
                         case let .TextUrl(url):
-                            if hasUrls {
+                            if firstUrl == nil {
+                                firstUrl = url
+                            }
+                            urlCount += 1
+                            if urlCount == 1 {
+                                singleUrl = url
+                            } else {
                                 singleUrl = nil
                                 break loop
-                            } else {
-                                singleUrl = url
-                                hasUrls = true
                             }
                         default:
                             break
@@ -556,7 +565,7 @@ public final class ChatMessageAccessibilityData {
             }
         }
         
-        if hint == nil && singleUrl != nil {
+        if hint == nil && firstUrl != nil {
             hint = item.presentationData.strings.VoiceOver_Chat_OpenLinkHint
         }
         
@@ -612,6 +621,7 @@ public final class ChatMessageAccessibilityData {
         self.hint = hint
         self.traits = traits
         self.customActions = customActions.isEmpty ? nil : customActions
+        self.firstUrl = firstUrl
         self.singleUrl = singleUrl
     }
     
