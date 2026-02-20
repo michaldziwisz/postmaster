@@ -170,6 +170,29 @@ public final class AlertCheckComponent: Component {
                     self.addSubview(buttonView)
                 }
                 transition.setFrame(view: buttonView, frame: buttonFrame)
+                
+                let resolvedAccessibility = AlertCheckComponentVoiceOver.resolve(
+                    strings: environment.strings,
+                    title: component.title,
+                    isSelected: component.externalState.value,
+                    linkActionAvailable: component.linkAction != nil
+                )
+                buttonView.accessibilityLabel = resolvedAccessibility.label
+                buttonView.accessibilityTraits = resolvedAccessibility.traits
+                
+                if resolvedAccessibility.containsLinkAction {
+                    buttonView.accessibilityCustomActions = [
+                        UIAccessibilityCustomAction(name: environment.strings.Conversation_OpenLink) { [weak self] _ in
+                            guard let self, let component = self.component else {
+                                return false
+                            }
+                            component.linkAction?()
+                            return true
+                        }
+                    ]
+                } else {
+                    buttonView.accessibilityCustomActions = nil
+                }
             }
             
             return CGSize(width: availableSize.width, height: buttonSize.height + 7.0)

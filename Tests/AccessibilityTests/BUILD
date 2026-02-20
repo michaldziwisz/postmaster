@@ -15,6 +15,7 @@ swift_library(
         "//submodules/ChatListUI",
         "//submodules/TelegramUI",
         "//submodules/TelegramUpdateUI",
+        "//submodules/TelegramUI/Components/AlertComponent/AlertCheckComponent",
         "//submodules/TelegramUI/Components/AudioTranscriptionButtonComponent",
         "//submodules/TelegramUI/Components/CameraScreen",
         "//submodules/TelegramUI/Components/Calls/VideoChatMicButtonComponent",
