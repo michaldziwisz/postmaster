@@ -692,22 +692,24 @@ public final class CallListController: TelegramBaseController {
                 self.navigationItem.setLeftBarButton(UIBarButtonItem(title: self.presentationData.strings.Common_Done, style: .done, target: self, action: #selector(self.donePressed)), animated: true)
                
                 let deleteAllResolved = CallListDeleteAllButtonVoiceOver.resolve(strings: self.presentationData.strings)
-                let deleteAllItem = UIBarButtonItem(customDisplayNode: buttonNode)
-                deleteAllItem.accessibilityLabel = deleteAllResolved.label
-                deleteAllItem.accessibilityHint = deleteAllResolved.hint
-                deleteAllItem.setCustomAction({
-                    pressedImpl?()
-                })
-                self.navigationItem.setRightBarButton(deleteAllItem, animated: true)
+                if let deleteAllItem = UIBarButtonItem(customDisplayNode: buttonNode) {
+                    deleteAllItem.accessibilityLabel = deleteAllResolved.label
+                    deleteAllItem.accessibilityHint = deleteAllResolved.hint
+                    deleteAllItem.setCustomAction({
+                        pressedImpl?()
+                    })
+                    self.navigationItem.setRightBarButton(deleteAllItem, animated: true)
+                }
             case .navigation:
                 let deleteAllResolved = CallListDeleteAllButtonVoiceOver.resolve(strings: self.presentationData.strings)
-                let deleteAllItem = UIBarButtonItem(customDisplayNode: buttonNode)
-                deleteAllItem.accessibilityLabel = deleteAllResolved.label
-                deleteAllItem.accessibilityHint = deleteAllResolved.hint
-                deleteAllItem.setCustomAction({
-                    pressedImpl?()
-                })
-                self.navigationItem.setLeftBarButton(deleteAllItem, animated: true)
+                if let deleteAllItem = UIBarButtonItem(customDisplayNode: buttonNode) {
+                    deleteAllItem.accessibilityLabel = deleteAllResolved.label
+                    deleteAllItem.accessibilityHint = deleteAllResolved.hint
+                    deleteAllItem.setCustomAction({
+                        pressedImpl?()
+                    })
+                    self.navigationItem.setLeftBarButton(deleteAllItem, animated: true)
+                }
             
                 self.navigationItem.setRightBarButton(UIBarButtonItem(title: self.presentationData.strings.Common_Done, style: .done, target: self, action: #selector(self.donePressed)), animated: true)
         }
