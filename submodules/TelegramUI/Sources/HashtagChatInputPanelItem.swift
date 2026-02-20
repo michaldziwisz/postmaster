@@ -270,7 +270,8 @@ final class HashtagChatInputPanelItemNode: ListViewItemNode {
 	                    strongSelf.highlightedBackgroundNode.frame = CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: params.width, height: nodeLayout.size.height + UIScreenPixel))
 	                    
 	                    strongSelf.activateAreaNode.accessibilityLabel = item.title
-	                    let accessibilityValue = [item.text, item.badge].compactMap { value in
+	                    let rawAccessibilityValues: [String?] = [item.text, item.badge]
+	                    let accessibilityValue = rawAccessibilityValues.compactMap { value in
 	                        guard let value, !value.isEmpty else {
 	                            return nil
 	                        }
