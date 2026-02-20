@@ -280,6 +280,14 @@ public final class MediaNavigationAccessoryHeaderNode: ASDisplayNode, ASScrollVi
         self.addSubnode(self.closeButton)
         self.addSubnode(self.rateButton)
         self.addSubnode(self.accessibilityAreaNode)
+
+        self.accessibilityAreaNode.activate = { [weak self] in
+            guard let self, let tapAction = self.tapAction else {
+                return false
+            }
+            tapAction()
+            return true
+        }
         
         self.actionButton.addSubnode(self.playPauseIconNode)
         self.addSubnode(self.actionButton)
@@ -442,7 +450,15 @@ public final class MediaNavigationAccessoryHeaderNode: ASDisplayNode, ASScrollVi
         let inset: CGFloat = 45.0 + leftInset
         let constrainedSize = CGSize(width: size.width - inset * 2.0, height: size.height)
         let (titleString, subtitleString, rateButtonHidden) = self.currentItemNode.updateLayout(size: constrainedSize, leftInset: leftInset, rightInset: rightInset, theme: self.theme, strings: self.strings, dateTimeFormat: self.dateTimeFormat, nameDisplayOrder: self.nameDisplayOrder, playbackItem: self.playbackItems?.0, transition: transition)
-        self.accessibilityAreaNode.accessibilityLabel = "\(titleString?.string ?? ""). \(subtitleString?.string ?? "")"
+        let accessibility = MediaNavigationAccessoryHeaderVoiceOver.resolveTitleArea(
+            strings: self.strings,
+            title: titleString?.string,
+            subtitle: subtitleString?.string,
+            isEnabled: self.tapAction != nil
+        )
+        self.accessibilityAreaNode.accessibilityLabel = accessibility.label
+        self.accessibilityAreaNode.accessibilityHint = accessibility.hint
+        self.accessibilityAreaNode.accessibilityTraits = accessibility.traits
         self.rateButton.isHidden = rateButtonHidden
         
         let _ = self.previousItemNode.updateLayout(size: constrainedSize, leftInset: 0.0, rightInset: 0.0, theme: self.theme, strings: self.strings, dateTimeFormat: self.dateTimeFormat, nameDisplayOrder: self.nameDisplayOrder, playbackItem: self.playbackItems?.1, transition: transition)
