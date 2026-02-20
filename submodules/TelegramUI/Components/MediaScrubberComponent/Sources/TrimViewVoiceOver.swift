@@ -62,7 +62,7 @@ public enum TrimViewHandleVoiceOver {
         let delta = step * Double(direction)
         
         switch handle {
-        case .start: {
+        case .start:
             var updatedStartPosition = startPosition + delta
             updatedStartPosition = max(0.0, min(updatedStartPosition, endPosition - boundedMinDuration))
             
@@ -76,8 +76,7 @@ public enum TrimViewHandleVoiceOver {
             updatedEndPosition = max(0.0, min(updatedEndPosition, duration))
             
             return (updatedStartPosition, updatedEndPosition)
-        }()
-        case .end: {
+        case .end:
             var updatedEndPosition = endPosition + delta
             updatedEndPosition = min(duration, max(updatedEndPosition, startPosition + boundedMinDuration))
             
@@ -91,7 +90,6 @@ public enum TrimViewHandleVoiceOver {
             updatedEndPosition = max(0.0, min(updatedEndPosition, duration))
             
             return (updatedStartPosition, updatedEndPosition)
-        }()
         }
     }
     
@@ -107,4 +105,3 @@ public enum TrimViewHandleVoiceOver {
         }
     }
 }
-
