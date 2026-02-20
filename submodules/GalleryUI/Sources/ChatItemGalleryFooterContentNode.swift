@@ -148,6 +148,7 @@ final class ChatItemGalleryFooterContentNode: GalleryFooterContentNode, ASScroll
     private let scrollNode: ASScrollNode
 
     private let textNode: ImmediateTextNodeWithEntities
+    private let textAccessibilityArea: AccessibilityAreaNode
     private var spoilerTextNode: ImmediateTextNodeWithEntities?
     private var dustNode: InvisibleInkDustNode?
     private var buttonNode: SolidRoundedButtonNode?
@@ -394,6 +395,9 @@ final class ChatItemGalleryFooterContentNode: GalleryFooterContentNode, ASScroll
         self.textNode.linkHighlightColor = UIColor(rgb: 0x5ac8fa, alpha: 0.2)
         self.textNode.displaySpoilerEffect = false
         
+        self.textAccessibilityArea = AccessibilityAreaNode()
+        self.textAccessibilityArea.isHidden = true
+        
         self.backwardButton = PlaybackButtonNode()
         self.backwardButton.alpha = 0.0
         self.backwardButton.isUserInteractionEnabled = false
@@ -610,6 +614,7 @@ final class ChatItemGalleryFooterContentNode: GalleryFooterContentNode, ASScroll
         self.contentNode.view.addSubview(self.textSelectionKnobContainer)
         self.scrollNode.addSubnode(textSelectionNode.highlightAreaNode)
         self.scrollNode.addSubnode(self.textNode)
+        self.scrollNode.addSubnode(self.textAccessibilityArea)
         self.scrollNode.addSubnode(textSelectionNode)
         
         //self.contentNode.addSubnode(self.backwardButton)
@@ -829,6 +834,8 @@ final class ChatItemGalleryFooterContentNode: GalleryFooterContentNode, ASScroll
             }
             self.textSelectionNode?.isHidden = self.textNode.isHidden
             
+            self.updateTextAccessibility()
+            
             self.requestLayout?(.immediate)
         }
     }
@@ -1040,6 +1047,7 @@ final class ChatItemGalleryFooterContentNode: GalleryFooterContentNode, ASScroll
             }
             
             self.textSelectionNode?.isHidden = self.textNode.isHidden
+            self.updateTextAccessibility()
             
             if canFullscreen {
                 displayFullscreenButton = true
@@ -1085,6 +1093,85 @@ final class ChatItemGalleryFooterContentNode: GalleryFooterContentNode, ASScroll
             )
             
             self.requestLayout?(animated ? .animated(duration: 0.4, curve: .spring) : .immediate)
+        }
+    }
+    
+    private func updateTextAccessibility() {
+        guard !self.textNode.isHidden, let attributedText = self.textNode.attributedText, attributedText.length > 0 else {
+            self.textAccessibilityArea.isHidden = true
+            self.textAccessibilityArea.activate = nil
+            self.textAccessibilityArea.accessibilityLabel = nil
+            self.textAccessibilityArea.accessibilityHint = nil
+            self.textAccessibilityArea.accessibilityTraits = [.staticText]
+            self.textAccessibilityArea.accessibilityCustomActions = nil
+            return
+        }
+        
+        let resolved = ChatItemGalleryFooterContentVoiceOver.resolve(strings: self.strings, attributedText: attributedText)
+        self.textAccessibilityArea.accessibilityLabel = resolved.label
+        self.textAccessibilityArea.accessibilityHint = resolved.hint
+        self.textAccessibilityArea.accessibilityTraits = resolved.traits
+        
+        let urlKey = NSAttributedString.Key(rawValue: TelegramTextAttributes.URL)
+        let fullRange = NSRange(location: 0, length: attributedText.length)
+        
+        var primaryAction: GalleryControllerInteractionTapAction?
+        attributedText.enumerateAttribute(urlKey, in: fullRange, options: []) { value, range, stop in
+            guard value is String else {
+                return
+            }
+            let index = range.location
+            if index < attributedText.length {
+                let attributes = attributedText.attributes(at: index, effectiveRange: nil)
+                primaryAction = self.actionForAttributes(attributes, index)
+                stop.pointee = primaryAction != nil
+            }
+        }
+        
+        if primaryAction == nil {
+            attributedText.enumerateAttributes(in: fullRange, options: []) { attributes, range, stop in
+                let index = range.location
+                if index < attributedText.length, let action = self.actionForAttributes(attributes, index) {
+                    primaryAction = action
+                    stop.pointee = true
+                }
+            }
+        }
+        
+        if let primaryAction {
+            self.textAccessibilityArea.activate = { [weak self] in
+                guard let self, let performAction = self.performAction else {
+                    return false
+                }
+                performAction(primaryAction)
+                return true
+            }
+        } else {
+            self.textAccessibilityArea.activate = nil
+        }
+        
+        if !resolved.linkActions.isEmpty {
+            self.textAccessibilityArea.accessibilityCustomActions = resolved.linkActions.compactMap { linkAction in
+                guard linkAction.index >= 0, linkAction.index < attributedText.length else {
+                    return nil
+                }
+                return UIAccessibilityCustomAction(name: linkAction.title) { [weak self] _ in
+                    guard let self, let performAction = self.performAction else {
+                        return false
+                    }
+                    guard let attributedText = self.textNode.attributedText, linkAction.index < attributedText.length else {
+                        return false
+                    }
+                    let attributes = attributedText.attributes(at: linkAction.index, effectiveRange: nil)
+                    guard let action = self.actionForAttributes(attributes, linkAction.index) else {
+                        return false
+                    }
+                    performAction(action)
+                    return true
+                }
+            }
+        } else {
+            self.textAccessibilityArea.accessibilityCustomActions = nil
         }
     }
     
@@ -1167,6 +1254,8 @@ final class ChatItemGalleryFooterContentNode: GalleryFooterContentNode, ASScroll
         } else {
             displayCaption = !self.textNode.isHidden
         }
+        
+        self.textAccessibilityArea.isHidden = self.textNode.isHidden || !displayCaption
         
         var buttonPanelInsets = UIEdgeInsets()
         buttonPanelInsets.left = 8.0
@@ -1265,6 +1354,7 @@ final class ChatItemGalleryFooterContentNode: GalleryFooterContentNode, ASScroll
             
             if self.textNode.frame != textFrame {
                 self.textNode.frame = textFrame
+                self.textAccessibilityArea.frame = textFrame
                 self.spoilerTextNode?.frame = textFrame
                 
                 self.textSelectionNode?.frame = textFrame
