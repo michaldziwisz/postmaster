@@ -530,7 +530,9 @@ final class BrowserInstantPageContent: UIView, BrowserContent, UIScrollViewDeleg
             self.currentExpandedDetails = expandedDetails
         }
         
-        let accessibilityAreas = instantPageAccessibilityAreasFromLayout(currentLayout, boundingWidth: size.width)
+        let accessibilityAreas = instantPageAccessibilityAreasFromLayout(currentLayout, boundingWidth: size.width, strings: self.presentationData.strings, openUrl: { [weak self] url in
+            self?.openUrl(url)
+        })
         
         self.currentLayout = currentLayout
         self.currentLayoutTiles = currentLayoutTiles

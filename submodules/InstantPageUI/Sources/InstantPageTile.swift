@@ -1,6 +1,7 @@
 import Foundation
 import UIKit
 import Display
+import TelegramPresentationData
 
 public final class InstantPageTile {
     public let frame: CGRect
@@ -81,14 +82,37 @@ public func instantPageTilesFromLayout(_ layout: InstantPageLayout, boundingWidt
     })
 }
 
-public func instantPageAccessibilityAreasFromLayout(_ layout: InstantPageLayout, boundingWidth: CGFloat) -> [AccessibilityAreaNode] {
+public func instantPageAccessibilityAreasFromLayout(_ layout: InstantPageLayout, boundingWidth: CGFloat, strings: PresentationStrings, openUrl: @escaping (InstantPageUrlItem) -> Void) -> [AccessibilityAreaNode] {
     var result: [AccessibilityAreaNode] = []
     for item in layout.items {
         if let item = item as? InstantPageTextItem {
             let itemNode = AccessibilityAreaNode()
             itemNode.frame = item.frame
-            itemNode.accessibilityTraits = .staticText
-            itemNode.accessibilityLabel = item.attributedString.string
+            
+            let resolved = InstantPageTextItemVoiceOver.resolve(strings: strings, attributedText: item.attributedString)
+            itemNode.accessibilityTraits = resolved.traits
+            itemNode.accessibilityLabel = resolved.label
+            itemNode.accessibilityHint = resolved.hint
+            
+            if let firstLink = resolved.linkActions.first {
+                itemNode.activate = {
+                    openUrl(firstLink.value)
+                    return true
+                }
+            } else {
+                itemNode.activate = nil
+            }
+            
+            if !resolved.linkActions.isEmpty {
+                itemNode.accessibilityCustomActions = resolved.linkActions.map { linkAction in
+                    UIAccessibilityCustomAction(name: linkAction.title) { _ in
+                        openUrl(linkAction.value)
+                        return true
+                    }
+                }
+            } else {
+                itemNode.accessibilityCustomActions = nil
+            }
             result.append(itemNode)
         }
     }

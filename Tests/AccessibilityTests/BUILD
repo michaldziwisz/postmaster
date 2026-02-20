@@ -54,6 +54,7 @@ swift_library(
         "//submodules/AuthorizationUI",
         "//submodules/BotPaymentsUI",
         "//submodules/InviteLinksUI",
+        "//submodules/InstantPageUI",
         "//submodules/ListMessageItem",
         "//submodules/MediaPickerUI",
         "//submodules/MediaPlayer:UniversalMediaPlayer",

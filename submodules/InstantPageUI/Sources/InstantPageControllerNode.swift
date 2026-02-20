@@ -519,7 +519,9 @@ final class InstantPageControllerNode: ASDisplayNode, ASScrollViewDelegate {
             self.currentExpandedDetails = expandedDetails
         }
         
-        let accessibilityAreas = instantPageAccessibilityAreasFromLayout(currentLayout, boundingWidth: containerLayout.size.width)
+        let accessibilityAreas = instantPageAccessibilityAreasFromLayout(currentLayout, boundingWidth: containerLayout.size.width, strings: self.strings, openUrl: { [weak self] url in
+            self?.openUrl(url)
+        })
         
         self.currentLayout = currentLayout
         self.currentLayoutTiles = currentLayoutTiles
