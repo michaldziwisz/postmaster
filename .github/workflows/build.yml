@@ -20,11 +20,17 @@ on:
           - debug_arm64
           - release_arm64
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: macos-latest
     permissions:
       contents: write
+    env:
+      BAZEL_CACHE_DIR: ${{ runner.temp }}/bazel-disk-cache
 
     steps:
       - uses: actions/checkout@v4
@@ -48,6 +54,14 @@ jobs:
           xcode-select -p
           xcodebuild -version
 
+      - name: Cache Bazel disk cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.BAZEL_CACHE_DIR }}
+          key: bazel-disk-${{ runner.os }}-${{ hashFiles('MODULE.bazel.lock', 'versions.json') }}
+          restore-keys: |
+            bazel-disk-${{ runner.os }}-
+
       - name: Create canonical source directory
         run: |
           set -x
@@ -67,6 +81,7 @@ jobs:
 
           # use canonical bazel root
           BAZEL_USER_ROOT="/private/var/tmp/_bazel_containerhost"
+          mkdir -p "$BAZEL_CACHE_DIR"
 
           cd $SOURCE_DIR
 
@@ -94,6 +109,7 @@ jobs:
             python3 -u build-system/Make/Make.py \
               --overrideXcodeVersion \
               --bazelUserRoot="$BAZEL_USER_ROOT" \
+              --cacheDir="$BAZEL_CACHE_DIR" \
               test \
               --configurationPath="build-system/ci-configuration.json" \
               --codesigningInformationPath=build-system/fake-codesigning
@@ -104,6 +120,7 @@ jobs:
           python3 -u build-system/Make/Make.py \
             --overrideXcodeVersion \
             --bazelUserRoot="$BAZEL_USER_ROOT" \
+            --cacheDir="$BAZEL_CACHE_DIR" \
             build \
             --configurationPath="build-system/ci-configuration.json" \
             --codesigningInformationPath=build-system/fake-codesigning \
