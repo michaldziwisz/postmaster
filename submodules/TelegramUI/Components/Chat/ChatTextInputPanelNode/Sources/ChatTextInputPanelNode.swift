@@ -1639,7 +1639,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             if currentPeer == nil {
                 currentPeer = sendAsPeers.first?.peer
             }
-            let currentPeerTitle = currentPeer.flatMap { $0.displayTitle(strings: interfaceState.strings, displayOrder: interfaceState.nameDisplayOrder) }
+            let currentPeerTitle = currentPeer.flatMap { EnginePeer($0).displayTitle(strings: interfaceState.strings, displayOrder: interfaceState.nameDisplayOrder) }
             if let context = self.context, let peer = currentPeer {
                 self.sendAsAvatarNode.setPeer(context: context, theme: interfaceState.theme, peer: EnginePeer(peer), emptyColor: interfaceState.theme.list.mediaPlaceholderColor)
             }
