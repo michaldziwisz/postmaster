@@ -649,6 +649,25 @@ public enum InternalBubbleTapAction {
     case openContextMenu(OpenContextMenu)
 }
 
+public enum ChatMessageVoiceOverActivation {
+    @discardableResult
+    public static func perform(_ action: InternalBubbleTapAction?) -> Bool {
+        guard let action else {
+            return false
+        }
+        switch action {
+        case let .action(action):
+            action.action()
+            return true
+        case let .optionalAction(action):
+            action()
+            return true
+        case .openContextMenu:
+            return false
+        }
+    }
+}
+
 open class ChatMessageItemView: ListViewItemNode, ChatMessageItemNodeProtocol {
     public let layoutConstants = (ChatMessageItemLayoutConstants.compact, ChatMessageItemLayoutConstants.regular)
     

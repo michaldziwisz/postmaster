@@ -25,6 +25,7 @@ swift_library(
         "//submodules/TelegramUI/Components/Chat/ChatMessageFactCheckBubbleContentNode",
         "//submodules/TelegramUI/Components/Chat/ChatMessageInteractiveFileNode",
         "//submodules/TelegramUI/Components/Chat/ChatMessageInstantVideoItemNode",
+        "//submodules/TelegramUI/Components/Chat/ChatMessageItemView",
         "//submodules/TelegramUI/Components/Chat/ChatMessageJoinedChannelBubbleContentNode",
         "//submodules/TelegramUI/Components/Chat/ChatMessageUnlockMediaNode",
         "//submodules/TelegramUI/Components/Chat/ChatMessagePollBubbleContentNode",

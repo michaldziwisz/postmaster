@@ -185,6 +185,19 @@ public class ChatMessageStickerItemNode: ChatMessageItemView {
         self.contextSourceNode.contentNode.addSubnode(self.dateAndStatusNode)
         self.addSubnode(self.messageAccessibilityArea)
         
+        self.messageAccessibilityArea.activate = { [weak self] in
+            guard let self, let item = self.item else {
+                return false
+            }
+            let location = CGPoint(x: self.imageNode.frame.midX, y: self.imageNode.frame.midY)
+            let action = self.gestureRecognized(gesture: .tap, location: location, recognizer: nil)
+            if ChatMessageVoiceOverActivation.perform(action) {
+                return true
+            }
+            item.controllerInteraction.clickThroughMessage(self.view, location)
+            return true
+        }
+        
         self.messageAccessibilityArea.focused = { [weak self] in
             self?.accessibilityElementDidBecomeFocused()
         }
