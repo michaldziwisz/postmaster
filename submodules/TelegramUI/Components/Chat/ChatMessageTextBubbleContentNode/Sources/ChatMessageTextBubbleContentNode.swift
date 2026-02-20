@@ -1099,6 +1099,80 @@ public class ChatMessageTextBubbleContentNode: ChatMessageBubbleContentNode {
         self.textNode.textNode.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.2, removeOnCompletion: false)
         self.statusNode?.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.2, removeOnCompletion: false)
     }
+
+    override public func accessibilityActivate() -> Bool {
+        guard let item = self.item else {
+            return false
+        }
+        guard let attributedText = self.textNode.textNode.currentText else {
+            return false
+        }
+        guard let action = TelegramTextAttributesVoiceOver.firstAction(in: attributedText) else {
+            return false
+        }
+
+        switch action {
+        case let .url(url, concealed):
+            item.controllerInteraction.openUrl(ChatControllerInteraction.OpenUrl(url: url, concealed: concealed, external: false, message: item.message))
+            return true
+        case let .peerMention(peerId, _):
+            let _ = (item.context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: peerId))
+            |> deliverOnMainQueue).startStandalone(next: { peer in
+                guard let peer else {
+                    return
+                }
+                item.controllerInteraction.openPeer(peer, .chat(textInputState: nil, subject: nil, peekData: nil), nil, .default)
+            })
+            return true
+        case let .textMention(name):
+            item.controllerInteraction.openPeerMention(name, nil)
+            return true
+        case let .botCommand(command):
+            item.controllerInteraction.sendBotCommand(item.message.id, command)
+            return true
+        case let .hashtag(peerName, hashtag):
+            item.controllerInteraction.openHashtag(peerName, hashtag)
+            return true
+        case let .timecode(timecode, _):
+            var mediaMessage: Message = item.message
+            var forceOpen = false
+            var hasPlayableMedia = false
+
+            for media in item.message.media {
+                if let file = media as? TelegramMediaFile, file.duration != nil {
+                    hasPlayableMedia = true
+                    break
+                }
+            }
+
+            if !hasPlayableMedia {
+                for attribute in item.message.attributes {
+                    if let attribute = attribute as? ReplyMessageAttribute, let replyMessage = item.message.associatedMessages[attribute.messageId] {
+                        for media in replyMessage.media {
+                            if let file = media as? TelegramMediaFile, file.duration != nil {
+                                mediaMessage = replyMessage
+                                forceOpen = true
+                                hasPlayableMedia = true
+                                break
+                            }
+                            if let webpage = media as? TelegramMediaWebpage, case let .Loaded(content) = webpage.content, webEmbedType(content: content).supportsSeeking {
+                                mediaMessage = replyMessage
+                                forceOpen = true
+                                hasPlayableMedia = true
+                                break
+                            }
+                        }
+                        if hasPlayableMedia {
+                            break
+                        }
+                    }
+                }
+            }
+
+            item.controllerInteraction.seekToTimecode(mediaMessage, timecode, forceOpen)
+            return true
+        }
+    }
     
     override public func tapActionAtPoint(_ point: CGPoint, gesture: TapLongTapOrDoubleTapGesture, isEstimating: Bool) -> ChatMessageBubbleContentTapAction {
         if case .tap = gesture {

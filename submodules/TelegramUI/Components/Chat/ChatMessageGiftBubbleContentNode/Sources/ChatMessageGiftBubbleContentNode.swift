@@ -302,6 +302,14 @@ public class ChatMessageGiftBubbleContentNode: ChatMessageBubbleContentNode {
         }
         let _ = item.controllerInteraction.openMessage(item.message, OpenMessageParams(mode: .default, progress: self.makeProgress()))
     }
+
+    override public func accessibilityActivate() -> Bool {
+        guard self.item != nil else {
+            return false
+        }
+        self.buttonPressed()
+        return true
+    }
     
     private func expandPressed() {
         self.isExpanded = !self.isExpanded

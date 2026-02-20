@@ -109,6 +109,7 @@ public final class ChatMessageAttachedContentNode: ASDisplayNode {
     private var linkHighlightingNode: LinkHighlightingNode?
     
     private var context: AccountContext?
+    private var controllerInteraction: ChatControllerInteraction?
     private var message: Message?
     private var media: Media?
     private var theme: ChatPresentationThemeData?
@@ -167,6 +168,55 @@ public final class ChatMessageAttachedContentNode: ASDisplayNode {
     
     @objc private func badgePressed() {
         self.activateBadgeAction?()
+    }
+
+    override public func accessibilityActivate() -> Bool {
+        guard let context = self.context, let controllerInteraction = self.controllerInteraction, let message = self.message else {
+            return false
+        }
+
+        let candidateTexts: [NSAttributedString?] = [
+            self.title?.textNode.currentText,
+            self.subtitle?.textNode.currentText,
+            self.text?.textNode.currentText
+        ]
+        for attributedText in candidateTexts {
+            if let attributedText, let action = TelegramTextAttributesVoiceOver.firstAction(in: attributedText) {
+                switch action {
+                case let .url(url, concealed):
+                    controllerInteraction.openUrl(ChatControllerInteraction.OpenUrl(url: url, concealed: concealed, external: false, message: message))
+                    return true
+                case let .peerMention(peerId, _):
+                    let _ = (context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: peerId))
+                    |> deliverOnMainQueue).startStandalone(next: { peer in
+                        guard let peer else {
+                            return
+                        }
+                        controllerInteraction.openPeer(peer, .chat(textInputState: nil, subject: nil, peekData: nil), nil, .default)
+                    })
+                    return true
+                case let .textMention(name):
+                    controllerInteraction.openPeerMention(name, nil)
+                    return true
+                case let .botCommand(command):
+                    controllerInteraction.sendBotCommand(message.id, command)
+                    return true
+                case let .hashtag(peerName, hashtag):
+                    controllerInteraction.openHashtag(peerName, hashtag)
+                    return true
+                case let .timecode(timecode, _):
+                    controllerInteraction.seekToTimecode(message, timecode, true)
+                    return true
+                }
+            }
+        }
+
+        if let activateAction = self.activateAction {
+            activateAction()
+            return true
+        }
+
+        return false
     }
     
     public typealias AsyncLayout = (_ presentationData: ChatPresentationData, _ automaticDownloadSettings: MediaAutoDownloadSettings, _ associatedData: ChatMessageItemAssociatedData, _ attributes: ChatMessageEntryAttributes, _ context: AccountContext, _ controllerInteraction: ChatControllerInteraction, _ message: Message, _ messageRead: Bool, _ chatLocation: ChatLocation, _ title: String?, _ titleBadge: String?, _ subtitle: NSAttributedString?, _ text: String?, _ entities: [MessageTextEntity]?, _ media: ([Media], ChatMessageAttachedContentNodeMediaFlags)?, _ mediaBadge: String?, _ actionIcon: ChatMessageAttachedContentActionIcon?, _ actionTitle: String?, _ displayLine: Bool, _ layoutConstants: ChatMessageItemLayoutConstants, _ preparePosition: ChatMessageBubblePreparePosition, _ constrainedSize: CGSize, _ animationCache: AnimationCache, _ animationRenderer: MultiAnimationRenderer) -> (CGFloat, (CGSize, ChatMessageBubbleContentPosition) -> (CGFloat, (CGFloat) -> (CGSize, (ListViewItemUpdateAnimation, Bool, ListViewItemApply?) -> Void)))
@@ -992,6 +1042,7 @@ public final class ChatMessageAttachedContentNode: ASDisplayNode {
                         let themeUpdated = self.theme !== presentationData.theme || self.mainColor != mainColor
                         
                         self.context = context
+                        self.controllerInteraction = controllerInteraction
                         self.message = message
                         self.media = mediaAndFlags?.0.first
                         self.theme = presentationData.theme

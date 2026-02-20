@@ -14,6 +14,7 @@ import ChatMessageBackground
 import ChatMessageDateAndStatusNode
 import ChatMessageBubbleContentNode
 import ChatMessageItemCommon
+import ChatControllerInteraction
 import PollBubbleTimerNode
 import MergedAvatarsNode
 import TextNodeWithEntities
@@ -1880,6 +1881,43 @@ public class ChatMessagePollBubbleContentNode: ChatMessageBubbleContentNode {
     override public func animateRemoved(_ currentTimestamp: Double, duration: Double) {
         self.textNode.textNode.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.2, removeOnCompletion: false)
         self.statusNode.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.2, removeOnCompletion: false)
+    }
+
+    override public func accessibilityActivate() -> Bool {
+        guard let item = self.item else {
+            return false
+        }
+
+        if let attributedText = self.textNode.textNode.currentText, let action = TelegramTextAttributesVoiceOver.firstAction(in: attributedText) {
+            switch action {
+            case let .url(url, concealed):
+                item.controllerInteraction.openUrl(ChatControllerInteraction.OpenUrl(url: url, concealed: concealed, external: false, message: item.message))
+                return true
+            case let .peerMention(peerId, _):
+                let _ = (item.context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: peerId))
+                |> deliverOnMainQueue).startStandalone(next: { peer in
+                    guard let peer else {
+                        return
+                    }
+                    item.controllerInteraction.openPeer(peer, .chat(textInputState: nil, subject: nil, peekData: nil), nil, .default)
+                })
+                return true
+            case let .textMention(name):
+                item.controllerInteraction.openPeerMention(name, nil)
+                return true
+            case let .botCommand(command):
+                item.controllerInteraction.sendBotCommand(item.message.id, command)
+                return true
+            case let .hashtag(peerName, hashtag):
+                item.controllerInteraction.openHashtag(peerName, hashtag)
+                return true
+            case let .timecode(timecode, _):
+                item.controllerInteraction.seekToTimecode(item.message, timecode, true)
+                return true
+            }
+        }
+
+        return false
     }
     
     override public func tapActionAtPoint(_ point: CGPoint, gesture: TapLongTapOrDoubleTapGesture, isEstimating: Bool) -> ChatMessageBubbleContentTapAction {
