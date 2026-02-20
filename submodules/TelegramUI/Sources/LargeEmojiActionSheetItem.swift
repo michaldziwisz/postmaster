@@ -88,8 +88,17 @@ private final class LargeEmojiActionSheetItemNode: ActionSheetItemNode {
         let attributedText = NSAttributedString(string: text, font: textFont, textColor: theme.secondaryTextColor)
         self.textNode.attributedText = attributedText
             
-        self.accessibilityArea.accessibilityLabel = attributedText.string
-        self.accessibilityArea.accessibilityTraits = .staticText
+        let accessibility = LargeEmojiActionSheetItemVoiceOver.resolve(text: attributedText.string)
+        self.accessibilityArea.accessibilityLabel = accessibility.label
+        self.accessibilityArea.accessibilityHint = accessibility.hint
+        self.accessibilityArea.accessibilityTraits = accessibility.traits
+        self.accessibilityArea.activate = { [weak self] in
+            guard let self else {
+                return false
+            }
+            let _ = self.animationNode.playIfNeeded()
+            return true
+        }
         
         let dimensions = file.dimensions ?? PixelDimensions(width: 512, height: 512)
         self.imageNode.setSignal(chatMessageAnimatedSticker(postbox: context.account.postbox, userLocation: .other, file: file, small: false, size: dimensions.cgSize.aspectFilled(CGSize(width: 384.0, height: 384.0)), fitzModifier: fitzModifier, thumbnail: false, synchronousLoad: true), attemptSynchronously: true)
