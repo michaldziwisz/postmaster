@@ -365,14 +365,6 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
 	            self.cameraActivateAreaNode.accessibilityLabel = self.presentationData.strings.Attachment_Camera
 	            self.cameraActivateAreaNode.accessibilityHint = self.presentationData.strings.VoiceOver_Chat_OpenHint
 	            self.cameraActivateAreaNode.accessibilityTraits = [.button]
-	            self.cameraActivateAreaNode.activate = { [weak self] in
-	                guard let self, let cameraView = self.cameraView, !self.openingMedia else {
-	                    return false
-	                }
-	                self.dismissInput()
-	                self.controller?.openCamera?(cameraView)
-	                return true
-	            }
             
             self.topEdgeEffectView = EdgeEffectView()
             self.topEdgeEffectView.isUserInteractionEnabled = false
@@ -381,6 +373,15 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
             self.bottomEdgeEffectView.isUserInteractionEnabled = false
             
             super.init()
+
+	            self.cameraActivateAreaNode.activate = { [weak self] in
+	                guard let self, let cameraView = self.cameraView, !self.openingMedia else {
+	                    return false
+	                }
+	                self.dismissInput()
+	                self.controller?.openCamera?(cameraView)
+	                return true
+	            }
             
             if case .assets(nil, .default) = controller.subject {
             } else if case .assets(nil, .story) = controller.subject, (savedStoriesContentOffset ?? 0.0).isZero {
