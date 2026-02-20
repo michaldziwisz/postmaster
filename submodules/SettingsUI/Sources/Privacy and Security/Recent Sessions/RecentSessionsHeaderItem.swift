@@ -79,6 +79,7 @@ class RecentSessionsHeaderItemNode: ListViewItemNode {
     private var animationNode: AnimatedStickerNode
     private let buttonNode: SolidRoundedButtonNode
     private let button = ComponentView<Empty>()
+    private let activateArea: AccessibilityAreaNode
     
     private var item: RecentSessionsHeaderItem?
     
@@ -92,11 +93,14 @@ class RecentSessionsHeaderItemNode: ListViewItemNode {
         
         self.buttonNode = SolidRoundedButtonNode(theme: SolidRoundedButtonTheme(backgroundColor: .black, foregroundColor: .white), fontSize: 16.0, height: 50.0, cornerRadius: 11.0)
         
+        self.activateArea = AccessibilityAreaNode()
+        
         super.init(layerBacked: false)
         
         self.addSubnode(self.titleNode)
         self.addSubnode(self.animationNode)
         //self.addSubnode(self.buttonNode)
+        self.addSubnode(self.activateArea)
     }
     
     override public func didLoad() {
@@ -197,8 +201,34 @@ class RecentSessionsHeaderItemNode: ListViewItemNode {
                         }
                         buttonView.frame = buttonFrame
                     }
+                                        
+                    strongSelf.activateArea.accessibilityLabel = attributedText.string
+                    strongSelf.activateArea.frame = CGRect(origin: CGPoint(x: params.leftInset, y: topInset + 8.0), size: CGSize(width: params.width - params.leftInset - params.rightInset, height: titleLayout.size.height))
                     
-                    strongSelf.accessibilityLabel = attributedText.string
+                    let urlAttributeKey = NSAttributedString.Key(rawValue: TelegramTextAttributes.URL)
+                    var firstUrl: String?
+                    attributedText.enumerateAttribute(urlAttributeKey, in: NSRange(location: 0, length: attributedText.length), options: []) { value, _, stop in
+                        if let value = value as? String {
+                            firstUrl = value
+                            stop.pointee = true
+                        }
+                    }
+                    let strings = item.context.sharedContext.currentPresentationData.with { $0 }.strings
+                    let containsLink = firstUrl != nil && item.linkAction != nil
+                    let resolvedAccessibility = ItemListLinkableTextVoiceOver.resolve(strings: strings, containsLink: containsLink)
+                    strongSelf.activateArea.accessibilityHint = resolvedAccessibility.hint
+                    strongSelf.activateArea.accessibilityTraits = resolvedAccessibility.traits
+                    if let firstUrl, containsLink {
+                        strongSelf.activateArea.activate = { [weak strongSelf] in
+                            guard let strongSelf, let item = strongSelf.item else {
+                                return false
+                            }
+                            item.linkAction?(.tap(firstUrl))
+                            return true
+                        }
+                    } else {
+                        strongSelf.activateArea.activate = nil
+                    }
                                         
                     let iconSize = CGSize(width: 128.0, height: 128.0)
                     strongSelf.animationNode.frame = CGRect(origin: CGPoint(x: floor((layout.size.width - iconSize.width) / 2.0), y: -10.0), size: iconSize)
