@@ -507,6 +507,7 @@ private final class RecurrentConfirmationNode: ASDisplayNode {
     
     private var checkNode: InteractiveCheckNode?
     private let textNode: ImmediateTextNode
+    private let textAccessibilityArea: AccessibilityAreaNode
     
     init(isAcceptedUpdated: @escaping (Bool) -> Void, openTerms: @escaping () -> Void) {
         self.isAcceptedUpdated = isAcceptedUpdated
@@ -514,6 +515,7 @@ private final class RecurrentConfirmationNode: ASDisplayNode {
         
         self.textNode = ImmediateTextNode()
         self.textNode.maximumNumberOfLines = 0
+        self.textAccessibilityArea = AccessibilityAreaNode()
         
         super.init()
         
@@ -531,6 +533,7 @@ private final class RecurrentConfirmationNode: ASDisplayNode {
         }
         
         self.addSubnode(self.textNode)
+        self.addSubnode(self.textAccessibilityArea)
         
         self.view.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(self.tapGesture(_:))))
     }
@@ -602,6 +605,42 @@ private final class RecurrentConfirmationNode: ASDisplayNode {
         checkNode.frame = CGRect(origin: CGPoint(x: contentOriginX, y: topInset + floor((height - checkSize.height) / 2.0)), size: checkSize)
         
         self.textNode.frame = CGRect(origin: CGPoint(x: contentOriginX + checkSize.width + spacing, y: topInset + floor((height - textSize.height) / 2.0)), size: textSize)
+        
+        let strings = presentationData.strings
+        let toggleAccessibility = BotCheckoutRecurrentConfirmationVoiceOver.resolveToggle(
+            strings: strings,
+            label: attributedText.string,
+            isSelected: checkNode.selected,
+            isEnabled: true
+        )
+        checkNode.isAccessibilityElement = true
+        checkNode.accessibilityLabel = toggleAccessibility.label
+        checkNode.accessibilityValue = toggleAccessibility.value
+        checkNode.accessibilityHint = toggleAccessibility.hint
+        checkNode.accessibilityTraits = toggleAccessibility.traits
+        
+        let urlAttributeKey = NSAttributedString.Key(rawValue: TelegramTextAttributes.URL)
+        var containsLink = false
+        attributedText.enumerateAttribute(urlAttributeKey, in: NSRange(location: 0, length: attributedText.length), options: []) { value, _, stop in
+            if value != nil {
+                containsLink = true
+                stop.pointee = true
+            }
+        }
+        
+        let linkAccessibility = BotCheckoutRecurrentConfirmationVoiceOver.resolveLink(
+            strings: strings,
+            label: attributedText.string,
+            isEnabled: containsLink
+        )
+        self.textAccessibilityArea.frame = self.textNode.frame
+        self.textAccessibilityArea.accessibilityLabel = linkAccessibility.label
+        self.textAccessibilityArea.accessibilityHint = linkAccessibility.hint
+        self.textAccessibilityArea.accessibilityTraits = linkAccessibility.traits
+        self.textAccessibilityArea.activate = containsLink ? { [weak self] in
+            self?.openTerms()
+            return true
+        } : nil
         
         return height
     }
