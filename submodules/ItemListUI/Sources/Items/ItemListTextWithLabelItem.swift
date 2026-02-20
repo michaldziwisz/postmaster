@@ -103,6 +103,7 @@ public class ItemListTextWithLabelItemNode: ListViewItemNode {
     private let maskNode: ASImageNode
     
     public var item: ItemListTextWithLabelItem?
+    private var accessibilityLinkItem: TextLinkItem?
     
     override public var canBeLongTapped: Bool {
         return true
@@ -230,9 +231,45 @@ public class ItemListTextWithLabelItemNode: ListViewItemNode {
                     }
                     
                     strongSelf.item = item
+                    strongSelf.accessibilityLinkItem = nil
                     
                     strongSelf.accessibilityLabel = item.label
                     strongSelf.accessibilityValue = item.text
+
+                    var firstLinkItem: TextLinkItem?
+                    string.enumerateAttributes(in: NSRange(location: 0, length: string.length), options: []) { attributes, _, stop in
+                        if let url = attributes[NSAttributedString.Key(rawValue: TelegramTextAttributes.URL)] as? String {
+                            firstLinkItem = .url(url: url, concealed: false)
+                            stop.pointee = true
+                        } else if let peerName = attributes[NSAttributedString.Key(rawValue: TelegramTextAttributes.PeerTextMention)] as? String {
+                            firstLinkItem = .mention(peerName)
+                            stop.pointee = true
+                        } else if let hashtag = attributes[NSAttributedString.Key(rawValue: TelegramTextAttributes.Hashtag)] as? TelegramHashtag {
+                            firstLinkItem = .hashtag(hashtag.peerName, hashtag.hashtag)
+                            stop.pointee = true
+                        }
+                    }
+                    
+                    let hasLink = firstLinkItem != nil && item.linkItemAction != nil
+                    let hasAction = item.action != nil
+                    if hasAction {
+                        let resolved = ItemListRowVoiceOver.resolve(strings: item.presentationData.strings, kind: .open, isEnabled: true)
+                        strongSelf.accessibilityHint = resolved.hint
+                        var traits = resolved.traits
+                        if item.selected == true {
+                            traits.insert(.selected)
+                        }
+                        strongSelf.accessibilityTraits = traits
+                    } else {
+                        let resolved = ItemListLinkableTextVoiceOver.resolve(strings: item.presentationData.strings, containsLink: hasLink)
+                        strongSelf.accessibilityHint = resolved.hint
+                        var traits = resolved.traits
+                        if item.selected == true {
+                            traits.insert(.selected)
+                        }
+                        strongSelf.accessibilityTraits = traits
+                    }
+                    strongSelf.accessibilityLinkItem = firstLinkItem
                     
                     if let _ = updatedTheme {
                         switch item.style {
@@ -417,6 +454,21 @@ public class ItemListTextWithLabelItemNode: ListViewItemNode {
             }
         }
         return nil
+    }
+
+    override public func accessibilityActivate() -> Bool {
+        guard let item = self.item else {
+            return false
+        }
+        if let action = item.action {
+            action()
+            return true
+        }
+        if let linkItem = self.accessibilityLinkItem {
+            item.linkItemAction?(.tap, linkItem)
+            return item.linkItemAction != nil
+        }
+        return false
     }
     
     override public func animateInsertion(_ currentTimestamp: Double, duration: Double, options: ListViewItemAnimationOptions) {
