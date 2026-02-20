@@ -55,6 +55,7 @@ swift_library(
         "//submodules/ListMessageItem",
         "//submodules/MediaPickerUI",
         "//submodules/MediaPlayer:UniversalMediaPlayer",
+        "//submodules/QrCodeUI",
         "//submodules/TelegramUI/Components/MediaPlaybackHeaderPanelComponent",
         "//submodules/PremiumUI",
         "//submodules/TelegramPresentationData",

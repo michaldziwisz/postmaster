@@ -370,6 +370,7 @@ private final class QrCodeScanScreenNode: ViewControllerTracingNode, ASScrollVie
     private let titleNode: ImmediateTextNode
     private let textNode: ImmediateTextNode
     private let errorTextNode: ImmediateTextNode
+    private let textAccessibilityArea: AccessibilityAreaNode
     
     private let camera: Camera
     private let codeDisposable = MetaDisposable()
@@ -483,6 +484,8 @@ private final class QrCodeScanScreenNode: ViewControllerTracingNode, ASScrollVie
         self.errorTextNode.textAlignment = .center
         self.errorTextNode.isHidden = true
         
+        self.textAccessibilityArea = AccessibilityAreaNode()
+        
         self.camera = Camera(configuration: .init(preset: .hd1920x1080, position: .back, audio: false, photo: true, metadata: true), previewView: self.previewView)
         
         super.init()
@@ -510,9 +513,46 @@ private final class QrCodeScanScreenNode: ViewControllerTracingNode, ASScrollVie
         self.addSubnode(self.titleNode)
         self.addSubnode(self.textNode)
         self.addSubnode(self.errorTextNode)
+        self.addSubnode(self.textAccessibilityArea)
       
         self.galleryButtonNode.addTarget(self, action: #selector(self.galleryPressed), forControlEvents: .touchUpInside)
         self.torchButtonNode.addTarget(self, action: #selector(self.torchPressed), forControlEvents: .touchUpInside)
+        
+        self.galleryButtonNode.accessibilityLabel = presentationData.strings.Attachment_Gallery
+        self.galleryButtonNode.accessibilityTraits = [.button]
+        
+        self.torchButtonNode.accessibilityLabel = presentationData.strings.VoiceOver_Camera_Flash
+        self.torchButtonNode.accessibilityTraits = [.button]
+        self.torchButtonNode.accessibilityValue = presentationData.strings.Camera_FlashOff
+        
+        let resolvedTextAccessibility = QrCodeScanScreenTextVoiceOver.resolve(strings: presentationData.strings, attributedText: attributedText)
+        self.textAccessibilityArea.accessibilityLabel = resolvedTextAccessibility.label
+        self.textAccessibilityArea.accessibilityHint = resolvedTextAccessibility.hint
+        self.textAccessibilityArea.accessibilityTraits = resolvedTextAccessibility.traits
+        
+        if let firstLink = resolvedTextAccessibility.linkActions.first {
+            self.textAccessibilityArea.activate = { [weak self] in
+                guard let self else {
+                    return false
+                }
+                return self.openInfoUrl(firstLink.value)
+            }
+        } else {
+            self.textAccessibilityArea.activate = nil
+        }
+        
+        if !resolvedTextAccessibility.linkActions.isEmpty {
+            self.textAccessibilityArea.accessibilityCustomActions = resolvedTextAccessibility.linkActions.map { linkAction in
+                UIAccessibilityCustomAction(name: linkAction.title) { [weak self] _ in
+                    guard let self else {
+                        return false
+                    }
+                    return self.openInfoUrl(linkAction.value)
+                }
+            }
+        } else {
+            self.textAccessibilityArea.accessibilityCustomActions = nil
+        }
         
         self.previewView.resetPlaceholder(front: false)
         if #available(iOS 13.0, *) {
@@ -606,6 +646,19 @@ private final class QrCodeScanScreenNode: ViewControllerTracingNode, ASScrollVie
         self.frameNode.animateIn()
     }
     
+    private func openInfoUrl(_ url: String) -> Bool {
+        switch url {
+        case "desktop":
+            self.context.sharedContext.openExternalUrl(context: self.context, urlContext: .generic, url: "https://getdesktop.telegram.org", forceExternal: true, presentationData: self.context.sharedContext.currentPresentationData.with { $0 }, navigationController: nil, dismissInput: {})
+            return true
+        case "web":
+            self.context.sharedContext.openExternalUrl(context: self.context, urlContext: .generic, url: "https://web.telegram.org", forceExternal: true, presentationData: self.context.sharedContext.currentPresentationData.with { $0 }, navigationController: nil, dismissInput: {})
+            return true
+        default:
+            return false
+        }
+    }
+    
     @objc private func tapLongTapOrDoubleTapGesture(_ recognizer: TapLongTapOrDoubleTapGestureRecognizer) {
         switch recognizer.state {
             case .ended:
@@ -614,14 +667,7 @@ private final class QrCodeScanScreenNode: ViewControllerTracingNode, ASScrollVie
                         case .tap:
                             if let (_, attributes) = self.textNode.attributesAtPoint(location) {
                                 if let url = attributes[NSAttributedString.Key(rawValue: TelegramTextAttributes.URL)] as? String {
-                                    switch url {
-                                    case "desktop":
-                                        self.context.sharedContext.openExternalUrl(context: self.context, urlContext: .generic, url: "https://getdesktop.telegram.org", forceExternal: true, presentationData: self.context.sharedContext.currentPresentationData.with { $0 }, navigationController: nil, dismissInput: {})
-                                    case "web":
-                                        self.context.sharedContext.openExternalUrl(context: self.context, urlContext: .generic, url: "https://web.telegram.org", forceExternal: true, presentationData: self.context.sharedContext.currentPresentationData.with { $0 }, navigationController: nil, dismissInput: {})
-                                    default:
-                                        break
-                                    }
+                                    let _ = self.openInfoUrl(url)
                                 }
                             }
                         default:
@@ -741,6 +787,7 @@ private final class QrCodeScanScreenNode: ViewControllerTracingNode, ASScrollVie
         
         transition.updateAlpha(node: self.textNode, alpha: controlsAlpha)
         transition.updateAlpha(node: self.errorTextNode, alpha: controlsAlpha)
+        transition.updateAlpha(node: self.textAccessibilityArea, alpha: controlsAlpha)
         transition.updateAlpha(node: self.galleryButtonNode, alpha: controlsAlpha)
         transition.updateAlpha(node: self.torchButtonNode, alpha: controlsAlpha)
         for view in self.highlightViews {
@@ -763,6 +810,7 @@ private final class QrCodeScanScreenNode: ViewControllerTracingNode, ASScrollVie
 
         transition.updateFrameAdditive(node: self.titleNode, frame: titleFrame)
         transition.updateFrameAdditive(node: self.textNode, frame: textFrame)
+        transition.updateFrameAdditive(node: self.textAccessibilityArea, frame: textFrame)
         transition.updateFrameAdditive(node: self.errorTextNode, frame: errorTextFrame)
         
         if self.highlightViews.isEmpty {
@@ -841,6 +889,7 @@ private final class QrCodeScanScreenNode: ViewControllerTracingNode, ASScrollVie
     @objc private func torchPressed() {
         self.torchButtonNode.isSelected = !self.torchButtonNode.isSelected
         self.camera.setTorchActive(self.torchButtonNode.isSelected)
+        self.torchButtonNode.accessibilityValue = self.torchButtonNode.isSelected ? self.presentationData.strings.Camera_FlashOn : self.presentationData.strings.Camera_FlashOff
     }
     
     fileprivate func resolveCode(code: String, completion: @escaping (Bool) -> Void) {
@@ -897,4 +946,3 @@ private final class QrCodeScanScreenNode: ViewControllerTracingNode, ASScrollVie
         return true
     }
 }
-
