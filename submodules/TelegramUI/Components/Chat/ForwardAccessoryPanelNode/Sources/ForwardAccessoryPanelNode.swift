@@ -154,6 +154,11 @@ public final class ForwardAccessoryPanelNode: AccessoryPanelNode {
         self.addSubnode(self.titleNode)
         self.addSubnode(self.textNode)
         self.addSubnode(self.actionArea)
+
+        self.actionArea.activate = { [weak self] in
+            self?.presentForwardOptions()
+            return true
+        }
         
         if let animationCache = animationCache, let animationRenderer = animationRenderer {
             self.textNode.arguments = TextNodeWithEntities.Arguments(
@@ -346,7 +351,31 @@ public final class ForwardAccessoryPanelNode: AccessoryPanelNode {
         self.textNode.attributedText = text
         self.originalText = text
         self.textNode.visibility = true
-        self.actionArea.accessibilityLabel = "\(title).\n\(text.string)"
+        let accessibility = ChatPreparedContentAccessoryPanelVoiceOver.resolve(
+            strings: self.strings,
+            label: title,
+            value: text.string,
+            isEnabled: true,
+            includesGoToOriginalMessage: false
+        )
+        self.actionArea.accessibilityLabel = accessibility.label
+        self.actionArea.accessibilityValue = accessibility.value
+        self.actionArea.accessibilityHint = accessibility.hint
+        self.actionArea.accessibilityTraits = accessibility.traits
+        self.actionArea.accessibilityCustomActions = accessibility.customActions.map { action in
+            UIAccessibilityCustomAction(name: action.name, actionHandler: { [weak self] _ in
+                guard let self else {
+                    return false
+                }
+                switch action.kind {
+                case .close:
+                    self.closePressed()
+                    return true
+                case .goToOriginalMessage:
+                    return false
+                }
+            })
+        }
         
         let titleSize = self.titleNode.updateLayout(CGSize(width: bounds.size.width - leftInset - textLineInset - rightInset - textRightInset, height: bounds.size.height))
         self.titleNode.frame = CGRect(origin: CGPoint(x: leftInset + textLineInset, y: 7.0), size: titleSize)
@@ -421,17 +450,21 @@ public final class ForwardAccessoryPanelNode: AccessoryPanelNode {
     private var previousTapTimestamp: Double?
     @objc private func tapGesture(_ recognizer: UITapGestureRecognizer) {
         if case .ended = recognizer.state {
-            let timestamp = CFAbsoluteTimeGetCurrent()
-            if let previousTapTimestamp = self.previousTapTimestamp, previousTapTimestamp + 1.0 > timestamp {
-                return
-            }
-            self.previousTapTimestamp = CFAbsoluteTimeGetCurrent()
-            self.interfaceInteraction?.presentForwardOptions(self.view)
-            Queue.mainQueue().after(1.5) {
-                self.updateThemeAndStrings(theme: self.theme, strings: self.strings, forwardOptionsState: self.forwardOptionsState, force: true)
-            }
-            
-            let _ = ApplicationSpecificNotice.incrementChatForwardOptionsTip(accountManager: self.context.sharedContext.accountManager, count: 3).start()
+            self.presentForwardOptions()
         }
+    }
+    
+    private func presentForwardOptions() {
+        let timestamp = CFAbsoluteTimeGetCurrent()
+        if let previousTapTimestamp = self.previousTapTimestamp, previousTapTimestamp + 1.0 > timestamp {
+            return
+        }
+        self.previousTapTimestamp = CFAbsoluteTimeGetCurrent()
+        self.interfaceInteraction?.presentForwardOptions(self.view)
+        Queue.mainQueue().after(1.5) {
+            self.updateThemeAndStrings(theme: self.theme, strings: self.strings, forwardOptionsState: self.forwardOptionsState, force: true)
+        }
+        
+        let _ = ApplicationSpecificNotice.incrementChatForwardOptionsTip(accountManager: self.context.sharedContext.accountManager, count: 3).start()
     }
 }

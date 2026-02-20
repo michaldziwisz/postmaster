@@ -160,6 +160,10 @@ final class EditAccessoryPanelNode: AccessoryPanelNode {
         self.addSubnode(self.statusNode)
         self.addSubnode(self.tapNode)
         self.addSubnode(self.actionArea)
+        
+        self.actionArea.activate = { [weak self] in
+            return self?.performPrimaryAction() ?? false
+        }
         self.messageDisposable.set((context.account.postbox.messageAtId(messageId)
         |> deliverOnMainQueue).startStrict(next: { [weak self] message in
             self?.updateMessage(message)
@@ -317,7 +321,31 @@ final class EditAccessoryPanelNode: AccessoryPanelNode {
         self.textNode.attributedText = messageText
         
         let headerString: String = titleString
-        self.actionArea.accessibilityLabel = "\(headerString).\n\(text)"
+        let accessibility = ChatPreparedContentAccessoryPanelVoiceOver.resolve(
+            strings: self.strings,
+            label: headerString,
+            value: text,
+            isEnabled: message != nil,
+            includesGoToOriginalMessage: false
+        )
+        self.actionArea.accessibilityLabel = accessibility.label
+        self.actionArea.accessibilityValue = accessibility.value
+        self.actionArea.accessibilityHint = accessibility.hint
+        self.actionArea.accessibilityTraits = accessibility.traits
+        self.actionArea.accessibilityCustomActions = accessibility.customActions.map { action in
+            UIAccessibilityCustomAction(name: action.name, actionHandler: { [weak self] _ in
+                guard let self else {
+                    return false
+                }
+                switch action.kind {
+                case .close:
+                    self.closePressed()
+                    return true
+                case .goToOriginalMessage:
+                    return false
+                }
+            })
+        }
         
         if let applyImage = applyImage {
             applyImage()
@@ -454,12 +482,20 @@ final class EditAccessoryPanelNode: AccessoryPanelNode {
     }
     
     @objc func contentTap(_ recognizer: UITapGestureRecognizer) {
-        if case .ended = recognizer.state, let message = self.currentMessage {
-            if self.isPhoto {
-                self.interfaceInteraction?.editMessageMedia(message.id, true)
-            } else {
-                self.interfaceInteraction?.navigateToMessage(message.id, false, true, .generic)
-            }
+        if case .ended = recognizer.state {
+            _ = self.performPrimaryAction()
         }
+    }
+    
+    private func performPrimaryAction() -> Bool {
+        guard let message = self.currentMessage else {
+            return false
+        }
+        if self.isPhoto {
+            self.interfaceInteraction?.editMessageMedia(message.id, true)
+        } else {
+            self.interfaceInteraction?.navigateToMessage(message.id, false, true, .generic)
+        }
+        return true
     }
 }

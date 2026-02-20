@@ -96,6 +96,11 @@ public final class SuggestPostAccessoryPanelNode: AccessoryPanelNode {
         self.addSubnode(self.titleNode)
         self.addSubnode(self.textNode)
         self.addSubnode(self.actionArea)
+        
+        self.actionArea.activate = { [weak self] in
+            self?.presentSuggestPostOptions()
+            return true
+        }
     }
     
     deinit {
@@ -334,6 +339,38 @@ public final class SuggestPostAccessoryPanelNode: AccessoryPanelNode {
         
         self.textNode.attributedText = mutableTextString
         
+        let accessibilityTitle: String
+        if let postSuggestionState = interfaceState.interfaceState.postSuggestionState, postSuggestionState.editingOriginalMessageId != nil {
+            accessibilityTitle = self.strings.Chat_PostSuggestion_Suggest_InputEditTitle
+        } else {
+            accessibilityTitle = self.strings.Chat_PostSuggestion_Suggest_InputTitle
+        }
+        let accessibility = ChatPreparedContentAccessoryPanelVoiceOver.resolve(
+            strings: self.strings,
+            label: accessibilityTitle,
+            value: mutableTextString.string,
+            isEnabled: true,
+            includesGoToOriginalMessage: false
+        )
+        self.actionArea.accessibilityLabel = accessibility.label
+        self.actionArea.accessibilityValue = accessibility.value
+        self.actionArea.accessibilityHint = accessibility.hint
+        self.actionArea.accessibilityTraits = accessibility.traits
+        self.actionArea.accessibilityCustomActions = accessibility.customActions.map { action in
+            UIAccessibilityCustomAction(name: action.name, actionHandler: { [weak self] _ in
+                guard let self else {
+                    return false
+                }
+                switch action.kind {
+                case .close:
+                    self.closePressed()
+                    return true
+                case .goToOriginalMessage:
+                    return false
+                }
+            })
+        }
+        
         let textSize = self.textNode.updateLayout(CGSize(width: bounds.size.width - leftInset - textLineInset - rightInset - textRightInset - imageTextInset, height: bounds.size.height))
         let textFrame = CGRect(origin: CGPoint(x: leftInset + textLineInset + imageTextInset - self.textNode.insets.left, y: 25.0 - self.textNode.insets.top), size: textSize)
         if self.textNode.supernode == self {
@@ -350,15 +387,19 @@ public final class SuggestPostAccessoryPanelNode: AccessoryPanelNode {
     private var previousTapTimestamp: Double?
     @objc private func tapGesture(_ recognizer: UITapGestureRecognizer) {
         if case .ended = recognizer.state {
-            let timestamp = CFAbsoluteTimeGetCurrent()
-            if let previousTapTimestamp = self.previousTapTimestamp, previousTapTimestamp + 1.0 > timestamp {
-                return
-            }
-            self.previousTapTimestamp = CFAbsoluteTimeGetCurrent()
-            self.interfaceInteraction?.presentSuggestPostOptions()
-            Queue.mainQueue().after(1.5) {
-                self.updateThemeAndStrings(theme: self.theme, strings: self.strings, force: true)
-            }
+            self.presentSuggestPostOptions()
+        }
+    }
+    
+    private func presentSuggestPostOptions() {
+        let timestamp = CFAbsoluteTimeGetCurrent()
+        if let previousTapTimestamp = self.previousTapTimestamp, previousTapTimestamp + 1.0 > timestamp {
+            return
+        }
+        self.previousTapTimestamp = CFAbsoluteTimeGetCurrent()
+        self.interfaceInteraction?.presentSuggestPostOptions()
+        Queue.mainQueue().after(1.5) {
+            self.updateThemeAndStrings(theme: self.theme, strings: self.strings, force: true)
         }
     }
 }

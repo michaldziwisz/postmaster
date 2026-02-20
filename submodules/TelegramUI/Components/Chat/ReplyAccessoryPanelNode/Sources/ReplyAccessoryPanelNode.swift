@@ -113,6 +113,11 @@ public final class ReplyAccessoryPanelNode: AccessoryPanelNode {
         self.addSubnode(self.imageNode)
         self.addSubnode(self.actionArea)
         
+        self.actionArea.activate = { [weak self] in
+            self?.presentReplyOptions()
+            return true
+        }
+        
         self.messageDisposable.set((context.account.postbox.messageView(messageId)
         |> deliverOnMainQueue).startStrict(next: { [weak self] messageView in
             if let strongSelf = self {
@@ -319,7 +324,32 @@ public final class ReplyAccessoryPanelNode: AccessoryPanelNode {
                 } else {
                     headerString = strongSelf.strings.Chat_ReplyPanel_AccessibilityReplyToMessage
                 }
-                strongSelf.actionArea.accessibilityLabel = "\(headerString).\n\(text)"
+                let accessibility = ChatPreparedContentAccessoryPanelVoiceOver.resolve(
+                    strings: strongSelf.strings,
+                    label: headerString,
+                    value: text,
+                    isEnabled: true,
+                    includesGoToOriginalMessage: true
+                )
+                strongSelf.actionArea.accessibilityLabel = accessibility.label
+                strongSelf.actionArea.accessibilityValue = accessibility.value
+                strongSelf.actionArea.accessibilityHint = accessibility.hint
+                strongSelf.actionArea.accessibilityTraits = accessibility.traits
+                strongSelf.actionArea.accessibilityCustomActions = accessibility.customActions.map { action in
+                    UIAccessibilityCustomAction(name: action.name, actionHandler: { [weak strongSelf] _ in
+                        guard let strongSelf else {
+                            return false
+                        }
+                        switch action.kind {
+                        case .close:
+                            strongSelf.closePressed()
+                            return true
+                        case .goToOriginalMessage:
+                            strongSelf.interfaceInteraction?.navigateToMessage(strongSelf.messageId, false, true, ChatLoadingMessageSubject.generic)
+                            return true
+                        }
+                    })
+                }
                 
                 if let applyImage = applyImage {
                     applyImage()
@@ -487,18 +517,22 @@ public final class ReplyAccessoryPanelNode: AccessoryPanelNode {
     private var previousTapTimestamp: Double?
     @objc private func tapGesture(_ recognizer: UITapGestureRecognizer) {
         if case .ended = recognizer.state {
-            let timestamp = CFAbsoluteTimeGetCurrent()
-            if let previousTapTimestamp = self.previousTapTimestamp, previousTapTimestamp + 1.0 > timestamp {
-                return
-            }
-            self.previousTapTimestamp = CFAbsoluteTimeGetCurrent()
-            self.interfaceInteraction?.presentReplyOptions(self.view)
-            Queue.mainQueue().after(1.5) {
-                self.updateThemeAndStrings(theme: self.theme, strings: self.strings, force: true)
-            }
-            
-            let _ = ApplicationSpecificNotice.incrementChatReplyOptionsTip(accountManager: self.context.sharedContext.accountManager, count: 3).start()
+            self.presentReplyOptions()
         }
+    }
+    
+    private func presentReplyOptions() {
+        let timestamp = CFAbsoluteTimeGetCurrent()
+        if let previousTapTimestamp = self.previousTapTimestamp, previousTapTimestamp + 1.0 > timestamp {
+            return
+        }
+        self.previousTapTimestamp = CFAbsoluteTimeGetCurrent()
+        self.interfaceInteraction?.presentReplyOptions(self.view)
+        Queue.mainQueue().after(1.5) {
+            self.updateThemeAndStrings(theme: self.theme, strings: self.strings, force: true)
+        }
+        
+        let _ = ApplicationSpecificNotice.incrementChatReplyOptionsTip(accountManager: self.context.sharedContext.accountManager, count: 3).start()
     }
     
     @objc func longPressGesture(_ recognizer: UILongPressGestureRecognizer) {
