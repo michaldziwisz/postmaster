@@ -94,6 +94,7 @@ public final class ChatBotInfoItemNode: ListViewItemNode {
     public let titleNode: TextNode
     public let textNode: TextNode
     private var linkHighlightingNode: LinkHighlightingNode?
+    private let activateArea: AccessibilityAreaNode
     
     private let fetchDisposable = MetaDisposable()
     
@@ -117,6 +118,7 @@ public final class ChatBotInfoItemNode: ListViewItemNode {
         self.imageNode = TransformImageNode()
         self.textNode = TextNode()
         self.titleNode = TextNode()
+        self.activateArea = AccessibilityAreaNode()
         
         super.init(layerBacked: false, rotated: true)
         
@@ -127,6 +129,7 @@ public final class ChatBotInfoItemNode: ListViewItemNode {
         self.offsetContainer.addSubnode(self.imageNode)
         self.offsetContainer.addSubnode(self.titleNode)
         self.offsetContainer.addSubnode(self.textNode)
+        self.offsetContainer.addSubnode(self.activateArea)
         self.wantsTrailingItemSpaceUpdates = true
     }
     
@@ -232,6 +235,55 @@ public final class ChatBotInfoItemNode: ListViewItemNode {
             
             let attributedText = stringWithAppliedEntities(updatedTextAndEntities.0, entities: updatedTextAndEntities.1, baseColor: item.presentationData.theme.theme.chat.message.infoPrimaryTextColor, linkColor: item.presentationData.theme.theme.chat.message.infoLinkTextColor, baseFont: messageFont, linkFont: messageFont, boldFont: messageBoldFont, italicFont: messageItalicFont, boldItalicFont: messageBoldItalicFont, fixedFont: messageFixedFont, blockQuoteFont: messageFont, message: nil, adjustQuoteFontSize: true)
             
+            enum PrimaryAction {
+                case url(url: String, concealed: Bool)
+                case peerMention(peerId: EnginePeer.Id, mention: String)
+                case textMention(String)
+                case botCommand(String)
+                case hashtag(String?, String)
+            }
+            
+            var primaryAction: PrimaryAction?
+            attributedText.enumerateAttributes(in: NSRange(location: 0, length: attributedText.length), options: []) { attributes, range, stop in
+                if let url = attributes[NSAttributedString.Key(rawValue: TelegramTextAttributes.URL)] as? String {
+                    let attributeText = (attributedText.string as NSString).substring(with: range)
+                    let concealed = !doesUrlMatchText(url: url, text: attributeText, fullText: attributedText.string)
+                    primaryAction = .url(url: url, concealed: concealed)
+                    stop.pointee = true
+                } else if let peerMention = attributes[NSAttributedString.Key(rawValue: TelegramTextAttributes.PeerMention)] as? TelegramPeerMention {
+                    primaryAction = .peerMention(peerId: peerMention.peerId, mention: peerMention.mention)
+                    stop.pointee = true
+                } else if let peerName = attributes[NSAttributedString.Key(rawValue: TelegramTextAttributes.PeerTextMention)] as? String {
+                    primaryAction = .textMention(peerName)
+                    stop.pointee = true
+                } else if let botCommand = attributes[NSAttributedString.Key(rawValue: TelegramTextAttributes.BotCommand)] as? String {
+                    primaryAction = .botCommand(botCommand)
+                    stop.pointee = true
+                } else if let hashtag = attributes[NSAttributedString.Key(rawValue: TelegramTextAttributes.Hashtag)] as? TelegramHashtag {
+                    primaryAction = .hashtag(hashtag.peerName, hashtag.hashtag)
+                    stop.pointee = true
+                }
+            }
+            
+            let actionKind: ChatBotInfoItemVoiceOver.ActionKind?
+            if let primaryAction {
+                switch primaryAction {
+                case .url:
+                    actionKind = .url
+                default:
+                    actionKind = .other
+                }
+            } else {
+                actionKind = nil
+            }
+            
+            let resolvedAccessibility = ChatBotInfoItemVoiceOver.resolve(
+                strings: item.presentationData.strings,
+                title: item.title,
+                text: item.text,
+                actionKind: actionKind
+            )
+            
             let horizontalEdgeInset: CGFloat = 10.0 + params.leftInset
             let horizontalContentInset: CGFloat = 12.0
             let verticalItemInset: CGFloat = 10.0
@@ -314,6 +366,39 @@ public final class ChatBotInfoItemNode: ListViewItemNode {
                     strongSelf.backgroundNode.frame = backgroundFrame
                     strongSelf.titleNode.frame = titleFrame
                     strongSelf.textNode.frame = textFrame
+                    
+                    strongSelf.activateArea.frame = backgroundFrame
+                    strongSelf.activateArea.accessibilityLabel = resolvedAccessibility.label
+                    strongSelf.activateArea.accessibilityHint = resolvedAccessibility.hint
+                    strongSelf.activateArea.accessibilityTraits = resolvedAccessibility.traits
+                    
+                    if let primaryAction {
+                        strongSelf.activateArea.activate = { [weak strongSelf] in
+                            guard let strongSelf, let item = strongSelf.item else {
+                                return false
+                            }
+                            switch primaryAction {
+                            case let .url(url, concealed):
+                                item.controllerInteraction.openUrl(ChatControllerInteraction.OpenUrl(url: url, concealed: concealed, progress: nil))
+                            case let .peerMention(peerId, _):
+                                let _ = (item.context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: peerId))
+                                |> deliverOnMainQueue).startStandalone(next: { [weak strongSelf] peer in
+                                    if let peer = peer {
+                                        strongSelf?.item?.controllerInteraction.openPeer(peer, .chat(textInputState: nil, subject: nil, peekData: nil), nil, .default)
+                                    }
+                                })
+                            case let .textMention(name):
+                                item.controllerInteraction.openPeerMention(name, nil)
+                            case let .botCommand(command):
+                                item.controllerInteraction.sendBotCommand(nil, command)
+                            case let .hashtag(peerName, hashtag):
+                                item.controllerInteraction.openHashtag(peerName, hashtag)
+                            }
+                            return true
+                        }
+                    } else {
+                        strongSelf.activateArea.activate = nil
+                    }
                     
                     if item.controllerInteraction.presentationContext.backgroundNode?.hasExtraBubbleBackground() == true {
                         if strongSelf.backgroundContent == nil, let backgroundContent = item.controllerInteraction.presentationContext.backgroundNode?.makeBubbleBackground(for: .free) {

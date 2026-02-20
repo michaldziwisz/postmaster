@@ -34,6 +34,7 @@ swift_library(
         "//submodules/TelegramUI/Components/Chat/ChatMessageShareButton",
         "//submodules/TelegramUI/Components/Chat/ChatMessageStickerItemNode",
         "//submodules/TelegramUI/Components/Chat/ChatButtonKeyboardInputNode",
+        "//submodules/TelegramUI/Components/Chat/ChatBotInfoItem",
         "//submodules/TelegramUI/Components/Chat/ChatQrCodeScreen",
         "//submodules/TelegramUI/Components/Chat/ChatSearchNavigationContentNode",
         "//submodules/TelegramUI/Components/Chat/ChatChannelSubscriberInputPanelNode",
