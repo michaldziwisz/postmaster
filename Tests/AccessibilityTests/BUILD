@@ -86,6 +86,7 @@ swift_library(
         "//submodules/ItemListUI",
         "//submodules/LocationUI",
         "//submodules/PeerInfoAvatarListNode",
+        "//submodules/PeerInfoUI",
         "//submodules/StatisticsUI",
     ],
 )

@@ -36,6 +36,9 @@ final class SecretChatKeyControllerNode: ViewControllerTracingNode {
     private let imageNode: ASImageNode
     private let keyTextNode: TextNode
     private let infoNode: TextNode
+    private let imageAccessibilityArea: AccessibilityAreaNode
+    private let keyTextAccessibilityArea: AccessibilityAreaNode
+    private let infoAccessibilityArea: AccessibilityAreaNode
     
     private var validImageSize: CGSize?
     
@@ -60,6 +63,10 @@ final class SecretChatKeyControllerNode: ViewControllerTracingNode {
         self.infoNode = TextNode()
         self.infoNode.displaysAsynchronously = false
         
+        self.imageAccessibilityArea = AccessibilityAreaNode()
+        self.keyTextAccessibilityArea = AccessibilityAreaNode()
+        self.infoAccessibilityArea = AccessibilityAreaNode()
+        
         super.init()
         
         self.backgroundColor = presentationData.theme.list.plainBackgroundColor
@@ -68,12 +75,33 @@ final class SecretChatKeyControllerNode: ViewControllerTracingNode {
         self.scrollNode.addSubnode(self.imageNode)
         self.scrollNode.addSubnode(self.keyTextNode)
         self.scrollNode.addSubnode(self.infoNode)
+        self.scrollNode.addSubnode(self.imageAccessibilityArea)
+        self.scrollNode.addSubnode(self.keyTextAccessibilityArea)
+        self.scrollNode.addSubnode(self.infoAccessibilityArea)
+        
+        self.imageAccessibilityArea.accessibilityLabel = presentationData.strings.EncryptionKey_Title
+        self.imageAccessibilityArea.accessibilityTraits = [.image]
     }
     
     override func didLoad() {
         super.didLoad()
         
         self.infoNode.view.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(self.infoTap(_:))))
+    }
+    
+    private func openInfoUrl(_ url: String) -> Bool {
+        self.context.sharedContext.openExternalUrl(
+            context: self.context,
+            urlContext: .generic,
+            url: url,
+            forceExternal: false,
+            presentationData: self.presentationData,
+            navigationController: self.getNavigationController(),
+            dismissInput: { [weak self] in
+                self?.view.endEditing(true)
+            }
+        )
+        return true
     }
     
     func containerLayoutUpdated(_ layout: ContainerViewLayout, navigationBarHeight: CGFloat, transition: ContainedViewLayoutTransition) {
@@ -150,6 +178,28 @@ final class SecretChatKeyControllerNode: ViewControllerTracingNode {
         
         let infoFrame = CGRect(origin: CGPoint(x: floor((layout.size.width - infoLayout.size.width) / 2.0), y: keyTextFrame.maxY + textSpacing), size: infoLayout.size)
         transition.updateFrame(node: self.infoNode, frame: infoFrame)
+        
+        self.imageAccessibilityArea.frame = imageFrame
+        self.keyTextAccessibilityArea.frame = keyTextFrame
+        self.keyTextAccessibilityArea.accessibilityLabel = self.presentationData.strings.EncryptionKey_Title
+        self.keyTextAccessibilityArea.accessibilityValue = text
+        self.keyTextAccessibilityArea.accessibilityTraits = [.staticText]
+        
+        self.infoAccessibilityArea.frame = infoFrame
+        let resolvedInfoAccessibility = SecretChatKeyControllerNodeVoiceOver.resolve(strings: self.presentationData.strings, attributedText: infoText)
+        self.infoAccessibilityArea.accessibilityLabel = resolvedInfoAccessibility.label
+        self.infoAccessibilityArea.accessibilityHint = resolvedInfoAccessibility.hint
+        self.infoAccessibilityArea.accessibilityTraits = resolvedInfoAccessibility.traits
+        if let url = resolvedInfoAccessibility.url {
+            self.infoAccessibilityArea.activate = { [weak self] in
+                guard let self else {
+                    return false
+                }
+                return self.openInfoUrl(url)
+            }
+        } else {
+            self.infoAccessibilityArea.activate = nil
+        }
     }
     
     @objc func infoTap(_ recognizer: UITapGestureRecognizer) {
@@ -157,9 +207,7 @@ final class SecretChatKeyControllerNode: ViewControllerTracingNode {
             let point = recognizer.location(in: recognizer.view)
             if let attributes = self.infoNode.attributesAtPoint(point)?.1 {
                 if let url = attributes[NSAttributedString.Key(rawValue: TelegramTextAttributes.URL)] as? String {
-                    self.context.sharedContext.openExternalUrl(context: self.context, urlContext: .generic, url: url, forceExternal: false, presentationData: self.presentationData, navigationController: self.getNavigationController(), dismissInput: { [weak self] in
-                        self?.view.endEditing(true)
-                    })
+                    let _ = self.openInfoUrl(url)
                 }
             }
         }
