@@ -163,6 +163,28 @@ final class StoryContentCaptionComponent: Component {
             fatalError("init(coder:) has not been implemented")
         }
     }
+    
+    private final class CaptionAccessibilityView: UIView {
+        var activate: (() -> Bool)?
+        
+        override init(frame: CGRect) {
+            super.init(frame: frame)
+            self.isAccessibilityElement = true
+            self.backgroundColor = .clear
+        }
+        
+        required init?(coder: NSCoder) {
+            fatalError("init(coder:) has not been implemented")
+        }
+        
+        override func accessibilityActivate() -> Bool {
+            return self.activate?() ?? false
+        }
+        
+        override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+            return nil
+        }
+    }
 
     final class View: UIView, UIScrollViewDelegate {
         private let scrollViewContainer: UIView
@@ -170,6 +192,7 @@ final class StoryContentCaptionComponent: Component {
         
         private let collapsedText: ContentItem
         private let expandedText: ContentItem
+        private let captionAccessibilityView: CaptionAccessibilityView
         private var textSelectionNode: TextSelectionNode?
         private let textSelectionKnobContainer: UIView
         private var textSelectionKnobSurface: UIView?
@@ -274,6 +297,7 @@ final class StoryContentCaptionComponent: Component {
             
             self.collapsedText = ContentItem(frame: CGRect())
             self.expandedText = ContentItem(frame: CGRect())
+            self.captionAccessibilityView = CaptionAccessibilityView(frame: CGRect())
             
             self.textSelectionKnobContainer = UIView()
             self.textSelectionKnobContainer.isUserInteractionEnabled = false
@@ -288,6 +312,7 @@ final class StoryContentCaptionComponent: Component {
             
             self.scrollView.addSubview(self.collapsedText)
             self.scrollView.addSubview(self.expandedText)
+            self.scrollView.addSubview(self.captionAccessibilityView)
             
             self.scrollViewContainer.mask = self.scrollMaskContainer
             
@@ -808,6 +833,41 @@ final class StoryContentCaptionComponent: Component {
             
             let collapsedTextFrame = CGRect(origin: CGPoint(x: sideInset - textInsets.left, y: availableSize.height - visibleTextHeight - verticalInset - textInsets.top), size: collapsedTextLayout.0.size)
             let expandedTextFrame = CGRect(origin: CGPoint(x: sideInset - textInsets.left, y: availableSize.height - visibleTextHeight - verticalInset - textInsets.top), size: expandedTextLayout.0.size)
+            
+            var firstUrl: (url: String, concealed: Bool)?
+            let urlKey = NSAttributedString.Key(rawValue: TelegramTextAttributes.URL)
+            attributedText.enumerateAttribute(urlKey, in: NSRange(location: 0, length: attributedText.length), options: []) { value, range, stop in
+                guard let url = value as? String else {
+                    return
+                }
+                let attributeText = (attributedText.string as NSString).substring(with: range)
+                let concealed = !doesUrlMatchText(url: url, text: attributeText, fullText: attributedText.string)
+                firstUrl = (url, concealed)
+                stop.pointee = true
+            }
+            
+            let resolvedCaptionAccessibility = StoryContentCaptionVoiceOver.resolve(
+                strings: component.strings,
+                text: attributedText.string,
+                containsLink: firstUrl != nil
+            )
+            self.captionAccessibilityView.accessibilityLabel = resolvedCaptionAccessibility.label
+            self.captionAccessibilityView.accessibilityHint = resolvedCaptionAccessibility.hint
+            self.captionAccessibilityView.accessibilityTraits = resolvedCaptionAccessibility.traits
+            self.captionAccessibilityView.frame = component.externalState.isExpanded ? expandedTextFrame : collapsedTextFrame
+            self.captionAccessibilityView.activate = { [weak self] in
+                guard let self, let component = self.component else {
+                    return false
+                }
+                if let firstUrl {
+                    component.action(.url(url: firstUrl.url, concealed: firstUrl.concealed))
+                } else if self.isExpanded {
+                    self.collapse(transition: ComponentTransition(animation: .curve(duration: 0.4, curve: .spring)))
+                } else {
+                    self.expand(transition: ComponentTransition(animation: .curve(duration: 0.4, curve: .spring)))
+                }
+                return true
+            }
             
             var spoilerExpandRect: CGRect?
             if let location = self.displayContentsUnderSpoilers.location {
