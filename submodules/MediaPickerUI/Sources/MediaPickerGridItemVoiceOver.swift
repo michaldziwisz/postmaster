@@ -33,7 +33,7 @@ public enum MediaPickerGridItemVoiceOver {
         }
         
         let dateString = creationDate.flatMap { date in
-            DateFormatter.localizedString(from: date, dateStyle: .abbreviated, timeStyle: .standard)
+            DateFormatter.localizedString(from: date, dateStyle: .medium, timeStyle: .short)
         }
         let label: String
         if let dateString, !dateString.isEmpty {
@@ -65,4 +65,3 @@ public enum MediaPickerGridItemVoiceOver {
         return Resolved(label: strings.Common_Select, hint: nil, traits: traits)
     }
 }
-
