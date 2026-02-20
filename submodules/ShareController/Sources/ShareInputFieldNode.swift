@@ -223,6 +223,7 @@ public final class ShareInputFieldNode: ASDisplayNode, ASEditableTextNodeDelegat
     public var placeholder: String = "" {
         didSet {
             self.placeholderNode.attributedText = NSAttributedString(string: self.placeholder, font: Font.regular(17.0), textColor: self.theme.placeholderColor)
+            self.textInputNode.textView.accessibilityLabel = self.placeholder
         }
     }
     
@@ -258,6 +259,12 @@ public final class ShareInputFieldNode: ASDisplayNode, ASEditableTextNodeDelegat
         self.clearButton.isHidden = true
         
         super.init()
+
+        self.placeholder = placeholder
+        self.textInputNode.textView.accessibilityLabel = placeholder
+        
+        self.clearButton.accessibilityLabel = strings.VoiceOver_Editing_ClearText
+        self.clearButton.accessibilityTraits = [.button]
         
         self.textInputNode.delegate = self
         
