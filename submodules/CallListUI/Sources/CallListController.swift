@@ -406,15 +406,15 @@ public final class CallListController: TelegramBaseController {
                             case .tab:
                                 if strongSelf.editingMode {
                                     let deleteAllResolved = CallListDeleteAllButtonVoiceOver.resolve(strings: strongSelf.presentationData.strings)
-                                    let deleteAllItem = UIBarButtonItem(customDisplayNode: buttonNode)
-                                    deleteAllItem.accessibilityLabel = deleteAllResolved.label
-                                    deleteAllItem.accessibilityHint = deleteAllResolved.hint
-                                    deleteAllItem.setCustomAction({
-                                        pressedImpl?()
-                                    })
-                                    
                                     strongSelf.navigationItem.setLeftBarButton(UIBarButtonItem(title: strongSelf.presentationData.strings.Common_Done, style: .done, target: strongSelf, action: #selector(strongSelf.donePressed)), animated: strongSelf.controllerNode.didSetReady)
-                                    strongSelf.navigationItem.setRightBarButton(deleteAllItem, animated: strongSelf.controllerNode.didSetReady)
+                                    if let deleteAllItem = UIBarButtonItem(customDisplayNode: buttonNode) {
+                                        deleteAllItem.accessibilityLabel = deleteAllResolved.label
+                                        deleteAllItem.accessibilityHint = deleteAllResolved.hint
+                                        deleteAllItem.setCustomAction({
+                                            pressedImpl?()
+                                        })
+                                        strongSelf.navigationItem.setRightBarButton(deleteAllItem, animated: strongSelf.controllerNode.didSetReady)
+                                    }
                                 } else {
                                     strongSelf.navigationItem.setLeftBarButton(UIBarButtonItem(title: strongSelf.presentationData.strings.Common_Edit, style: .plain, target: strongSelf, action: #selector(strongSelf.editPressed)), animated: strongSelf.controllerNode.didSetReady)
                                     strongSelf.navigationItem.setRightBarButton(nil, animated: strongSelf.controllerNode.didSetReady)
@@ -422,14 +422,14 @@ public final class CallListController: TelegramBaseController {
                             case .navigation:
                                 if strongSelf.editingMode {
                                     let deleteAllResolved = CallListDeleteAllButtonVoiceOver.resolve(strings: strongSelf.presentationData.strings)
-                                    let deleteAllItem = UIBarButtonItem(customDisplayNode: buttonNode)
-                                    deleteAllItem.accessibilityLabel = deleteAllResolved.label
-                                    deleteAllItem.accessibilityHint = deleteAllResolved.hint
-                                    deleteAllItem.setCustomAction({
-                                        pressedImpl?()
-                                    })
-                                    
-                                    strongSelf.navigationItem.setLeftBarButton(deleteAllItem, animated: strongSelf.controllerNode.didSetReady)
+                                    if let deleteAllItem = UIBarButtonItem(customDisplayNode: buttonNode) {
+                                        deleteAllItem.accessibilityLabel = deleteAllResolved.label
+                                        deleteAllItem.accessibilityHint = deleteAllResolved.hint
+                                        deleteAllItem.setCustomAction({
+                                            pressedImpl?()
+                                        })
+                                        strongSelf.navigationItem.setLeftBarButton(deleteAllItem, animated: strongSelf.controllerNode.didSetReady)
+                                    }
                                     strongSelf.navigationItem.setRightBarButton(UIBarButtonItem(title: strongSelf.presentationData.strings.Common_Done, style: .done, target: strongSelf, action: #selector(strongSelf.donePressed)), animated: strongSelf.controllerNode.didSetReady)
                                 } else {
                                     strongSelf.navigationItem.setRightBarButton(UIBarButtonItem(title: strongSelf.presentationData.strings.Common_Edit, style: .plain, target: strongSelf, action: #selector(strongSelf.editPressed)), animated: strongSelf.controllerNode.didSetReady)
