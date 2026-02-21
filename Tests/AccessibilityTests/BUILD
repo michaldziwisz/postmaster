@@ -1,6 +1,105 @@
-load("@build_bazel_rules_apple//apple:ios.bzl", "ios_unit_test")
+load("@build_bazel_rules_apple//apple:ios.bzl", "ios_application", "ios_unit_test")
 
 load("@build_bazel_rules_swift//swift:swift.bzl", "swift_library")
+
+load("//build-system/bazel-utils:plist_fragment.bzl", "plist_fragment")
+
+module_name = "AccessibilityTestHost"
+
+swift_library(
+    name = "AccessibilityTestHostLib",
+    testonly = True,
+    srcs = glob([
+        "Host/Sources/**/*.swift",
+    ]),
+)
+
+plist_fragment(
+    name = "AccessibilityTestHostBuildNumberInfoPlist",
+    extension = "plist",
+    template =
+    """
+    <key>CFBundleVersion</key>
+    <string>1</string>
+    """,
+)
+
+plist_fragment(
+    name = "AccessibilityTestHostVersionInfoPlist",
+    extension = "plist",
+    template =
+    """
+    <key>CFBundleShortVersionString</key>
+    <string>1.0</string>
+    """,
+)
+
+plist_fragment(
+    name = "AccessibilityTestHostAppInfoPlist",
+    extension = "plist",
+    template =
+    """
+    <key>CFBundleAllowMixedLocalizations</key>
+    <true/>
+    <key>CFBundleDevelopmentRegion</key>
+    <string>en</string>
+    <key>CFBundleDisplayName</key>
+    <string>Test</string>
+    <key>CFBundleIdentifier</key>
+    <string>org.telegram.{module_name}</string>
+    <key>CFBundleName</key>
+    <string>Test</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleSignature</key>
+    <string>????</string>
+    <key>ITSAppUsesNonExemptEncryption</key>
+    <false/>
+    <key>LSRequiresIPhoneOS</key>
+    <true/>
+    <key>UIDeviceFamily</key>
+    <array>
+        <integer>1</integer>
+        <integer>2</integer>
+    </array>
+    <key>UIStatusBarStyle</key>
+    <string>UIStatusBarStyleDefault</string>
+    <key>UISupportedInterfaceOrientations</key>
+    <array>
+        <string>UIInterfaceOrientationPortrait</string>
+    </array>
+    <key>UISupportedInterfaceOrientations~ipad</key>
+    <array>
+        <string>UIInterfaceOrientationPortrait</string>
+        <string>UIInterfaceOrientationLandscapeLeft</string>
+        <string>UIInterfaceOrientationLandscapeRight</string>
+    </array>
+    <key>UIViewControllerBasedStatusBarAppearance</key>
+    <false/>
+    <key>CADisableMinimumFrameDurationOnPhone</key>
+    <true/>
+    """.format(module_name=module_name),
+)
+
+ios_application(
+    name = module_name,
+    bundle_id = "org.telegram.{}".format(module_name),
+    families = ["iphone", "ipad"],
+    minimum_os_version = "13.0",
+    provisioning_profile = None,
+    infoplists = [
+        ":AccessibilityTestHostAppInfoPlist",
+        ":AccessibilityTestHostBuildNumberInfoPlist",
+        ":AccessibilityTestHostVersionInfoPlist",
+    ],
+    resources = [
+        "//Tests/Common:LaunchScreen",
+    ],
+    deps = [
+        "//Tests/Common:Main",
+        ":AccessibilityTestHostLib",
+    ],
+)
 
 swift_library(
     name = "TabBarAccessibilityTestsLib",
@@ -111,6 +210,7 @@ ios_unit_test(
     name = "AccessibilitySmokeTests",
     minimum_os_version = "13.0",
     runner = "@build_bazel_rules_apple//apple/testing/default_runner:ios_xctestrun_ordered_runner",
+    test_host = ":{}".format(module_name),
     deps = [
         ":AccessibilitySmokeTestsLib",
     ],
@@ -121,6 +221,7 @@ ios_unit_test(
     name = "TabBarAccessibilityTests",
     minimum_os_version = "13.0",
     timeout = "long",
+    test_host = ":{}".format(module_name),
     deps = [
         ":TabBarAccessibilityTestsLib",
     ],
