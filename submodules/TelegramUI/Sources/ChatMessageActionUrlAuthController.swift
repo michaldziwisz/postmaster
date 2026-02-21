@@ -92,10 +92,6 @@ private final class ChatMessageActionUrlAuthAlertContentNode: AlertContentNode {
         self.authorizeLabelNode.isUserInteractionEnabled = true
         self.authorizeLabelNode.isAccessibilityElement = false
         self.authorizeAccessibilityNode = AccessibilityAreaNode()
-        self.authorizeAccessibilityNode.activate = { [weak self] in
-            self?.toggleAuthorize()
-            return true
-        }
         
         self.allowWriteCheckNode = InteractiveCheckNode(theme: CheckNodeTheme(backgroundColor: theme.accentColor, strokeColor: theme.contrastColor, borderColor: theme.controlBorderColor, overlayBorder: false, hasInset: false, hasShadow: false))
         self.allowWriteCheckNode.setSelected(true, animated: false)
@@ -105,10 +101,6 @@ private final class ChatMessageActionUrlAuthAlertContentNode: AlertContentNode {
         self.allowWriteLabelNode.isUserInteractionEnabled = true
         self.allowWriteLabelNode.isAccessibilityElement = false
         self.allowWriteAccessibilityNode = AccessibilityAreaNode()
-        self.allowWriteAccessibilityNode.activate = { [weak self] in
-            self?.toggleAllowWrite()
-            return true
-        }
         
         self.actionNodesSeparator = ASDisplayNode()
         self.actionNodesSeparator.isLayerBacked = true
@@ -128,6 +120,16 @@ private final class ChatMessageActionUrlAuthAlertContentNode: AlertContentNode {
         self.actionVerticalSeparators = actionVerticalSeparators
         
         super.init()
+        
+        self.authorizeAccessibilityNode.activate = { [weak self] in
+            self?.toggleAuthorize()
+            return true
+        }
+        
+        self.allowWriteAccessibilityNode.activate = { [weak self] in
+            self?.toggleAllowWrite()
+            return true
+        }
         
         self.addSubnode(self.titleNode)
         self.addSubnode(self.textNode)

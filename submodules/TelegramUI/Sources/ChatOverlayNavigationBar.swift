@@ -52,10 +52,6 @@ final class ChatOverlayNavigationBar: ASDisplayNode {
         self.titleNode.isAccessibilityElement = false
         
         self.activateAreaNode = AccessibilityAreaNode()
-        self.activateAreaNode.activate = { [weak self] in
-            self?.tapped()
-            return true
-        }
         
         self.closeButton = HighlightableButtonNode()
         self.closeButton.hitTestSlop = UIEdgeInsets(top: -8.0, left: -8.0, bottom: -8.0, right: -8.0)
@@ -76,6 +72,11 @@ final class ChatOverlayNavigationBar: ASDisplayNode {
         self.closeButton.setImage(closeImage, for: [])
         
         super.init()
+        
+        self.activateAreaNode.activate = { [weak self] in
+            self?.tapped()
+            return true
+        }
         
         self.backgroundColor = theme.inAppNotification.expandedNotification.navigationBar.backgroundColor
         

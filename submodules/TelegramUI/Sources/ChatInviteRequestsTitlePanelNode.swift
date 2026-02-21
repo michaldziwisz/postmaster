@@ -164,12 +164,13 @@ final class ChatInviteRequestsTitlePanelNode: ChatTitleAccessoryPanelNode {
         
         self.activateAreaNode = AccessibilityAreaNode()
         self.activateAreaNode.accessibilityTraits = .button
+        
+        super.init()
+        
         self.activateAreaNode.activate = { [weak self] in
             self?.buttonPressed()
             return true
         }
-        
-        super.init()
 
         self.addSubnode(self.separatorNode)
         
