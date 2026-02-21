@@ -44,11 +44,12 @@ final class ChatVerifiedPeerTitlePanelNode: ChatTitleAccessoryPanelNode {
         self.emojiStatusTextNode.textNode.isAccessibilityElement = false
         
         self.activateAreaNode = AccessibilityAreaNode()
+        
+        super.init()
+        
         self.activateAreaNode.activate = { [weak self] in
             return self?.openVerificationLinkIfPossible() ?? false
         }
-        
-        super.init()
 
         self.addSubnode(self.separatorNode)
         self.addSubnode(self.emojiStatusTextNode.textNode)

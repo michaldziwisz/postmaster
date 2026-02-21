@@ -263,12 +263,13 @@ private final class ChatInfoTitlePanelPeerNearbyInfoNode: ASDisplayNode {
         self.filledBackgroundNode = LinkHighlightingNode(color: .clear)
         
         self.activateAreaNode = AccessibilityAreaNode()
+        
+        super.init()
+        
         self.activateAreaNode.activate = { [weak self] in
             self?.openPeersNearby()
             return true
         }
-        
-        super.init()
         
         self.addSubnode(self.filledBackgroundNode)
         self.addSubnode(self.labelNode)
@@ -411,11 +412,12 @@ final class ChatReportPeerTitlePanelNode: ChatTitleAccessoryPanelNode {
         
         self.activateAreaNode = AccessibilityAreaNode()
         self.activateAreaNode.isAccessibilityElement = false
+        
+        super.init()
+        
         self.activateAreaNode.activate = { [weak self] in
             return self?.activateAdminInfoIfAvailable() ?? false
         }
-        
-        super.init()
 
         self.addSubnode(self.separatorNode)
         self.addSubnode(self.emojiSeparatorNode)

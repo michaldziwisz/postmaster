@@ -20,8 +20,8 @@ public enum ChatPinnedMessageTitlePanelVoiceOver {
     public static func resolveMain(strings: PresentationStrings, title: String, message: String?, isEnabled: Bool) -> Resolved {
         let title = title.trimmingCharacters(in: .whitespacesAndNewlines)
         
-        let message = message?.trimmingCharacters(in: .whitespacesAndNewlines)
-        let message = (message?.isEmpty == false) ? message : nil
+        let trimmedMessage = message?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedMessage = (trimmedMessage?.isEmpty == false) ? trimmedMessage : nil
         
         var traits: UIAccessibilityTraits = [.button]
         if !isEnabled {
@@ -30,7 +30,7 @@ public enum ChatPinnedMessageTitlePanelVoiceOver {
         
         return Resolved(
             label: title,
-            value: message,
+            value: normalizedMessage,
             hint: isEnabled ? strings.VoiceOver_Chat_OpenHint : nil,
             traits: traits
         )
