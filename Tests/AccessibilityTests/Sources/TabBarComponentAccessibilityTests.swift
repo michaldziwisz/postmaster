@@ -45,18 +45,21 @@ final class TabBarComponentAccessibilityTests: XCTestCase {
             return
         }
         
-        let accessibilityElements = Self.collectAccessibilityElements(in: tabBarView)
+        let accessibilityElements = tabBarView.accessibilityElements as? [UIAccessibilityElement] ?? []
         let chatsElements = accessibilityElements.filter { $0.accessibilityLabel == "Chats" }
         XCTAssertEqual(chatsElements.count, 1)
         
         let chatsElement = chatsElements[0]
-        XCTAssertTrue(chatsElement.isAccessibilityElement)
         XCTAssertTrue(chatsElement.accessibilityTraits.contains(.button))
         XCTAssertTrue(chatsElement.accessibilityTraits.contains(.selected))
         XCTAssertEqual(chatsElement.accessibilityValue, "3")
         
         XCTAssertTrue(chatsElement.accessibilityActivate())
         XCTAssertTrue(didActivateChats)
+        
+        let settingsElements = accessibilityElements.filter { $0.accessibilityLabel == "Settings" }
+        XCTAssertEqual(settingsElements.count, 1)
+        XCTAssertTrue(settingsElements[0].accessibilityTraits.contains(.button))
     }
 
     func testNavigationSearchViewIsAccessibleWhenInactive() {

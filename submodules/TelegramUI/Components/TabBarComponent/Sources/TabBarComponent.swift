@@ -378,6 +378,20 @@ public final class TabBarComponent: Component {
     }
     
     public final class View: UIView, UITabBarDelegate, UIGestureRecognizerDelegate {
+        private final class TabItemAccessibilityElement: UIAccessibilityElement {
+            var action: () -> Void
+            
+            init(container: Any, action: @escaping () -> Void) {
+                self.action = action
+                super.init(accessibilityContainer: container)
+            }
+            
+            override func accessibilityActivate() -> Bool {
+                self.action()
+                return true
+            }
+        }
+        
         private let backgroundContainer: GlassBackgroundContainerView
         private let liquidLensView: LiquidLensView
         private let contextGestureContainerView: ContextControllerSourceView
@@ -396,6 +410,8 @@ public final class TabBarComponent: Component {
 
         private var selectionGestureState: (startX: CGFloat, currentX: CGFloat, itemWidth: CGFloat, itemId: AnyHashable)?
         private var overrideSelectedItemId: AnyHashable?
+        
+        private var itemAccessibilityElements: [AnyHashable: TabItemAccessibilityElement] = [:]
 
         public var currentSearchNode: ASDisplayNode? {
             return self.searchView?.searchBarNode
@@ -886,11 +902,80 @@ public final class TabBarComponent: Component {
                     })
                 }
             }
+            
+            var accessibilityElements: [Any] = []
+            var validAccessibilityIds = Set<AnyHashable>()
+            let effectiveSelectedId: AnyHashable? = self.overrideSelectedItemId ?? component.selectedId
+            for item in component.items {
+                validAccessibilityIds.insert(item.id)
+                
+                let element: TabItemAccessibilityElement
+                if let current = self.itemAccessibilityElements[item.id] {
+                    element = current
+                } else {
+                    element = TabItemAccessibilityElement(container: self, action: { item.action(false) })
+                    self.itemAccessibilityElements[item.id] = element
+                }
+                element.action = { item.action(false) }
+                
+                let tabBarItem = item.item
+                element.accessibilityLabel = tabBarItem.accessibilityLabel ?? tabBarItem.title
+                element.accessibilityValue = tabBarItem.badgeValue
+                
+                let isSelected = (effectiveSelectedId == item.id)
+                var traits: UIAccessibilityTraits = [.button]
+                if isSelected {
+                    traits.insert(.selected)
+                }
+                if !tabBarItem.isEnabled {
+                    traits.insert(.notEnabled)
+                }
+                element.accessibilityTraits = traits
+                
+                if let itemView = (isSelected ? self.selectedItemViews[item.id]?.view : self.itemViews[item.id]?.view) {
+                    let frame = self.convert(itemView.bounds, from: itemView)
+                    element.accessibilityFrameInContainerSpace = frame
+                }
+                
+                accessibilityElements.append(element)
+            }
+            if let searchView = self.searchView {
+                if searchView.isAccessibilityElement {
+                    accessibilityElements.append(searchView)
+                } else {
+                    accessibilityElements.append(contentsOf: Self.collectAccessibilityElements(in: searchView).map { $0 as Any })
+                }
+            }
+            self.accessibilityElements = accessibilityElements
+            self.itemAccessibilityElements = self.itemAccessibilityElements.filter { validAccessibilityIds.contains($0.key) }
 
             transition.setFrame(view: self.backgroundContainer, frame: CGRect(origin: CGPoint(), size: size))
             self.backgroundContainer.update(size: size, isDark: component.theme.overallDarkAppearance, transition: transition)
 
             return size
+        }
+        
+        private static func collectAccessibilityElements(in root: UIView) -> [UIView] {
+            var result: [UIView] = []
+            
+            func visit(_ view: UIView) {
+                if view.isHidden || view.alpha < 0.01 {
+                    return
+                }
+                if view.isAccessibilityElement {
+                    result.append(view)
+                    return
+                }
+                if view.accessibilityElementsHidden {
+                    return
+                }
+                for subview in view.subviews {
+                    visit(subview)
+                }
+            }
+            
+            visit(root)
+            return result
         }
     }
     
