@@ -110,7 +110,6 @@ swift_library(
 ios_unit_test(
     name = "AccessibilitySmokeTests",
     minimum_os_version = "13.0",
-    runner = "@build_bazel_rules_apple//apple/testing/default_runner:ios_xctestrun_ordered_runner",
     deps = [
         ":AccessibilitySmokeTestsLib",
     ],
@@ -121,7 +120,6 @@ ios_unit_test(
     name = "TabBarAccessibilityTests",
     minimum_os_version = "13.0",
     timeout = "long",
-    runner = "@build_bazel_rules_apple//apple/testing/default_runner:ios_xctestrun_ordered_runner",
     deps = [
         ":TabBarAccessibilityTestsLib",
     ],
