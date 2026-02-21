@@ -44,12 +44,12 @@ public enum ChatSearchTitleAccessoryPanelVoiceOver {
     
     public static func resolveItem(strings: PresentationStrings, title: String?, reactionText: String?, count: Int, isSelected: Bool, isPremium: Bool) -> Resolved {
         let trimmedTitle = title?.trimmingCharacters(in: .whitespacesAndNewlines)
-        let trimmedTitle = (trimmedTitle?.isEmpty == false) ? trimmedTitle : nil
+        let normalizedTitle = (trimmedTitle?.isEmpty == false) ? trimmedTitle : nil
         
         let trimmedReactionText = reactionText?.trimmingCharacters(in: .whitespacesAndNewlines)
-        let trimmedReactionText = (trimmedReactionText?.isEmpty == false) ? trimmedReactionText : nil
+        let normalizedReactionText = (trimmedReactionText?.isEmpty == false) ? trimmedReactionText : nil
         
-        let label = trimmedTitle ?? trimmedReactionText ?? strings.Premium_MessageTags
+        let label = normalizedTitle ?? normalizedReactionText ?? strings.Premium_MessageTags
         
         var traits: UIAccessibilityTraits = [.button]
         if isSelected {

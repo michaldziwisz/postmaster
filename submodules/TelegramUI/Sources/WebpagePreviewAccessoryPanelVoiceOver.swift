@@ -35,13 +35,13 @@ public enum WebpagePreviewAccessoryPanelVoiceOver {
     
     public static func resolve(strings: PresentationStrings, title: String, text: String) -> Resolved {
         let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        let trimmedTitle = trimmedTitle.isEmpty ? title : trimmedTitle
+        let normalizedTitle = trimmedTitle.isEmpty ? title : trimmedTitle
         
         let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
         let value = trimmedText.isEmpty ? nil : trimmedText
         
         return Resolved(
-            label: trimmedTitle,
+            label: normalizedTitle,
             value: value,
             hint: strings.VoiceOver_Chat_OpenHint,
             traits: [.button],
@@ -51,4 +51,3 @@ public enum WebpagePreviewAccessoryPanelVoiceOver {
         )
     }
 }
-
