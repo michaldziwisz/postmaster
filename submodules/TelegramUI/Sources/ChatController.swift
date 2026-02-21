@@ -5608,7 +5608,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
             if peer.id == self.context.account.peerId {
                 chatInfoPeerTitle = self.presentationData.strings.DialogList_SavedMessages
             } else {
-                chatInfoPeerTitle = peer.displayTitle(strings: self.presentationData.strings, displayOrder: self.presentationData.nameDisplayOrder)
+                chatInfoPeerTitle = EnginePeer(peer).displayTitle(strings: self.presentationData.strings, displayOrder: self.presentationData.nameDisplayOrder)
             }
         } else {
             chatInfoPeerTitle = nil
