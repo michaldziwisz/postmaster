@@ -27,8 +27,8 @@ public enum ChatMessageAvatarHeaderVoiceOver {
     }
     
     public static func resolve(strings: PresentationStrings, peerTitle: String?, peerKind: PeerKind, isEnabled: Bool) -> Resolved {
-        let peerTitle = peerTitle?.trimmingCharacters(in: .whitespacesAndNewlines)
-        let peerTitle = (peerTitle?.isEmpty == false) ? peerTitle : nil
+        let trimmedPeerTitle = peerTitle?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedPeerTitle = (trimmedPeerTitle?.isEmpty == false) ? trimmedPeerTitle : nil
         
         var traits: UIAccessibilityTraits = [.button]
         if !isEnabled {
@@ -52,8 +52,8 @@ public enum ChatMessageAvatarHeaderVoiceOver {
         }
         
         return Resolved(
-            isAccessibilityElement: peerTitle != nil,
-            label: peerTitle,
+            isAccessibilityElement: normalizedPeerTitle != nil,
+            label: normalizedPeerTitle,
             value: nil,
             hint: hint,
             traits: traits
