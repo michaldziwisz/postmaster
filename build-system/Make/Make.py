@@ -325,8 +325,16 @@ class BazelCommandLine:
         combined_arguments += ['test']
 
         combined_arguments += ['--cache_test_results=no']
-        combined_arguments += ['--test_output=errors']
+        test_output = os.environ.get('BAZEL_TEST_OUTPUT', 'errors').strip()
+        if test_output:
+            combined_arguments += ['--test_output={}'.format(test_output)]
+        else:
+            combined_arguments += ['--test_output=errors']
         combined_arguments += ['--test_env=CREATE_XCRESULT_BUNDLE=1']
+        if os.environ.get('DEBUG_XCTESTRUNNER'):
+            combined_arguments += ['--test_env=DEBUG_XCTESTRUNNER=1']
+        if os.environ.get('NO_CLEAN'):
+            combined_arguments += ['--test_env=NO_CLEAN=1']
 
         combined_arguments += ['Tests/AllTests']
 

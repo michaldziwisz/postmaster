@@ -114,17 +114,21 @@ jobs:
           python3 build-system/Make/ImportCertificates.py --path build-system/fake-codesigning/certs
 
           RUN_TESTS="${{ inputs.run_tests }}"
+          TESTS_EXIT_CODE=0
           if [ "$RUN_TESTS" = "true" ]; then
-            python3 -u build-system/Make/Make.py \
+            BAZEL_TEST_OUTPUT=streamed DEBUG_XCTESTRUNNER=1 python3 -u build-system/Make/Make.py \
               --overrideXcodeVersion \
               --bazelUserRoot="$BAZEL_USER_ROOT" \
               --cacheDir="$BAZEL_CACHE_DIR" \
               test \
               --configurationPath="build-system/ci-configuration.json" \
-              --codesigningInformationPath=build-system/fake-codesigning
+              --codesigningInformationPath=build-system/fake-codesigning || TESTS_EXIT_CODE=$?
+            echo "Tests finished with exit code $TESTS_EXIT_CODE"
           else
             echo "Skipping tests (inputs.run_tests=$RUN_TESTS)"
           fi
+          echo "RUN_TESTS=$(echo $RUN_TESTS)" >> $GITHUB_ENV
+          echo "TESTS_EXIT_CODE=$(echo $TESTS_EXIT_CODE)" >> $GITHUB_ENV
 
           python3 -u build-system/Make/Make.py \
             --overrideXcodeVersion \
@@ -195,3 +199,9 @@ jobs:
 
           gh release upload "$TAG" "build/artifacts/Postmaster.ipa#Postmaster.ipa" --clobber
           gh release upload "$TAG" "build/artifacts/Telegram.DSYMs.zip#Telegram.DSYMs.zip" --clobber
+
+      - name: Fail if tests failed
+        if: ${{ env.RUN_TESTS == 'true' && env.TESTS_EXIT_CODE != '0' }}
+        run: |
+          echo "Bazel tests failed (exit code $TESTS_EXIT_CODE)."
+          exit 1
