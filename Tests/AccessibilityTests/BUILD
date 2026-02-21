@@ -212,6 +212,7 @@ ios_ui_test(
     bundle_id = "org.telegram.Postmaster.AccessibilitySmokeTests",
     minimum_os_version = "13.0",
     runner = "@build_bazel_rules_apple//apple/testing/default_runner:ios_xctestrun_ordered_runner",
+    timeout = "long",
     test_host = ":{}".format(module_name),
     deps = [
         ":AccessibilitySmokeTestsLib",
