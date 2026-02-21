@@ -133,16 +133,24 @@ jobs:
           OUTPUT_PATH="build/artifacts"
           rm -rf "$OUTPUT_PATH"
           mkdir -p "$OUTPUT_PATH"
-          IPA_FILES=(bazel-out/applebin_ios-ios_arm*-*-ST-*/bin/Telegram/Telegram.ipa)
-          if [ ${#IPA_FILES[@]} -eq 0 ]; then
-            echo "No IPA files found in bazel-out."
+          IPA_CANDIDATES=()
+          if [ -f "bazel-bin/Telegram/Telegram.ipa" ]; then
+            IPA_CANDIDATES+=("bazel-bin/Telegram/Telegram.ipa")
+          fi
+          IPA_CANDIDATES+=(bazel-out/applebin_ios-ios_arm*-*-ST-*/bin/Telegram/Telegram.ipa)
+
+          if [ ${#IPA_CANDIDATES[@]} -eq 0 ]; then
+            echo "No IPA files found (checked bazel-bin and bazel-out)."
             exit 1
           fi
-          cp "${IPA_FILES[0]}" "$OUTPUT_PATH/Postmaster.ipa"
+          cp "${IPA_CANDIDATES[0]}" "$OUTPUT_PATH/Postmaster.ipa"
 
           # collect dsym
           mkdir -p build/DSYMs
-          for f in bazel-out/applebin_ios-ios_arm*-*-ST-*/bin/Telegram/*.dSYM; do
+          DSYM_FILES=()
+          DSYM_FILES+=(bazel-bin/Telegram/*.dSYM)
+          DSYM_FILES+=(bazel-out/applebin_ios-ios_arm*-*-ST-*/bin/Telegram/*.dSYM)
+          for f in "${DSYM_FILES[@]}"; do
             cp -R "$f" build/DSYMs/
           done
           zip -r "./$OUTPUT_PATH/Telegram.DSYMs.zip" build/DSYMs 1>/dev/null
