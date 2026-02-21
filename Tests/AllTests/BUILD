@@ -2,7 +2,7 @@
 test_suite(
     name = "AllTests",
     tests = [
-        "//Tests/AccessibilityTests:TabBarAccessibilityTests",
+        "//Tests/AccessibilityTests:AccessibilitySmokeTests",
         "//submodules/TgVoipWebrtc:TgCallsTests",
     ],
     visibility = [
