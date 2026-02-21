@@ -210,9 +210,17 @@ open class ListView: ASDisplayNode, ASScrollViewDelegate, ASGestureRecognizerDel
     private final var displayLink: CADisplayLink!
     private final var needsAnimations = false
     
-    public final var rotated = false
+    public final var rotated = false {
+        didSet {
+            if self.rotated != oldValue {
+                self.updateVoiceOverScrollerTransform()
+            }
+        }
+    }
     public final var experimentalSnapScrollToItem = false
     public final var useMainQueueTransactions = false
+    
+    private var voiceOverStatusObserver: NSObjectProtocol?
     
     public final var scrollEnabled: Bool = true {
         didSet {
@@ -497,6 +505,7 @@ open class ListView: ASDisplayNode, ASScrollViewDelegate, ASGestureRecognizerDel
         self.clipsToBounds = true
         
         (self.view as! ListViewBackingView).target = self
+        self.view.accessibilityContainerType = .list
         
         self.transactionQueue.transactionCompleted = { [weak self] in
             if let strongSelf = self {
@@ -506,7 +515,15 @@ open class ListView: ASDisplayNode, ASScrollViewDelegate, ASGestureRecognizerDel
         
         self.scroller.alwaysBounceVertical = true
         self.scroller.contentSize = CGSize(width: 0.0, height: infiniteScrollSize * 2.0)
-        self.scroller.isHidden = true
+        self.scroller.isAccessibilityElement = false
+        self.scroller.showsVerticalScrollIndicator = false
+        self.scroller.showsHorizontalScrollIndicator = false
+        self.scroller.backgroundColor = .clear
+        self.scroller.isUserInteractionEnabled = false
+        self.updateVoiceOverScrollerVisibility()
+        self.voiceOverStatusObserver = NotificationCenter.default.addObserver(forName: UIAccessibility.voiceOverStatusDidChangeNotification, object: nil, queue: .main, using: { [weak self] _ in
+            self?.updateVoiceOverScrollerVisibility()
+        })
         self.scroller.delegate = self.wrappedScrollViewDelegate
         self.view.addSubview(self.scroller)
         self.scroller.panGestureRecognizer.cancelsTouchesInView = true
@@ -563,6 +580,10 @@ open class ListView: ASDisplayNode, ASScrollViewDelegate, ASGestureRecognizerDel
     
     deinit {
         let _ = { () -> Void in
+            if let voiceOverStatusObserver = self.voiceOverStatusObserver {
+                NotificationCenter.default.removeObserver(voiceOverStatusObserver)
+            }
+            
             self.pauseAnimations()
             self.displayLink.invalidate()
             
@@ -580,6 +601,17 @@ open class ListView: ASDisplayNode, ASScrollViewDelegate, ASGestureRecognizerDel
             self.waitingForNodesDisposable.dispose()
             self.reorderFeedbackDisposable?.dispose()
         }()
+    }
+    
+    private func updateVoiceOverScrollerVisibility() {
+        let isVoiceOverRunning = UIAccessibility.isVoiceOverRunning
+        self.scroller.isHidden = !isVoiceOverRunning
+        self.scroller.showsVerticalScrollIndicator = isVoiceOverRunning
+        self.updateVoiceOverScrollerTransform()
+    }
+    
+    private func updateVoiceOverScrollerTransform() {
+        self.scroller.transform = self.rotated ? CGAffineTransform(rotationAngle: CGFloat.pi) : .identity
     }
     
     @objc private func tapGesture(_ gestureRecognizer: UITapGestureRecognizer) {

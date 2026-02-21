@@ -5,6 +5,14 @@ load(
     "telegram_bundle_id",
 )
 
+filegroup(
+    name = "TelegramUIAccessibilityLintSources",
+    srcs = [
+        "Sources/ChatHistoryListNode.swift",
+    ],
+    visibility = ["//visibility:public"],
+)
+
 
 filegroup(
     name = "TelegramUIResources",
