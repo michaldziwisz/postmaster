@@ -7,6 +7,30 @@ import AsyncDisplayKit
 import EdgeEffect
 import ComponentDisplayAdapters
 
+private final class NavigationBarButtonAccessibilityElement: UIAccessibilityElement {
+    private let activateImpl: () -> Bool
+    
+    init(
+        containerView: UIView,
+        frameInContainerSpace: CGRect,
+        label: String,
+        traits: UIAccessibilityTraits,
+        activate: @escaping () -> Bool
+    ) {
+        self.activateImpl = activate
+        
+        super.init(accessibilityContainer: containerView)
+        
+        self.accessibilityLabel = label
+        self.accessibilityTraits = traits
+        self.accessibilityFrameInContainerSpace = frameInContainerSpace
+    }
+    
+    override func accessibilityActivate() -> Bool {
+        return self.activateImpl()
+    }
+}
+
 public final class NavigationBarImpl: ASDisplayNode, NavigationBar {
     public static var defaultSecondaryContentHeight: CGFloat {
         return 38.0
@@ -245,7 +269,37 @@ public final class NavigationBarImpl: ASDisplayNode, NavigationBar {
         get {
             var accessibilityElements: [Any] = []
             if self.backButtonNodeImpl.view.superview != nil {
-                addAccessibilityChildren(of: self.backButtonNodeImpl, container: self, to: &accessibilityElements)
+                var backFrame = self.backButtonNodeImpl.frame
+                if self.backButtonArrow.view.superview != nil {
+                    backFrame = backFrame.union(self.backButtonArrow.frame)
+                }
+                if self.badgeNode.view.superview != nil {
+                    backFrame = backFrame.union(self.badgeNode.frame)
+                }
+                
+                let manualText = self.backButtonNodeImpl.manualText.trimmingCharacters(in: .whitespacesAndNewlines)
+                let label: String
+                if !manualText.isEmpty {
+                    label = manualText
+                } else if !self.presentationData.strings.back.isEmpty {
+                    label = self.presentationData.strings.back
+                } else {
+                    label = "Back"
+                }
+                
+                accessibilityElements.append(NavigationBarButtonAccessibilityElement(
+                    containerView: self.view,
+                    frameInContainerSpace: backFrame,
+                    label: label,
+                    traits: [.button],
+                    activate: { [weak self] in
+                        guard let self else {
+                            return false
+                        }
+                        self.backButtonNodeImpl.pressed(0)
+                        return true
+                    }
+                ))
             }
             if self.leftButtonNodeImpl.view.superview != nil {
                 addAccessibilityChildren(of: self.leftButtonNodeImpl, container: self, to: &accessibilityElements)

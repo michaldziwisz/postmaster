@@ -80,3 +80,4 @@ xcode-files
 /buildbox/*
 postmaster_api.txt
 build-system/ci-configuration.json
+artifacts/

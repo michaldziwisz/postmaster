@@ -6819,6 +6819,22 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
             self.updateStatusBarPresentation()
         }
     }
+
+    override public func accessibilityPerformEscape() -> Bool {
+        if let navigationBar = self.navigationBar {
+            navigationBar.backPressed()
+            return true
+        }
+        if let navigationController = self.navigationController {
+            navigationController.popViewController(animated: true)
+            return true
+        }
+        if self.presentingViewController != nil {
+            self.dismiss()
+            return true
+        }
+        return false
+    }
     
     override public func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)

@@ -258,7 +258,47 @@ public final class ChatTextInputActionButtonsNode: ASDisplayNode, ChatSendMessag
 
     override public var accessibilityElements: [Any]? {
         get {
-            return nil
+            if self.view.accessibilityElementsHidden {
+                return []
+            }
+            
+            var elements: [Any] = []
+            
+            func addIfAccessible(_ view: UIView?) {
+                guard let view else {
+                    return
+                }
+                guard view.isAccessibilityElement else {
+                    return
+                }
+                guard !view.isHidden, view.alpha > 0.01 else {
+                    return
+                }
+                guard !view.accessibilityElementsHidden else {
+                    return
+                }
+                guard view.superview != nil else {
+                    return
+                }
+                let frameInButtons = view.convert(view.bounds, to: self.view)
+                guard !frameInButtons.isEmpty else {
+                    return
+                }
+                guard frameInButtons.width > 1.0, frameInButtons.height > 1.0 else {
+                    return
+                }
+                guard self.view.bounds.intersects(frameInButtons) else {
+                    return
+                }
+                
+                elements.append(view)
+            }
+            
+            addIfAccessible(self.expandMediaInputButton)
+            addIfAccessible(self.micButton)
+            addIfAccessible(self.sendButton.view)
+            
+            return elements
         } set(value) {
         }
     }

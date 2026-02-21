@@ -1185,6 +1185,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         textInputNode.view.addGestureRecognizer(recognizer)
         self.touchDownGestureRecognizer = recognizer
         
+        textInputNode.textView.isAccessibilityElement = true
         if let placeholder = self.textPlaceholderNode.attributedText?.string {
             let resolved = ChatTextInputPanelTextViewVoiceOver.resolve(
                 placeholder: placeholder,
@@ -1197,7 +1198,65 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
 
     override public var accessibilityElements: [Any]? {
         get {
-            return nil
+            var elements: [Any] = []
+            
+            func addIfAccessible(_ view: UIView?) {
+                guard let view else {
+                    return
+                }
+                guard view.isAccessibilityElement else {
+                    return
+                }
+                guard !view.isHidden, view.alpha > 0.01 else {
+                    return
+                }
+                guard !view.accessibilityElementsHidden else {
+                    return
+                }
+                guard view.superview != nil else {
+                    return
+                }
+                let frameInPanel = view.convert(view.bounds, to: self.view)
+                guard !frameInPanel.isEmpty else {
+                    return
+                }
+                guard frameInPanel.width > 1.0, frameInPanel.height > 1.0 else {
+                    return
+                }
+                guard self.view.bounds.intersects(frameInPanel) else {
+                    return
+                }
+                
+                elements.append(view)
+            }
+            
+            addIfAccessible(self.menuButton.view)
+            addIfAccessible(self.sendAsAvatarButtonNode.view)
+            
+            for (_, button) in self.accessoryItemButtons {
+                addIfAccessible(button)
+            }
+            
+            addIfAccessible(self.attachmentButton.isAccessibilityElement ? self.attachmentButton : nil)
+            addIfAccessible(self.attachmentButtonDisabledNode.isAccessibilityElement ? self.attachmentButtonDisabledNode.view : nil)
+            
+            addIfAccessible(self.textInputNode?.textView)
+            
+            addIfAccessible(self.searchLayoutClearButton)
+            addIfAccessible(self.slowModeButton)
+            
+            addIfAccessible(self.viewOnceButton.isAccessibilityElement ? self.viewOnceButton.view : nil)
+            addIfAccessible(self.recordMoreButton.isAccessibilityElement ? self.recordMoreButton.view : nil)
+            
+            addIfAccessible(self.mediaRecordingAccessibilityArea?.view)
+            
+            addIfAccessible(self.mediaActionButtons.expandMediaInputButton)
+            addIfAccessible(self.mediaActionButtons.micButton)
+            addIfAccessible(self.mediaActionButtons.sendButton.view)
+            
+            addIfAccessible(self.sendActionButtons.sendButton.view)
+            
+            return elements
         } set(value) {
         }
     }
@@ -3351,7 +3410,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                 })
             }
         } else {
-            self.mediaActionButtons.isAccessibilityElement = true
+            self.mediaActionButtons.isAccessibilityElement = false
             if let mediaRecordingAccessibilityArea = self.mediaRecordingAccessibilityArea {
                 self.mediaRecordingAccessibilityArea = nil
                 mediaRecordingAccessibilityArea.removeFromSupernode()
