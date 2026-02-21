@@ -7,19 +7,19 @@ import XCTest
 
 final class ChatMessageCustomActionSignatureTests: XCTestCase {
     func testBubbleItemCustomActionHandlerReturnsNonVoid() {
-        assertCustomActionHandlerReturnsNonVoid(ChatMessageBubbleItemNode.ChatMessageBubbleItemNode.self)
+        assertCustomActionHandlerReturnsNonVoid(ChatMessageBubbleItemNode.self)
     }
     
     func testAnimatedStickerItemCustomActionHandlerReturnsNonVoid() {
-        assertCustomActionHandlerReturnsNonVoid(ChatMessageAnimatedStickerItemNode.ChatMessageAnimatedStickerItemNode.self)
+        assertCustomActionHandlerReturnsNonVoid(ChatMessageAnimatedStickerItemNode.self)
     }
     
     func testInstantVideoItemCustomActionHandlerReturnsNonVoid() {
-        assertCustomActionHandlerReturnsNonVoid(ChatMessageInstantVideoItemNode.ChatMessageInstantVideoItemNode.self)
+        assertCustomActionHandlerReturnsNonVoid(ChatMessageInstantVideoItemNode.self)
     }
     
     func testStickerItemCustomActionHandlerReturnsNonVoid() {
-        assertCustomActionHandlerReturnsNonVoid(ChatMessageStickerItemNode.ChatMessageStickerItemNode.self)
+        assertCustomActionHandlerReturnsNonVoid(ChatMessageStickerItemNode.self)
     }
 }
 
@@ -37,4 +37,3 @@ private func assertCustomActionHandlerReturnsNonVoid(_ targetClass: AnyClass, fi
     
     XCTAssertFalse(encoding.hasPrefix("v"), "Expected non-void return type for custom action handler, got encoding: \(encoding)", file: file, line: line)
 }
-
