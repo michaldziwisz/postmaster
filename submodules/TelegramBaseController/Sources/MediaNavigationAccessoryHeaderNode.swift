@@ -746,6 +746,9 @@ public final class AudioRateButton: HighlightableButtonNode {
 
         super.init()
 
+        self.isAccessibilityElement = true
+        self.accessibilityTraits = [.button]
+
         self.containerNode.addSubnode(self.referenceNode)
         self.referenceNode.addSubnode(self.iconNode)
         self.addSubnode(self.containerNode)

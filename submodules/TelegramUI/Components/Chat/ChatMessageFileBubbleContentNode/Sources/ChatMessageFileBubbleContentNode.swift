@@ -86,10 +86,30 @@ public class ChatMessageFileBubbleContentNode: ChatMessageBubbleContentNode {
     }
         
     override public func accessibilityActivate() -> Bool {
-        if let item = self.item {
+        guard let item = self.item else {
+            return false
+        }
+
+        if Self.isVoiceMessage(item.message) {
+            return self.interactiveFileNode.accessibilityActivate()
+        } else {
             let _ = item.controllerInteraction.openMessage(item.message, OpenMessageParams(mode: .default))
         }
         return true
+    }
+
+    private static func isVoiceMessage(_ message: Message) -> Bool {
+        for media in message.media {
+            guard let file = media as? TelegramMediaFile else {
+                continue
+            }
+            for attribute in file.attributes {
+                if case let .Audio(isVoice, _, _, _, _) = attribute {
+                    return isVoice
+                }
+            }
+        }
+        return false
     }
     
     required public init?(coder aDecoder: NSCoder) {

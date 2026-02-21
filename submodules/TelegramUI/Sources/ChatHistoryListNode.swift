@@ -615,6 +615,9 @@ public final class ChatHistoryListNodeImpl: ListView, ChatHistoryNode, ChatHisto
     private var currentPresentationData: ChatPresentationData
     private var chatPresentationDataPromise: Promise<ChatPresentationData>
     private var presentationDataDisposable: Disposable?
+
+    private let historyScrollAccessibilityArea: AccessibilityAreaNode
+    private var scrollingIndicatorState: ListView.ScrollingIndicatorState?
     
     private let historyAppearsClearedPromise = ValuePromise<Bool>(false)
     var historyAppearsCleared: Bool = false {
@@ -804,6 +807,8 @@ public final class ChatHistoryListNodeImpl: ListView, ChatHistoryNode, ChatHisto
         self.currentPresentationData = ChatPresentationData(theme: ChatPresentationThemeData(theme: presentationData.theme, wallpaper: presentationData.chatWallpaper), fontSize: presentationData.chatFontSize, strings: presentationData.strings, dateTimeFormat: presentationData.dateTimeFormat, nameDisplayOrder: presentationData.nameDisplayOrder, disableAnimations: true, largeEmoji: presentationData.largeEmoji, chatBubbleCorners: presentationData.chatBubbleCorners, animatedEmojiScale: 1.0)
         
         self.chatPresentationDataPromise = Promise()
+
+        self.historyScrollAccessibilityArea = AccessibilityAreaNode()
         
         self.prefetchManager = InChatPrefetchManager(context: context)
         
@@ -914,6 +919,18 @@ public final class ChatHistoryListNodeImpl: ListView, ChatHistoryNode, ChatHisto
         }
 
         self.clipsToBounds = false
+
+        self.verticalScrollIndicatorColor = self.currentPresentationData.theme.theme.list.itemSecondaryTextColor.withAlphaComponent(0.6)
+
+        self.historyScrollAccessibilityArea.accessibilityLabel = "Scroll history"
+        self.historyScrollAccessibilityArea.accessibilityTraits = [.adjustable]
+        self.historyScrollAccessibilityArea.increment = { [weak self] in
+            self?.accessibilityScrollHistory(older: true)
+        }
+        self.historyScrollAccessibilityArea.decrement = { [weak self] in
+            self?.accessibilityScrollHistory(older: false)
+        }
+        self.addSubnode(self.historyScrollAccessibilityArea)
         
         self.beginAdMessageManagement(adMessages: adMessages)
         
@@ -1206,13 +1223,13 @@ public final class ChatHistoryListNodeImpl: ListView, ChatHistoryNode, ChatHisto
             //strongSelf.updateHistoryScrollingArea(transition: .immediate)
         }
 
-        /*self.updateScrollingIndicator = { [weak self] scrollingState, transition in
-            guard let strongSelf = self else {
+        self.updateScrollingIndicator = { [weak self] scrollingState, _ in
+            guard let self else {
                 return
             }
-            strongSelf.scrollingState = scrollingState
-            strongSelf.updateHistoryScrollingArea(transition: transition)
-        }*/
+            self.scrollingIndicatorState = scrollingState
+            self.updateHistoryScrollAccessibilityAreaValue()
+        }
         
         let selectionRecognizer = ChatHistoryListSelectionRecognizer(target: self, action: #selector(self.selectionPanGesture(_:)))
         selectionRecognizer.shouldBegin = { [weak self] in
@@ -4369,6 +4386,36 @@ public final class ChatHistoryListNodeImpl: ListView, ChatHistoryNode, ChatHisto
             self.dequeuedInitialTransitionOnLayout = true
             self.dequeueHistoryViewTransitions()
         }
+
+        self.updateHistoryScrollAccessibilityAreaFrame(size: updateSizeAndInsets.size)
+    }
+
+    private func updateHistoryScrollAccessibilityAreaFrame(size: CGSize) {
+        let areaWidth: CGFloat = 44.0
+        let x: CGFloat = self.rotated ? 0.0 : max(0.0, size.width - areaWidth)
+        self.historyScrollAccessibilityArea.frame = CGRect(origin: CGPoint(x: x, y: 0.0), size: CGSize(width: min(areaWidth, size.width), height: size.height))
+    }
+
+    private func updateHistoryScrollAccessibilityAreaValue() {
+        guard let scrollingIndicatorState = self.scrollingIndicatorState else {
+            self.historyScrollAccessibilityArea.accessibilityValue = nil
+            return
+        }
+        self.historyScrollAccessibilityArea.accessibilityValue = self.currentPresentationData.strings.VoiceOver_ScrollStatus("\(scrollingIndicatorState.topItem.index + 1)", "\(scrollingIndicatorState.itemCount)").string
+    }
+
+    private func accessibilityScrollHistory(older: Bool) {
+        let distance = floor((self.visibleSize.height - self.insets.top - self.insets.bottom))
+        guard distance > 0.0 else {
+            return
+        }
+        let scrollDirection: ListViewScrollDirection
+        if older {
+            scrollDirection = self.rotated ? .down : .up
+        } else {
+            scrollDirection = self.rotated ? .up : .down
+        }
+        let _ = self.scrollWithDirection(scrollDirection, distance: distance)
     }
     
     public func disconnect() {

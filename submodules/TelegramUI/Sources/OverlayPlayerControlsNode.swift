@@ -863,6 +863,10 @@ final class OverlayPlayerControlsNode: ASDisplayNode {
     private func updateRateButton(_ playbackBaseRate: AudioPlaybackRate) {
         let rate = self.previousRate ?? playbackBaseRate
         
+        self.rateButton.accessibilityLabel = self.presentationData.strings.VoiceOver_Media_PlaybackRate
+        self.rateButton.accessibilityHint = self.presentationData.strings.VoiceOver_Media_PlaybackRateChange
+        self.rateButton.accessibilityValue = playbackBaseRate.stringValue
+        
         self.rateButton.setContent(.image(optionsRateImage(rate: rate.stringValue.uppercased(), color: self.presentationData.theme.list.itemSecondaryTextColor)))
     }
     

@@ -55,6 +55,16 @@ public enum ChatMessageInteractiveFileNodeVoiceOver {
             traits: traits
         )
     }
+
+    public static func shouldExposeSeparateMediaControls(isVoice: Bool, isSelecting: Bool) -> Bool {
+        if isSelecting {
+            return false
+        }
+        if isVoice {
+            return false
+        }
+        return true
+    }
     
     public static func shouldActivate(isEnabled: Bool) -> Bool {
         return isEnabled

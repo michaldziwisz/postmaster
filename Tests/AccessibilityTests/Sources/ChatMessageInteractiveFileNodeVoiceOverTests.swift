@@ -4,6 +4,18 @@ import UIKit
 import XCTest
 
 final class ChatMessageInteractiveFileNodeVoiceOverTests: XCTestCase {
+    func testShouldExposeSeparateMediaControlsVoiceMessageReturnsFalse() {
+        XCTAssertFalse(ChatMessageInteractiveFileNodeVoiceOver.shouldExposeSeparateMediaControls(isVoice: true, isSelecting: false))
+    }
+    
+    func testShouldExposeSeparateMediaControlsSelectingReturnsFalse() {
+        XCTAssertFalse(ChatMessageInteractiveFileNodeVoiceOver.shouldExposeSeparateMediaControls(isVoice: false, isSelecting: true))
+    }
+    
+    func testShouldExposeSeparateMediaControlsRegularFileReturnsTrue() {
+        XCTAssertTrue(ChatMessageInteractiveFileNodeVoiceOver.shouldExposeSeparateMediaControls(isVoice: false, isSelecting: false))
+    }
+    
     func testResolvePlaybackButtonPlayingUsesPauseLabel() {
         let resolved = ChatMessageInteractiveFileNodeVoiceOver.resolvePlaybackButton(
             strings: defaultPresentationStrings,

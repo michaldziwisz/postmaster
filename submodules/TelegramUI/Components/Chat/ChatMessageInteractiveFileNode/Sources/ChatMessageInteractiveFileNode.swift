@@ -379,6 +379,17 @@ public final class ChatMessageInteractiveFileNode: ASDisplayNode {
             }
         }
     }
+
+    override public func accessibilityActivate() -> Bool {
+        guard let arguments = self.arguments, arguments.messageSelection == nil else {
+            return false
+        }
+        guard self.resourceStatus != nil else {
+            return false
+        }
+        self.progressPressed()
+        return true
+    }
     
     private func accessibilitySeekWaveform(direction: Int) {
         guard self.isWaveformAccessibilityEnabled else {
@@ -1694,7 +1705,7 @@ public final class ChatMessageInteractiveFileNode: ASDisplayNode {
         isSelecting: Bool,
         progressFrame: CGRect
     ) {
-        let shouldExposePlaybackControl = !isSelecting
+        let shouldExposePlaybackControl = ChatMessageInteractiveFileNodeVoiceOver.shouldExposeSeparateMediaControls(isVoice: isVoice, isSelecting: isSelecting)
         
         if !shouldExposePlaybackControl {
             self.isPlaybackAccessibilityEnabled = false
