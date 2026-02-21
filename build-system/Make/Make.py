@@ -326,6 +326,7 @@ class BazelCommandLine:
 
         combined_arguments += ['--cache_test_results=no']
         combined_arguments += ['--test_output=errors']
+        combined_arguments += ['--test_env=CREATE_XCRESULT_BUNDLE=1']
 
         combined_arguments += ['Tests/AllTests']
 
