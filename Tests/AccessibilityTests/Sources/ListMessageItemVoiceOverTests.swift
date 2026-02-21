@@ -32,7 +32,7 @@ final class ListMessageItemVoiceOverTests: XCTestCase {
         
         XCTAssertEqual(
             resolved.value,
-            "\(defaultPresentationStrings.VoiceOver_ChatList_MessageFrom(\"Alice\").string)\nHello"
+            "\(defaultPresentationStrings.VoiceOver_ChatList_MessageFrom("Alice").string)\nHello"
         )
     }
     
@@ -60,4 +60,3 @@ final class ListMessageItemVoiceOverTests: XCTestCase {
         XCTAssertFalse(resolved.isAccessibilityElement)
     }
 }
-
