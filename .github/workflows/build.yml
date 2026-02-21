@@ -31,6 +31,7 @@ jobs:
       contents: write
     env:
       BAZEL_CACHE_DIR: /private/var/tmp/postmaster-bazel-disk-cache
+      BAZEL_REPOSITORY_CACHE_DIR: /private/var/tmp/postmaster-bazel-repository-cache
 
     steps:
       - uses: actions/checkout@v4
@@ -62,6 +63,14 @@ jobs:
           restore-keys: |
             bazel-disk-v2-${{ runner.os }}-
 
+      - name: Cache Bazel repository cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.BAZEL_REPOSITORY_CACHE_DIR }}
+          key: bazel-repo-v1-${{ runner.os }}-${{ hashFiles('MODULE.bazel.lock', 'versions.json') }}
+          restore-keys: |
+            bazel-repo-v1-${{ runner.os }}-
+
       - name: Create canonical source directory
         run: |
           set -euo pipefail
@@ -83,6 +92,7 @@ jobs:
           # use canonical bazel root
           BAZEL_USER_ROOT="/private/var/tmp/_bazel_containerhost"
           mkdir -p "$BAZEL_CACHE_DIR"
+          mkdir -p "$BAZEL_REPOSITORY_CACHE_DIR"
 
           cd $SOURCE_DIR
 

@@ -71,6 +71,12 @@ class BazelCommandLine:
             # Asynchronously upload cache artifacts
             '--remote_cache_async',
         ]
+        
+        repository_cache_dir = os.environ.get('BAZEL_REPOSITORY_CACHE_DIR')
+        if repository_cache_dir:
+            self.common_args += [
+                '--repository_cache={}'.format(repository_cache_dir)
+            ]
 
         self.common_build_args = [
             # https://github.com/bazelbuild/rules_swift
