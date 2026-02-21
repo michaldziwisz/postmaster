@@ -114,7 +114,7 @@ final class ItemListActionItemAccessibilityActivationTests: XCTestCase {
         XCTAssertEqual(customActions?.count, 1)
         XCTAssertEqual(customActions?.first?.name, defaultPresentationStrings.Common_More)
         
-        XCTAssertTrue(customActions?.first?.actionHandler?() ?? false)
+        XCTAssertTrue(customActions?.first.flatMap { $0.actionHandler?($0) } ?? false)
         XCTAssertTrue(didLongActivate)
     }
     
@@ -141,4 +141,3 @@ final class ItemListActionItemAccessibilityActivationTests: XCTestCase {
         return result
     }
 }
-

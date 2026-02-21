@@ -124,7 +124,7 @@ final class CameraButtonComponentAccessibilityTests: XCTestCase {
         let actions = buttonView.accessibilityCustomActions ?? []
         XCTAssertEqual(actions.count, 1)
         XCTAssertEqual(actions[0].name, "Flash tint")
-        XCTAssertTrue(actions[0].actionHandler?() ?? false)
+        XCTAssertTrue(actions[0].actionHandler?(actions[0]) ?? false)
         XCTAssertTrue(didLongPress)
     }
     
@@ -161,4 +161,3 @@ private struct TestContentComponent: Component {
         return CGSize(width: 1.0, height: 1.0)
     }
 }
-

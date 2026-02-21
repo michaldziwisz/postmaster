@@ -158,12 +158,12 @@ final class HorizontalTabsComponentAccessibilityTests: XCTestCase {
         
         let moreAction = customActions.first(where: { $0.name == defaultPresentationStrings.Common_More })
         XCTAssertNotNil(moreAction)
-        XCTAssertTrue(moreAction?.actionHandler?() ?? false)
+        XCTAssertTrue(moreAction.flatMap { $0.actionHandler?($0) } ?? false)
         XCTAssertTrue(didOpenMore)
         
         let deleteAction = customActions.first(where: { $0.name == defaultPresentationStrings.Common_Delete })
         XCTAssertNotNil(deleteAction)
-        XCTAssertTrue(deleteAction?.actionHandler?() ?? false)
+        XCTAssertTrue(deleteAction.flatMap { $0.actionHandler?($0) } ?? false)
         XCTAssertTrue(didDelete)
     }
     

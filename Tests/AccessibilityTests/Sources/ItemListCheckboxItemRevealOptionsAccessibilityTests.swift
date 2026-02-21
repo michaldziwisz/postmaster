@@ -41,7 +41,7 @@ final class ItemListCheckboxItemRevealOptionsAccessibilityTests: XCTestCase {
         let actions = row.accessibilityCustomActions
         XCTAssertEqual(actions?.count, 1)
         XCTAssertEqual(actions?.first?.name, presentationData.strings.Common_Delete)
-        XCTAssertTrue(actions?.first?.actionHandler?() ?? false)
+        XCTAssertTrue(actions?.first.flatMap { $0.actionHandler?($0) } ?? false)
         XCTAssertTrue(didDelete)
     }
     
