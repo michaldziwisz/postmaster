@@ -83,6 +83,7 @@ plist_fragment(
 
 ios_application(
     name = module_name,
+    testonly = True,
     bundle_id = "org.telegram.{}".format(module_name),
     families = ["iphone", "ipad"],
     minimum_os_version = "13.0",
