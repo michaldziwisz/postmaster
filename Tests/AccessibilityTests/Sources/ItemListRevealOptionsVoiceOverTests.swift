@@ -19,9 +19,8 @@ final class ItemListRevealOptionsVoiceOverTests: XCTestCase {
         })
         
         XCTAssertEqual(actions.map(\.name), ["Left", "Right"])
-        XCTAssertFalse(actions[0].actionHandler?() ?? true)
-        XCTAssertTrue(actions[1].actionHandler?() ?? false)
+        XCTAssertFalse(actions[0].actionHandler?(actions[0]) ?? true)
+        XCTAssertTrue(actions[1].actionHandler?(actions[1]) ?? false)
         XCTAssertEqual(invokedKeys, [1, 2])
     }
 }
-
