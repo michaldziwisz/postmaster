@@ -1243,7 +1243,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             addIfAccessible(self.textInputNode?.textView)
             
             addIfAccessible(self.searchLayoutClearButton)
-            addIfAccessible(self.slowModeButton)
+            addIfAccessible(self.slowModeButton.view)
             
             addIfAccessible(self.viewOnceButton.isAccessibilityElement ? self.viewOnceButton.view : nil)
             addIfAccessible(self.recordMoreButton.isAccessibilityElement ? self.recordMoreButton.view : nil)
