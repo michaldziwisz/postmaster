@@ -1,18 +1,10 @@
 load("@build_bazel_rules_apple//apple:ios.bzl", "ios_application", "ios_unit_test")
 
-load("@build_bazel_rules_apple//apple/testing/default_runner:ios_xctestrun_runner.bzl", "ios_xctestrun_runner")
-
 load("@build_bazel_rules_swift//swift:swift.bzl", "swift_library")
 
 load("//build-system/bazel-utils:plist_fragment.bzl", "plist_fragment")
 
 module_name = "AccessibilityTestHost"
-
-ios_xctestrun_runner(
-    name = "postmaster_ios_xctestrun_ordered_runner",
-    random = False,
-    _test_template = ":postmaster_ios_xctestrun_runner.template.sh",
-)
 
 swift_library(
     name = "AccessibilityTestHostLib",
@@ -218,7 +210,7 @@ swift_library(
 ios_unit_test(
     name = "AccessibilitySmokeTests",
     minimum_os_version = "13.0",
-    runner = ":postmaster_ios_xctestrun_ordered_runner",
+    runner = "@build_bazel_rules_apple//apple/testing/default_runner:ios_xctestrun_ordered_runner",
     test_host = ":{}".format(module_name),
     deps = [
         ":AccessibilitySmokeTestsLib",
