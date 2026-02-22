@@ -41,7 +41,40 @@ public func formatWithArgumentRanges(_ value: String, _ ranges: [(Int, NSRange)]
     return (result as String, resultingRanges)
 }
 
-public let defaultPresentationStrings = PresentationStrings(primaryComponent: PresentationStrings.Component(languageCode: "en", localizedName: "English", pluralizationRulesCode: nil, dict: NSDictionary(contentsOf: URL(fileURLWithPath: getAppBundle().path(forResource: "Localizable", ofType: "strings", inDirectory: nil, forLocalization: "en")!)) as! [String : String]), secondaryComponent: nil, groupingSeparator: "")
+private func findSourceTreeLocalizableStringsPath() -> String? {
+    let relativePath = "Telegram/Telegram-iOS/en.lproj/Localizable.strings"
+    let fm = FileManager.default
+    
+    var startUrls: [URL] = []
+    startUrls.append(URL(fileURLWithPath: fm.currentDirectoryPath, isDirectory: true))
+    startUrls.append(getAppBundle().bundleURL)
+    startUrls.append(Bundle.main.bundleURL)
+    
+    for startUrl in startUrls {
+        var currentUrl = startUrl
+        for _ in 0 ..< 16 {
+            let candidatePath = currentUrl.appendingPathComponent(relativePath).path
+            if fm.fileExists(atPath: candidatePath) {
+                return candidatePath
+            }
+            currentUrl.deleteLastPathComponent()
+        }
+    }
+    
+    return nil
+}
+
+private func loadDefaultPresentationStringsDictionary() -> [String: String] {
+    if let path = getAppBundle().path(forResource: "Localizable", ofType: "strings", inDirectory: nil, forLocalization: "en"), let dict = NSDictionary(contentsOf: URL(fileURLWithPath: path)) as? [String: String] {
+        return dict
+    }
+    if let sourcePath = findSourceTreeLocalizableStringsPath(), let dict = NSDictionary(contentsOf: URL(fileURLWithPath: sourcePath)) as? [String: String] {
+        return dict
+    }
+    return [:]
+}
+
+public let defaultPresentationStrings = PresentationStrings(primaryComponent: PresentationStrings.Component(languageCode: "en", localizedName: "English", pluralizationRulesCode: nil, dict: loadDefaultPresentationStringsDictionary()), secondaryComponent: nil, groupingSeparator: "")
 
 public func dataSizeString(_ size: Int, forceDecimal: Bool = false, formatting: DataSizeStringFormatting) -> String {
     return dataSizeString(Int64(size), forceDecimal: forceDecimal, formatting: formatting)
