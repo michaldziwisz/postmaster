@@ -1070,6 +1070,9 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                 overlay.actions.requestLoadEarlier = { [weak self] in
                     self?.historyNode.voiceOverRequestLoadEarlier()
                 }
+                overlay.actions.scrollToLatest = { [weak self] in
+                    self?.historyNode.scrollToEndOfHistory()
+                }
                 overlay.actions.activateMessage = { [weak self] message in
                     guard let self else {
                         return

@@ -17,6 +17,7 @@ public final class ChatVoiceOverOverlayView: UIView {
         public var beginVoiceRecording: (() -> Void)?
         public var finishVoiceRecordingAndSend: (() -> Void)?
         public var requestLoadEarlier: (() -> Void)?
+        public var scrollToLatest: (() -> Void)?
         public var activateMessage: ((Message) -> Void)?
         
         public init(
@@ -27,6 +28,7 @@ public final class ChatVoiceOverOverlayView: UIView {
             beginVoiceRecording: (() -> Void)? = nil,
             finishVoiceRecordingAndSend: (() -> Void)? = nil,
             requestLoadEarlier: (() -> Void)? = nil,
+            scrollToLatest: (() -> Void)? = nil,
             activateMessage: ((Message) -> Void)? = nil
         ) {
             self.back = back
@@ -36,6 +38,7 @@ public final class ChatVoiceOverOverlayView: UIView {
             self.beginVoiceRecording = beginVoiceRecording
             self.finishVoiceRecordingAndSend = finishVoiceRecordingAndSend
             self.requestLoadEarlier = requestLoadEarlier
+            self.scrollToLatest = scrollToLatest
             self.activateMessage = activateMessage
         }
     }
@@ -75,6 +78,7 @@ public final class ChatVoiceOverOverlayView: UIView {
     private var isWaitingForLoadEarlier = false
     private var lastLoadEarlierRequestTimestamp: CFTimeInterval = 0.0
     private var loadEarlierRequestId: Int = 0
+    private var forceScrollToBottomOnNextApply = false
     
     public var actions = Actions()
     
@@ -120,7 +124,9 @@ public final class ChatVoiceOverOverlayView: UIView {
         self.tableView.translatesAutoresizingMaskIntoConstraints = false
         self.tableView.dataSource = self
         self.tableView.delegate = self
-        self.tableView.estimatedRowHeight = 56.0
+        self.tableView.estimatedRowHeight = 96.0
+        self.tableView.estimatedSectionHeaderHeight = 0.0
+        self.tableView.estimatedSectionFooterHeight = 0.0
         self.tableView.rowHeight = UITableView.automaticDimension
         self.tableView.keyboardDismissMode = .interactive
         self.tableView.alwaysBounceVertical = true
@@ -394,6 +400,26 @@ public final class ChatVoiceOverOverlayView: UIView {
             self.actions.activateMessage?(message)
         }
     }
+
+    public func tableView(_ tableView: UITableView, estimatedHeightForRowAt indexPath: IndexPath) -> CGFloat {
+        guard indexPath.row >= 0, indexPath.row < self.rows.count else {
+            return tableView.estimatedRowHeight
+        }
+        
+        let row = self.rows[indexPath.row]
+        switch row.kind {
+        case let .info(text):
+            let lines = max(1, min(6, (text.count / 44) + 1))
+            return max(72.0, CGFloat(24 * lines + 28))
+        case let .message(message):
+            if !message.text.isEmpty {
+                let lines = max(1, min(8, (message.text.count / 36) + 1))
+                return max(72.0, CGFloat(26 + (lines * 22)))
+            } else {
+                return 88.0
+            }
+        }
+    }
     
     public func scrollViewDidScroll(_ _: UIScrollView) {
         // Do not trigger loading earlier while the user is actively scrolling.
@@ -407,6 +433,7 @@ public final class ChatVoiceOverOverlayView: UIView {
         if !decelerate {
             self.applyPendingEntriesIfPossible()
             self.maybeTriggerLoadEarlierIfNeeded()
+            self.maybeEnsureAtLatestIfNeeded()
         }
     }
     
@@ -416,6 +443,7 @@ public final class ChatVoiceOverOverlayView: UIView {
         }
         self.applyPendingEntriesIfPossible()
         self.maybeTriggerLoadEarlierIfNeeded()
+        self.maybeEnsureAtLatestIfNeeded()
     }
     
     // MARK: - UITextViewDelegate
@@ -524,6 +552,10 @@ public final class ChatVoiceOverOverlayView: UIView {
                 self.scrollToBottom(animated: false)
                 self.focusLastMessageIfPossible()
             }
+        } else if self.forceScrollToBottomOnNextApply {
+            self.forceScrollToBottomOnNextApply = false
+            self.scrollToBottom(animated: false)
+            self.focusLastMessageIfPossible()
         } else if previousWasNearBottom {
             self.scrollToBottom(animated: false)
         } else if let anchorStableId, let newIndex = self.rows.firstIndex(where: { $0.stableId == anchorStableId }) {
@@ -573,6 +605,25 @@ public final class ChatVoiceOverOverlayView: UIView {
                 self.triggerLoadEarlierRequest()
             }
         }
+    }
+
+    private func maybeEnsureAtLatestIfNeeded() {
+        guard self.isAtBottom() else {
+            return
+        }
+        self.scrollToBottom(animated: false)
+        self.forceScrollToBottomOnNextApply = true
+        self.actions.scrollToLatest?()
+    }
+
+    private func isAtBottom(epsilon: CGFloat = 2.0) -> Bool {
+        let visibleHeight = self.tableView.bounds.height
+        if visibleHeight <= 0.0 {
+            return true
+        }
+        let minOffset = -self.tableView.adjustedContentInset.top
+        let maxOffset = max(minOffset, self.tableView.contentSize.height - visibleHeight + self.tableView.adjustedContentInset.bottom)
+        return maxOffset - self.tableView.contentOffset.y <= epsilon
     }
     
     private func resolveRow(_ row: Row, state: ChatPresentationInterfaceState) -> (title: String, subtitle: String?, accessibilityLabel: String, hint: String?, traits: UIAccessibilityTraits) {

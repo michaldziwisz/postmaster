@@ -67,4 +67,23 @@ final class ChatVoiceOverOverlayViewTests: XCTestCase {
         
         XCTAssertTrue(didRequestLoadEarlier)
     }
+    
+    func testRequestsScrollToLatestAfterScrollingEndsAtBottom() {
+        let view = ChatVoiceOverOverlayView(frame: .zero)
+        
+        var didRequestScrollToLatest = false
+        view.actions.scrollToLatest = {
+            didRequestScrollToLatest = true
+        }
+        
+        let tableView = view.subviews.compactMap { $0 as? UITableView }.first
+        XCTAssertNotNil(tableView)
+        tableView?.contentOffset = CGPoint(x: 0.0, y: 1000.0)
+        
+        if let tableView {
+            view.scrollViewDidEndDecelerating(tableView)
+        }
+        
+        XCTAssertTrue(didRequestScrollToLatest)
+    }
 }
