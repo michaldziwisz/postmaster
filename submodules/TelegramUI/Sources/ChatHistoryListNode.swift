@@ -485,6 +485,11 @@ public final class ChatHistoryListNodeImpl: ListView, ChatHistoryNode, ChatHisto
     public var originalHistoryView: MessageHistoryView? {
         return self.historyView?.originalView
     }
+
+    public var voiceOverHistoryEntriesUpdated: (([ChatHistoryEntry]) -> Void)?
+    public var voiceOverHistoryEntries: [ChatHistoryEntry] {
+        return self.historyView?.filteredEntries ?? []
+    }
     
     private let historyDisposable = MetaDisposable()
     private let readHistoryDisposable = MetaDisposable()
@@ -926,9 +931,6 @@ public final class ChatHistoryListNodeImpl: ListView, ChatHistoryNode, ChatHisto
                 return ""
             }
         }
-
-        self.voiceOverScrollBarEnabled = true
-        self.voiceOverScrollBarLabel = self.currentPresentationData.strings.GroupInfo_GroupHistoryShort
         
         self.experimentalSnapScrollToItem = false
         
@@ -2454,7 +2456,6 @@ public final class ChatHistoryListNodeImpl: ListView, ChatHistoryNode, ChatHisto
                     let chatPresentationData = ChatPresentationData(theme: themeData, fontSize: presentationData.chatFontSize, strings: presentationData.strings, dateTimeFormat: presentationData.dateTimeFormat, nameDisplayOrder: presentationData.nameDisplayOrder, disableAnimations: true, largeEmoji: presentationData.largeEmoji, chatBubbleCorners: presentationData.chatBubbleCorners, animatedEmojiScale: animatedEmojiConfig.scale)
                     
                     strongSelf.currentPresentationData = chatPresentationData
-                    strongSelf.voiceOverScrollBarLabel = chatPresentationData.strings.GroupInfo_GroupHistoryShort
                     
                     strongSelf.forEachItemHeaderNode { itemHeaderNode in
                         if let dateNode = itemHeaderNode as? ChatMessageDateHeaderNodeImpl {
@@ -3359,6 +3360,26 @@ public final class ChatHistoryListNodeImpl: ListView, ChatHistoryNode, ChatHisto
             }
         }
     }
+
+    public func voiceOverRequestLoadEarlier() {
+        guard let historyView = self.historyView else {
+            return
+        }
+        guard historyView.originalView.earlierId != nil || historyView.originalView.holeEarlier else {
+            return
+        }
+        guard !historyView.originalView.isLoadingEarlier else {
+            return
+        }
+        guard let firstEntry = historyView.filteredEntries.first else {
+            return
+        }
+
+        let locationInput: ChatHistoryLocation = .Navigation(index: .message(firstEntry.index), anchorIndex: .message(firstEntry.index), count: historyMessageCount, highlight: false)
+        if self.chatHistoryLocationValue?.content != locationInput {
+            self.chatHistoryLocationValue = ChatHistoryLocationInput(content: locationInput, id: self.takeNextHistoryLocationId())
+        }
+    }
     
     public func scrollToStartOfHistory() {
         self.beganDragging?()
@@ -3888,6 +3909,7 @@ public final class ChatHistoryListNodeImpl: ListView, ChatHistoryNode, ChatHisto
                 }
                 
                 strongSelf.historyView = transition.historyView
+                strongSelf.voiceOverHistoryEntriesUpdated?(transition.historyView.filteredEntries)
                 
                 let loadState: ChatHistoryNodeLoadState
                 var alwaysHasMessages = false

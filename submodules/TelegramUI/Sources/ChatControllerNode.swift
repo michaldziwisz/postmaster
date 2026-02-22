@@ -338,6 +338,10 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
     private var scheduledLayoutTransitionRequest: (Int, ContainedViewLayoutTransition)?
     
     private var panRecognizer: WindowPanRecognizer?
+    
+    private var voiceOverOverlayView: ChatVoiceOverOverlayView?
+    private var voiceOverOverlayConstraints: [NSLayoutConstraint] = []
+    private var voiceOverStatusObserver: NSObjectProtocol?
     private let keyboardGestureRecognizerDelegate = WindowKeyboardGestureRecognizerDelegate()
     private var upperInputPositionBound: CGFloat?
     private var keyboardGestureBeginLocation: CGPoint?
@@ -966,6 +970,10 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
         self.inputMediaNodeDataDisposable?.dispose()
         self.inlineSearchResultsReadyDisposable?.dispose()
         self.loadMoreSearchResultsDisposable?.dispose()
+        
+        if let observer = self.voiceOverStatusObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
     }
     
     override func didLoad() {
@@ -1015,6 +1023,95 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
             }
             
             return false
+        }
+
+        self.voiceOverStatusObserver = NotificationCenter.default.addObserver(forName: UIAccessibility.voiceOverStatusDidChangeNotification, object: nil, queue: .main) { [weak self] _ in
+            guard let self else {
+                return
+            }
+            self.updateVoiceOverOverlay(isEnabled: UIAccessibility.isVoiceOverRunning)
+        }
+        self.updateVoiceOverOverlay(isEnabled: UIAccessibility.isVoiceOverRunning)
+    }
+
+    private func updateVoiceOverOverlay(isEnabled: Bool) {
+        if isEnabled {
+            let overlay: ChatVoiceOverOverlayView
+            if let current = self.voiceOverOverlayView {
+                overlay = current
+            } else {
+                overlay = ChatVoiceOverOverlayView(frame: .zero)
+                overlay.translatesAutoresizingMaskIntoConstraints = false
+                
+                overlay.actions.back = { [weak self] in
+                    self?.controller?.navigationButtonAction(.dismiss)
+                }
+                overlay.actions.openProfile = { [weak self] in
+                    self?.interfaceInteraction?.openPeerInfo()
+                }
+                overlay.actions.openAttachments = { [weak self] in
+                    self?.controller?.presentAttachmentMenu(subject: .default)
+                }
+                overlay.actions.sendText = { [weak self] text in
+                    self?.controllerInteraction.sendMessage(text)
+                }
+                overlay.actions.beginVoiceRecording = { [weak self] in
+                    self?.interfaceInteraction?.beginMediaRecording(false)
+                }
+                overlay.actions.finishVoiceRecordingAndSend = { [weak self] in
+                    self?.interfaceInteraction?.finishMediaRecording(.send(viewOnce: false))
+                }
+                overlay.actions.requestLoadEarlier = { [weak self] in
+                    self?.historyNode.voiceOverRequestLoadEarlier()
+                }
+                overlay.actions.activateMessage = { [weak self] message in
+                    guard let self else {
+                        return
+                    }
+                    let _ = self.controllerInteraction.openMessage(message, OpenMessageParams(mode: .default))
+                }
+                
+                self.view.addSubview(overlay)
+                self.voiceOverOverlayConstraints = [
+                    overlay.topAnchor.constraint(equalTo: self.view.topAnchor),
+                    overlay.leadingAnchor.constraint(equalTo: self.view.leadingAnchor),
+                    overlay.trailingAnchor.constraint(equalTo: self.view.trailingAnchor),
+                    overlay.bottomAnchor.constraint(equalTo: self.view.bottomAnchor)
+                ]
+                NSLayoutConstraint.activate(self.voiceOverOverlayConstraints)
+                
+                self.voiceOverOverlayView = overlay
+                
+                self.historyNode.voiceOverHistoryEntriesUpdated = { [weak self] entries in
+                    self?.voiceOverOverlayView?.updateEntries(entries)
+                }
+            }
+            
+            overlay.updateInterfaceState(self.chatPresentationInterfaceState)
+            overlay.updateEntries(self.historyNode.voiceOverHistoryEntries)
+            
+            self.view.bringSubviewToFront(overlay)
+            
+            self.wrappingNode.view.accessibilityElementsHidden = true
+            self.wrappingNode.view.isUserInteractionEnabled = false
+            self.panRecognizer?.isEnabled = false
+            self.navigationBar?.view.accessibilityElementsHidden = true
+        } else {
+            self.wrappingNode.view.accessibilityElementsHidden = false
+            self.wrappingNode.view.isUserInteractionEnabled = true
+            self.panRecognizer?.isEnabled = true
+            self.navigationBar?.view.accessibilityElementsHidden = false
+            
+            self.historyNode.voiceOverHistoryEntriesUpdated = nil
+            
+            if let overlay = self.voiceOverOverlayView {
+                overlay.removeFromSuperview()
+            }
+            self.voiceOverOverlayView = nil
+            if !self.voiceOverOverlayConstraints.isEmpty {
+                NSLayoutConstraint.deactivate(self.voiceOverOverlayConstraints)
+                self.voiceOverOverlayConstraints.removeAll()
+            }
         }
     }
     
@@ -3469,6 +3566,8 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
             
             let updateInputTextState = self.chatPresentationInterfaceState.interfaceState.effectiveInputState != chatPresentationInterfaceState.interfaceState.effectiveInputState
             self.chatPresentationInterfaceState = chatPresentationInterfaceState
+            
+            self.voiceOverOverlayView?.updateInterfaceState(chatPresentationInterfaceState)
             
             self.navigateButtons.update(strings: chatPresentationInterfaceState.strings, theme: chatPresentationInterfaceState.theme, preferClearGlass: chatPresentationInterfaceState.preferredGlassType == .clear, dateTimeFormat: chatPresentationInterfaceState.dateTimeFormat, backgroundNode: self.backgroundNode)
             
