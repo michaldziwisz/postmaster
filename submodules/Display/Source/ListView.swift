@@ -609,6 +609,7 @@ open class ListView: ASDisplayNode, ASScrollViewDelegate, ASGestureRecognizerDel
         let isVoiceOverRunning = UIAccessibility.isVoiceOverRunning
         self.scroller.isHidden = !isVoiceOverRunning
         self.scroller.showsVerticalScrollIndicator = isVoiceOverRunning
+        self.scroller.isUserInteractionEnabled = isVoiceOverRunning
         self.updateVoiceOverScrollerTransform()
     }
     

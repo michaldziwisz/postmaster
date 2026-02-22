@@ -49,9 +49,21 @@ public final class ListViewScroller: UIScrollView, UIGestureRecognizerDelegate {
     }
     
     override public func accessibilityScroll(_ direction: UIAccessibilityScrollDirection) -> Bool {
-        if let target = self.target {
+        guard let target = self.target else {
+            return super.accessibilityScroll(direction)
+        }
+        
+        if target.rotated {
+            switch direction {
+            case .up:
+                return target.accessibilityScroll(.down)
+            case .down:
+                return target.accessibilityScroll(.up)
+            default:
+                return target.accessibilityScroll(direction)
+            }
+        } else {
             return target.accessibilityScroll(direction)
         }
-        return super.accessibilityScroll(direction)
     }
 }
