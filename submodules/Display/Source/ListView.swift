@@ -491,11 +491,12 @@ open class ListView: ASDisplayNode, ASScrollViewDelegate, ASGestureRecognizerDel
         self.transactionQueue = ListViewTransactionQueue()
         
         self.scroller = ListViewScroller()
-        self.scroller.target = self
 
         self.infiniteScrollSize = 10000.0
         
         super.init()
+
+        self.scroller.target = self
         
         self.isAccessibilityContainer = true
         
