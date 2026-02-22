@@ -144,6 +144,14 @@ genrule(
     ],
 )
 
+filegroup(
+    name = "PresentationStringsData",
+    srcs = [
+        ":GeneratedPresentationStrings/Resources/PresentationStrings.data",
+    ],
+    visibility = ["//visibility:public"],
+)
+
 minimum_os_version = "13.0"
 
 notificationServiceExtensionVersion = "v1"

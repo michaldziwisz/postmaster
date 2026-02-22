@@ -94,6 +94,7 @@ ios_application(
         ":AccessibilityTestHostVersionInfoPlist",
     ],
     resources = [
+        "//Telegram:PresentationStringsData",
         "//Tests/Common:LaunchScreen",
     ],
     deps = [
