@@ -191,10 +191,10 @@ final class ChatVoiceOverOverlayView: UIView, UITableViewDataSource, UITableView
     func updateInterfaceState(_ state: ChatPresentationInterfaceState) {
         self.interfaceState = state
         
-        self.backgroundColor = state.theme.rootController.backgroundColor
+        self.backgroundColor = state.theme.list.plainBackgroundColor
         self.topBarView.backgroundColor = state.theme.rootController.navigationBar.backgroundColor
         self.composerView.backgroundColor = state.theme.chat.inputPanel.panelBackgroundColor
-        self.tableView.backgroundColor = state.theme.rootController.backgroundColor
+        self.tableView.backgroundColor = state.theme.list.plainBackgroundColor
         
         self.inputTextView.backgroundColor = state.theme.list.itemBlocksBackgroundColor
         self.inputTextView.textColor = state.theme.list.itemPrimaryTextColor
@@ -257,7 +257,7 @@ final class ChatVoiceOverOverlayView: UIView, UITableViewDataSource, UITableView
             if peer.id == state.accountPeerId {
                 title = state.strings.DialogList_SavedMessages
             } else {
-                title = peer.displayTitle(strings: state.strings, displayOrder: state.nameDisplayOrder)
+                title = EnginePeer(peer).displayTitle(strings: state.strings, displayOrder: state.nameDisplayOrder)
             }
         }
         
@@ -307,7 +307,7 @@ final class ChatVoiceOverOverlayView: UIView, UITableViewDataSource, UITableView
                     let combined = "\(title)\n\(text)"
                     result.append(Row(stableId: entry.stableId, kind: .info(combined)))
                 case let .userInfo(peer, _, _, _, _):
-                    result.append(Row(stableId: entry.stableId, kind: .info(peer.displayTitle(strings: self.interfaceState?.strings ?? defaultPresentationStrings, displayOrder: .firstLast))))
+                    result.append(Row(stableId: entry.stableId, kind: .info(peer.displayTitle(strings: self.interfaceState?.strings ?? defaultPresentationStrings, displayOrder: PresentationPersonNameOrder.firstLast))))
                 case .newThreadInfo:
                     break
                 }
