@@ -1,0 +1,33 @@
+import TelegramUI
+import UIKit
+import XCTest
+
+final class ChatVoiceOverOverlayViewTests: XCTestCase {
+    func testInitConfiguresModalAccessibilityContainer() {
+        let view = ChatVoiceOverOverlayView(frame: .zero)
+        XCTAssertFalse(view.isAccessibilityElement)
+        XCTAssertTrue(view.accessibilityViewIsModal)
+    }
+    
+    func testEscapeGestureExecutesBackAction() {
+        let view = ChatVoiceOverOverlayView(frame: .zero)
+        
+        var didGoBack = false
+        view.actions.back = {
+            didGoBack = true
+        }
+        
+        XCTAssertTrue(view.accessibilityPerformEscape())
+        XCTAssertTrue(didGoBack)
+    }
+    
+    func testHasRefreshControlOnTableView() {
+        let view = ChatVoiceOverOverlayView(frame: .zero)
+        
+        let tableView = view.subviews.compactMap { $0 as? UITableView }.first
+        XCTAssertNotNil(tableView)
+        XCTAssertNotNil(tableView?.refreshControl)
+        XCTAssertTrue(tableView?.alwaysBounceVertical ?? false)
+    }
+}
+
