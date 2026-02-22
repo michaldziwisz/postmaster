@@ -192,6 +192,9 @@ objc_library(
     srcs = [
         "GeneratedPresentationStrings/Sources/PresentationStrings.m",
     ],
+    data = [
+        ":GeneratedPresentationStrings/Resources/PresentationStrings.data",
+    ],
     hdrs = [
         "GeneratedPresentationStrings/PublicHeaders/PresentationStrings/PresentationStrings.h",
     ],
