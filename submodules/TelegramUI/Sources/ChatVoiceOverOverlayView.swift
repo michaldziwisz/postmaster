@@ -395,21 +395,9 @@ public final class ChatVoiceOverOverlayView: UIView {
         }
     }
     
-    public func scrollViewDidScroll(_ scrollView: UIScrollView) {
-        guard scrollView === self.tableView else {
-            return
-        }
-        guard !self.isWaitingForLoadEarlier else {
-            return
-        }
-        let threshold: CGFloat = 120.0
-        if scrollView.contentOffset.y <= threshold {
-            let now = CACurrentMediaTime()
-            if now - self.lastLoadEarlierRequestTimestamp >= 1.0 {
-                self.lastLoadEarlierRequestTimestamp = now
-                self.triggerLoadEarlierRequest()
-            }
-        }
+    public func scrollViewDidScroll(_ _: UIScrollView) {
+        // Do not trigger loading earlier while the user is actively scrolling.
+        // This can cause large updates and VoiceOver stutter/hangs on long chats.
     }
     
     public func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
@@ -418,6 +406,7 @@ public final class ChatVoiceOverOverlayView: UIView {
         }
         if !decelerate {
             self.applyPendingEntriesIfPossible()
+            self.maybeTriggerLoadEarlierIfNeeded()
         }
     }
     
@@ -426,6 +415,7 @@ public final class ChatVoiceOverOverlayView: UIView {
             return
         }
         self.applyPendingEntriesIfPossible()
+        self.maybeTriggerLoadEarlierIfNeeded()
     }
     
     // MARK: - UITextViewDelegate
@@ -502,89 +492,49 @@ public final class ChatVoiceOverOverlayView: UIView {
         let newRows = self.makeRows(from: entries)
         
         let previousWasNearBottom = self.isNearBottom()
-        let previousContentHeight = self.tableView.contentSize.height
-        let previousContentOffsetY = self.tableView.contentOffset.y
+
         let previousStableIds = self.rows.map { $0.stableId }
         let newStableIds = newRows.map { $0.stableId }
-        
         if previousStableIds == newStableIds {
-            return
-        }
-        
-        if self.rows.isEmpty || !self.didInitialScrollToBottom {
-            self.rows = newRows
-            self.tableView.reloadData()
-            self.tableView.layoutIfNeeded()
-            
-            if !self.didInitialScrollToBottom {
-                self.didInitialScrollToBottom = true
-                self.scrollToBottom(animated: false)
-                self.focusLastMessageIfPossible()
-            }
-            
             if self.refreshControl.isRefreshing {
                 self.refreshControl.endRefreshing()
             }
             self.isWaitingForLoadEarlier = false
             return
         }
-        
-        if newStableIds.count > previousStableIds.count, Array(newStableIds.suffix(previousStableIds.count)) == previousStableIds {
-            let insertedCount = newStableIds.count - previousStableIds.count
-            self.rows = newRows
-            
-            UIView.performWithoutAnimation {
-                self.tableView.performBatchUpdates {
-                    let indexPaths = (0 ..< insertedCount).map { IndexPath(row: $0, section: 0) }
-                    self.tableView.insertRows(at: indexPaths, with: .none)
-                } completion: { [weak self] _ in
-                    guard let self else {
-                        return
-                    }
-                    self.tableView.layoutIfNeeded()
-                    let delta = self.tableView.contentSize.height - previousContentHeight
-                    self.tableView.setContentOffset(CGPoint(x: 0.0, y: previousContentOffsetY + delta), animated: false)
-                    if self.refreshControl.isRefreshing {
-                        self.refreshControl.endRefreshing()
-                    }
-                    self.isWaitingForLoadEarlier = false
-                }
-            }
-            
-            return
+
+        var anchorStableId: UInt64?
+        var anchorOffset: CGFloat = 0.0
+        if !previousWasNearBottom, let anchorIndexPath = self.tableView.indexPathsForVisibleRows?.sorted().first, anchorIndexPath.row >= 0, anchorIndexPath.row < self.rows.count {
+            anchorStableId = self.rows[anchorIndexPath.row].stableId
+            let rect = self.tableView.rectForRow(at: anchorIndexPath)
+            anchorOffset = rect.minY - self.tableView.contentOffset.y
         }
-        
-        if newStableIds.count > previousStableIds.count, Array(newStableIds.prefix(previousStableIds.count)) == previousStableIds {
-            let insertedCount = newStableIds.count - previousStableIds.count
-            self.rows = newRows
-            
-            UIView.performWithoutAnimation {
-                self.tableView.performBatchUpdates {
-                    let startIndex = previousStableIds.count
-                    let indexPaths = (0 ..< insertedCount).map { IndexPath(row: startIndex + $0, section: 0) }
-                    self.tableView.insertRows(at: indexPaths, with: .none)
-                } completion: { [weak self] _ in
-                    guard let self else {
-                        return
-                    }
-                    if self.refreshControl.isRefreshing {
-                        self.refreshControl.endRefreshing()
-                    }
-                    self.isWaitingForLoadEarlier = false
-                    if previousWasNearBottom {
-                        self.scrollToBottom(animated: false)
-                    }
-                }
-            }
-            
-            return
-        }
-        
+
         self.rows = newRows
-        self.tableView.reloadData()
-        if previousWasNearBottom {
-            self.scrollToBottom(animated: false)
+
+        UIView.performWithoutAnimation {
+            self.tableView.reloadData()
+            self.tableView.layoutIfNeeded()
         }
+
+        if self.rows.isEmpty || !self.didInitialScrollToBottom {
+            if !self.didInitialScrollToBottom {
+                self.didInitialScrollToBottom = true
+                self.scrollToBottom(animated: false)
+                self.focusLastMessageIfPossible()
+            }
+        } else if previousWasNearBottom {
+            self.scrollToBottom(animated: false)
+        } else if let anchorStableId, let newIndex = self.rows.firstIndex(where: { $0.stableId == anchorStableId }) {
+            let indexPath = IndexPath(row: newIndex, section: 0)
+            let rect = self.tableView.rectForRow(at: indexPath)
+            let targetOffset = rect.minY - anchorOffset
+            let minOffset = -self.tableView.adjustedContentInset.top
+            let maxOffset = max(minOffset, self.tableView.contentSize.height - self.tableView.bounds.height + self.tableView.adjustedContentInset.bottom)
+            self.tableView.setContentOffset(CGPoint(x: 0.0, y: min(max(targetOffset, minOffset), maxOffset)), animated: false)
+        }
+
         if self.refreshControl.isRefreshing {
             self.refreshControl.endRefreshing()
         }
@@ -607,6 +557,20 @@ public final class ChatVoiceOverOverlayView: UIView {
             self.isWaitingForLoadEarlier = false
             if self.refreshControl.isRefreshing {
                 self.refreshControl.endRefreshing()
+            }
+        }
+    }
+
+    private func maybeTriggerLoadEarlierIfNeeded() {
+        guard !self.isWaitingForLoadEarlier else {
+            return
+        }
+        let threshold: CGFloat = 120.0
+        if self.tableView.contentOffset.y <= threshold {
+            let now = CACurrentMediaTime()
+            if now - self.lastLoadEarlierRequestTimestamp >= 1.0 {
+                self.lastLoadEarlierRequestTimestamp = now
+                self.triggerLoadEarlierRequest()
             }
         }
     }
