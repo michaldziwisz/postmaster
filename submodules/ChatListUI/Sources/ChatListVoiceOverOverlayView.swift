@@ -95,7 +95,7 @@ final class ChatListVoiceOverOverlayView: UIView {
         case let .PeerEntry(peerEntry):
             let title: String
             if let peer = peerEntry.peer.chatMainPeer {
-                title = EnginePeer(peer).displayTitle(strings: presentationData.strings, displayOrder: presentationData.nameDisplayOrder)
+                title = peer.displayTitle(strings: presentationData.strings, displayOrder: presentationData.nameDisplayOrder)
             } else {
                 title = presentationData.strings.User_DeletedAccount
             }
