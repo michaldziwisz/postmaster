@@ -339,11 +339,11 @@ public final class ChatVoiceOverOverlayView: UIView {
     
     // MARK: - UITableViewDataSource
     
-    func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
+    public func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
         return self.rows.count
     }
     
-    func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
+    public func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         let cell: UITableViewCell
         if let current = tableView.dequeueReusableCell(withIdentifier: "Cell") {
             cell = current
@@ -386,7 +386,7 @@ public final class ChatVoiceOverOverlayView: UIView {
     
     // MARK: - UITableViewDelegate
     
-    func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+    public func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
         
         let row = self.rows[indexPath.row]
@@ -395,7 +395,7 @@ public final class ChatVoiceOverOverlayView: UIView {
         }
     }
     
-    func scrollViewDidScroll(_ scrollView: UIScrollView) {
+    public func scrollViewDidScroll(_ scrollView: UIScrollView) {
         guard scrollView === self.tableView else {
             return
         }
@@ -412,7 +412,7 @@ public final class ChatVoiceOverOverlayView: UIView {
         }
     }
     
-    func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
+    public func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
         guard scrollView === self.tableView else {
             return
         }
@@ -421,7 +421,7 @@ public final class ChatVoiceOverOverlayView: UIView {
         }
     }
     
-    func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
+    public func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
         guard scrollView === self.tableView else {
             return
         }
@@ -430,7 +430,7 @@ public final class ChatVoiceOverOverlayView: UIView {
     
     // MARK: - UITextViewDelegate
     
-    func textViewDidBeginEditing(_ textView: UITextView) {
+    public func textViewDidBeginEditing(_ textView: UITextView) {
         if UIAccessibility.isVoiceOverRunning {
             UIAccessibility.post(notification: .layoutChanged, argument: textView)
         }
