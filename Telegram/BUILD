@@ -267,6 +267,14 @@ filegroup(
 )
 
 filegroup(
+    name = "AppStringResourcesPublic",
+    srcs = [
+        ":AppStringResources",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+filegroup(
     name = "AppIntentVocabularyResources",
     srcs = glob([
         "Telegram-iOS/*.lproj/AppIntentVocabulary.plist",

@@ -97,6 +97,9 @@ ios_application(
         "//Telegram:PresentationStringsData",
         "//Tests/Common:LaunchScreen",
     ],
+    strings = [
+        "//Telegram:AppStringResourcesPublic",
+    ],
     deps = [
         "//Tests/Common:Main",
         ":AccessibilityTestHostLib",
