@@ -926,6 +926,9 @@ public final class ChatHistoryListNodeImpl: ListView, ChatHistoryNode, ChatHisto
                 return ""
             }
         }
+
+        self.voiceOverScrollBarEnabled = true
+        self.voiceOverScrollBarLabel = self.currentPresentationData.strings.GroupInfo_GroupHistoryShort
         
         self.experimentalSnapScrollToItem = false
         
@@ -2451,6 +2454,7 @@ public final class ChatHistoryListNodeImpl: ListView, ChatHistoryNode, ChatHisto
                     let chatPresentationData = ChatPresentationData(theme: themeData, fontSize: presentationData.chatFontSize, strings: presentationData.strings, dateTimeFormat: presentationData.dateTimeFormat, nameDisplayOrder: presentationData.nameDisplayOrder, disableAnimations: true, largeEmoji: presentationData.largeEmoji, chatBubbleCorners: presentationData.chatBubbleCorners, animatedEmojiScale: animatedEmojiConfig.scale)
                     
                     strongSelf.currentPresentationData = chatPresentationData
+                    strongSelf.voiceOverScrollBarLabel = chatPresentationData.strings.GroupInfo_GroupHistoryShort
                     
                     strongSelf.forEachItemHeaderNode { itemHeaderNode in
                         if let dateNode = itemHeaderNode as? ChatMessageDateHeaderNodeImpl {

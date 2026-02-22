@@ -39,6 +39,7 @@ private final class ListViewBackingLayer: CALayer {
 
 public final class ListViewBackingView: UIView {
     public fileprivate(set) weak var target: ListView?
+    private var voiceOverScrollBarElement: ListViewVoiceOverScrollBarElement?
     
     override public class var layerClass: AnyClass {
         return ListViewBackingLayer.self
@@ -86,9 +87,66 @@ public final class ListViewBackingView: UIView {
         }
         return super.hitTest(point, with: event)
     }
+
+    override public func accessibilityHitTest(_ point: CGPoint) -> Any? {
+        if UIAccessibility.isVoiceOverRunning, let target = self.target, target.voiceOverScrollBarEnabled {
+            let hitFrame = target.voiceOverScrollBarHitTestFrame(size: self.bounds.size)
+            if hitFrame.contains(point) {
+                let element: ListViewVoiceOverScrollBarElement
+                if let current = self.voiceOverScrollBarElement {
+                    element = current
+                } else {
+                    element = ListViewVoiceOverScrollBarElement(accessibilityContainer: self)
+                    self.voiceOverScrollBarElement = element
+                }
+                element.listView = target
+                element.update(containerView: self)
+                return element
+            }
+        }
+        return super.accessibilityHitTest(point)
+    }
     
     override public func accessibilityScroll(_ direction: UIAccessibilityScrollDirection) -> Bool {
         return self.target?.accessibilityScroll(direction) ?? false
+    }
+}
+
+private final class ListViewVoiceOverScrollBarElement: UIAccessibilityElement {
+    weak var listView: ListView?
+
+    override init(accessibilityContainer: Any) {
+        super.init(accessibilityContainer: accessibilityContainer)
+        self.accessibilityTraits = [.adjustable]
+    }
+
+    func update(containerView: UIView) {
+        guard let listView = self.listView else {
+            return
+        }
+        self.accessibilityLabel = listView.voiceOverScrollBarLabel
+        self.accessibilityValue = listView.voiceOverScrollBarValueString()
+        self.accessibilityFrameInContainerSpace = listView.voiceOverScrollBarFrame(size: containerView.bounds.size)
+    }
+
+    override func accessibilityIncrement() {
+        guard let listView = self.listView else {
+            return
+        }
+        let _ = listView.accessibilityScroll(.up)
+        if let containerView = self.accessibilityContainer as? UIView {
+            self.update(containerView: containerView)
+        }
+    }
+
+    override func accessibilityDecrement() {
+        guard let listView = self.listView else {
+            return
+        }
+        let _ = listView.accessibilityScroll(.down)
+        if let containerView = self.accessibilityContainer as? UIView {
+            self.update(containerView: containerView)
+        }
     }
 }
 
@@ -210,17 +268,9 @@ open class ListView: ASDisplayNode, ASScrollViewDelegate, ASGestureRecognizerDel
     private final var displayLink: CADisplayLink!
     private final var needsAnimations = false
     
-    public final var rotated = false {
-        didSet {
-            if self.rotated != oldValue {
-                self.updateVoiceOverScrollerTransform()
-            }
-        }
-    }
+    public final var rotated = false
     public final var experimentalSnapScrollToItem = false
     public final var useMainQueueTransactions = false
-    
-    private var voiceOverStatusObserver: NSObjectProtocol?
     
     public final var scrollEnabled: Bool = true {
         didSet {
@@ -495,8 +545,6 @@ open class ListView: ASDisplayNode, ASScrollViewDelegate, ASGestureRecognizerDel
         self.infiniteScrollSize = 10000.0
         
         super.init()
-
-        self.scroller.target = self
         
         self.isAccessibilityContainer = true
         
@@ -522,10 +570,6 @@ open class ListView: ASDisplayNode, ASScrollViewDelegate, ASGestureRecognizerDel
         self.scroller.showsHorizontalScrollIndicator = false
         self.scroller.backgroundColor = .clear
         self.scroller.isUserInteractionEnabled = false
-        self.updateVoiceOverScrollerVisibility()
-        self.voiceOverStatusObserver = NotificationCenter.default.addObserver(forName: UIAccessibility.voiceOverStatusDidChangeNotification, object: nil, queue: .main, using: { [weak self] _ in
-            self?.updateVoiceOverScrollerVisibility()
-        })
         self.scroller.delegate = self.wrappedScrollViewDelegate
         self.view.addSubview(self.scroller)
         self.scroller.panGestureRecognizer.cancelsTouchesInView = true
@@ -582,10 +626,6 @@ open class ListView: ASDisplayNode, ASScrollViewDelegate, ASGestureRecognizerDel
     
     deinit {
         let _ = { () -> Void in
-            if let voiceOverStatusObserver = self.voiceOverStatusObserver {
-                NotificationCenter.default.removeObserver(voiceOverStatusObserver)
-            }
-            
             self.pauseAnimations()
             self.displayLink.invalidate()
             
@@ -603,25 +643,6 @@ open class ListView: ASDisplayNode, ASScrollViewDelegate, ASGestureRecognizerDel
             self.waitingForNodesDisposable.dispose()
             self.reorderFeedbackDisposable?.dispose()
         }()
-    }
-    
-    private func updateVoiceOverScrollerVisibility() {
-        let isVoiceOverRunning = UIAccessibility.isVoiceOverRunning
-        self.scroller.isHidden = !isVoiceOverRunning
-        self.scroller.showsVerticalScrollIndicator = isVoiceOverRunning
-        self.scroller.isUserInteractionEnabled = isVoiceOverRunning
-        self.updateVoiceOverScrollerTransform()
-    }
-    
-    private func updateVoiceOverScrollerTransform() {
-        self.scroller.transform = self.rotated ? CGAffineTransform(rotationAngle: CGFloat.pi) : .identity
-    }
-
-    private func voiceOverScrollerFrame(size: CGSize) -> CGRect {
-        let areaWidth: CGFloat = 44.0
-        let width: CGFloat = min(areaWidth, size.width)
-        let x: CGFloat = self.rotated ? 0.0 : max(0.0, size.width - width)
-        return CGRect(x: x, y: 0.0, width: width, height: size.height)
     }
     
     @objc private func tapGesture(_ gestureRecognizer: UITapGestureRecognizer) {
@@ -1894,7 +1915,7 @@ open class ListView: ASDisplayNode, ASScrollViewDelegate, ASGestureRecognizerDel
                 
                 let wasIgnoringScrollingEvents = self.ignoreScrollingEvents
                 self.ignoreScrollingEvents = true
-                self.scroller.frame = self.voiceOverScrollerFrame(size: updateSizeAndInsets.size)
+                self.scroller.frame = CGRect(origin: .zero, size: updateSizeAndInsets.size)
                 //self.scroller.contentSize = CGSize(width: updateSizeAndInsets.size.width, height: infiniteScrollSize * 2.0)
                 //self.lastContentOffset = CGPoint(x: 0.0, y: infiniteScrollSize)
                 //print("lastContentOffset7 = \(self.lastContentOffset.y)")
@@ -3350,7 +3371,7 @@ open class ListView: ASDisplayNode, ASScrollViewDelegate, ASGestureRecognizerDel
             
             let wasIgnoringScrollingEvents = self.ignoreScrollingEvents
             self.ignoreScrollingEvents = true
-            let scrollerFrame = self.voiceOverScrollerFrame(size: self.visibleSize)
+            let scrollerFrame = CGRect(origin: .zero, size: self.visibleSize)
             if self.scroller.frame != scrollerFrame {
                 self.scroller.frame = scrollerFrame
             }
@@ -5320,6 +5341,36 @@ open class ListView: ASDisplayNode, ASScrollViewDelegate, ASGestureRecognizerDel
     }
     
     public var accessibilityPageScrolledString: ((String, String) -> String)?
+
+    public var voiceOverScrollBarEnabled: Bool = false
+    public var voiceOverScrollBarLabel: String?
+
+    fileprivate func voiceOverScrollBarFrame(size: CGSize) -> CGRect {
+        let width: CGFloat = min(44.0, size.width)
+        let x: CGFloat = self.rotated ? 0.0 : max(0.0, size.width - width)
+        return CGRect(x: x, y: 0.0, width: width, height: size.height)
+    }
+
+    fileprivate func voiceOverScrollBarHitTestFrame(size: CGSize) -> CGRect {
+        let width: CGFloat = min(20.0, size.width)
+        let x: CGFloat = self.rotated ? 0.0 : max(0.0, size.width - width)
+        return CGRect(x: x, y: 0.0, width: width, height: size.height)
+    }
+
+    fileprivate func voiceOverScrollBarValueString() -> String? {
+        guard let accessibilityPageScrolledString = self.accessibilityPageScrolledString else {
+            return nil
+        }
+
+        self.updateVisibleItemRange(force: true)
+        guard let visibleRange = self.displayedItemRange.visibleRange else {
+            return nil
+        }
+
+        let row = "\(visibleRange.firstIndex + 1)"
+        let count = "\(self.items.count)"
+        return accessibilityPageScrolledString(row, count)
+    }
     
     public func scrollWithDirection(_ direction: ListViewScrollDirection, distance: CGFloat) -> Bool {
         var accessibilityFocusedNode: (ASDisplayNode, CGRect)?
