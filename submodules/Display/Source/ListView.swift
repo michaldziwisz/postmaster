@@ -491,6 +491,7 @@ open class ListView: ASDisplayNode, ASScrollViewDelegate, ASGestureRecognizerDel
         self.transactionQueue = ListViewTransactionQueue()
         
         self.scroller = ListViewScroller()
+        self.scroller.target = self
 
         self.infiniteScrollSize = 10000.0
         
@@ -612,6 +613,13 @@ open class ListView: ASDisplayNode, ASScrollViewDelegate, ASGestureRecognizerDel
     
     private func updateVoiceOverScrollerTransform() {
         self.scroller.transform = self.rotated ? CGAffineTransform(rotationAngle: CGFloat.pi) : .identity
+    }
+
+    private func voiceOverScrollerFrame(size: CGSize) -> CGRect {
+        let areaWidth: CGFloat = 44.0
+        let width: CGFloat = min(areaWidth, size.width)
+        let x: CGFloat = self.rotated ? 0.0 : max(0.0, size.width - width)
+        return CGRect(x: x, y: 0.0, width: width, height: size.height)
     }
     
     @objc private func tapGesture(_ gestureRecognizer: UITapGestureRecognizer) {
@@ -1884,7 +1892,7 @@ open class ListView: ASDisplayNode, ASScrollViewDelegate, ASGestureRecognizerDel
                 
                 let wasIgnoringScrollingEvents = self.ignoreScrollingEvents
                 self.ignoreScrollingEvents = true
-                self.scroller.frame = CGRect(origin: CGPoint(), size: updateSizeAndInsets.size)
+                self.scroller.frame = self.voiceOverScrollerFrame(size: updateSizeAndInsets.size)
                 //self.scroller.contentSize = CGSize(width: updateSizeAndInsets.size.width, height: infiniteScrollSize * 2.0)
                 //self.lastContentOffset = CGPoint(x: 0.0, y: infiniteScrollSize)
                 //print("lastContentOffset7 = \(self.lastContentOffset.y)")
@@ -3340,8 +3348,9 @@ open class ListView: ASDisplayNode, ASScrollViewDelegate, ASGestureRecognizerDel
             
             let wasIgnoringScrollingEvents = self.ignoreScrollingEvents
             self.ignoreScrollingEvents = true
-            if self.scroller.bounds.size != self.visibleSize {
-                self.scroller.frame = CGRect(origin: CGPoint(), size: self.visibleSize)
+            let scrollerFrame = self.voiceOverScrollerFrame(size: self.visibleSize)
+            if self.scroller.frame != scrollerFrame {
+                self.scroller.frame = scrollerFrame
             }
             //self.scroller.contentSize = CGSize(width: self.visibleSize.width, height: infiniteScrollSize * 2.0)
             

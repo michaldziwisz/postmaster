@@ -1,6 +1,8 @@
 import UIKit
 
 public final class ListViewScroller: UIScrollView, UIGestureRecognizerDelegate {
+    weak var target: ListView?
+    
     override public init(frame: CGRect) {
         super.init(frame: frame)
         
@@ -44,5 +46,12 @@ public final class ListViewScroller: UIScrollView, UIGestureRecognizerDelegate {
     var forceDecelerating = false
     public override var isDecelerating: Bool {
         return self.forceDecelerating || super.isDecelerating
+    }
+    
+    override public func accessibilityScroll(_ direction: UIAccessibilityScrollDirection) -> Bool {
+        if let target = self.target {
+            return target.accessibilityScroll(direction)
+        }
+        return super.accessibilityScroll(direction)
     }
 }
