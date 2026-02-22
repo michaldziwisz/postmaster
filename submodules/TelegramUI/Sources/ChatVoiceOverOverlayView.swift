@@ -6,16 +6,36 @@ import TelegramPresentationData
 import ChatPresentationInterfaceState
 import TelegramStringFormatting
 
-final class ChatVoiceOverOverlayView: UIView, UITableViewDataSource, UITableViewDelegate, UITextViewDelegate {
-    struct Actions {
-        var back: (() -> Void)?
-        var openProfile: (() -> Void)?
-        var openAttachments: (() -> Void)?
-        var sendText: ((String) -> Void)?
-        var beginVoiceRecording: (() -> Void)?
-        var finishVoiceRecordingAndSend: (() -> Void)?
-        var requestLoadEarlier: (() -> Void)?
-        var activateMessage: ((Message) -> Void)?
+public final class ChatVoiceOverOverlayView: UIView, UITableViewDataSource, UITableViewDelegate, UITextViewDelegate {
+    public struct Actions {
+        public var back: (() -> Void)?
+        public var openProfile: (() -> Void)?
+        public var openAttachments: (() -> Void)?
+        public var sendText: ((String) -> Void)?
+        public var beginVoiceRecording: (() -> Void)?
+        public var finishVoiceRecordingAndSend: (() -> Void)?
+        public var requestLoadEarlier: (() -> Void)?
+        public var activateMessage: ((Message) -> Void)?
+        
+        public init(
+            back: (() -> Void)? = nil,
+            openProfile: (() -> Void)? = nil,
+            openAttachments: (() -> Void)? = nil,
+            sendText: ((String) -> Void)? = nil,
+            beginVoiceRecording: (() -> Void)? = nil,
+            finishVoiceRecordingAndSend: (() -> Void)? = nil,
+            requestLoadEarlier: (() -> Void)? = nil,
+            activateMessage: ((Message) -> Void)? = nil
+        ) {
+            self.back = back
+            self.openProfile = openProfile
+            self.openAttachments = openAttachments
+            self.sendText = sendText
+            self.beginVoiceRecording = beginVoiceRecording
+            self.finishVoiceRecordingAndSend = finishVoiceRecordingAndSend
+            self.requestLoadEarlier = requestLoadEarlier
+            self.activateMessage = activateMessage
+        }
     }
     
     private struct Row {
@@ -34,6 +54,7 @@ final class ChatVoiceOverOverlayView: UIView, UITableViewDataSource, UITableView
     private let profileButton = UIButton(type: .system)
     
     private let tableView = UITableView(frame: .zero, style: .plain)
+    private let refreshControl = UIRefreshControl()
     
     private let composerView = UIView()
     private let attachButton = UIButton(type: .system)
@@ -48,9 +69,12 @@ final class ChatVoiceOverOverlayView: UIView, UITableViewDataSource, UITableView
     private var rows: [Row] = []
     
     private var didInitialScrollToBottom = false
+    private var pendingEntries: [ChatHistoryEntry]?
+    private var isWaitingForLoadEarlier = false
     private var lastLoadEarlierRequestTimestamp: CFTimeInterval = 0.0
+    private var loadEarlierRequestId: Int = 0
     
-    var actions = Actions()
+    public var actions = Actions()
     
     private static let voiceMessageDurationFormatter: DateComponentsFormatter = {
         let formatter = DateComponentsFormatter()
@@ -65,7 +89,7 @@ final class ChatVoiceOverOverlayView: UIView, UITableViewDataSource, UITableView
         return formatter
     }()
     
-    override init(frame: CGRect) {
+    public override init(frame: CGRect) {
         super.init(frame: frame)
         
         self.isAccessibilityElement = false
@@ -97,6 +121,9 @@ final class ChatVoiceOverOverlayView: UIView, UITableViewDataSource, UITableView
         self.tableView.estimatedRowHeight = 56.0
         self.tableView.rowHeight = UITableView.automaticDimension
         self.tableView.keyboardDismissMode = .interactive
+        self.tableView.alwaysBounceVertical = true
+        self.refreshControl.addTarget(self, action: #selector(self.refreshTriggered), for: .valueChanged)
+        self.tableView.refreshControl = self.refreshControl
         self.addSubview(self.tableView)
         
         self.composerView.translatesAutoresizingMaskIntoConstraints = false
@@ -177,7 +204,7 @@ final class ChatVoiceOverOverlayView: UIView, UITableViewDataSource, UITableView
         self.setupKeyboardObservers()
     }
     
-    required init?(coder: NSCoder) {
+    required public init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
     
@@ -231,19 +258,8 @@ final class ChatVoiceOverOverlayView: UIView, UITableViewDataSource, UITableView
     }
     
     func updateEntries(_ entries: [ChatHistoryEntry]) {
-        let previousWasNearBottom = self.isNearBottom()
-        
-        self.rows = self.makeRows(from: entries)
-        self.tableView.reloadData()
-        self.tableView.layoutIfNeeded()
-        
-        if !self.didInitialScrollToBottom {
-            self.didInitialScrollToBottom = true
-            self.scrollToBottom(animated: false)
-            self.focusLastMessageIfPossible()
-        } else if previousWasNearBottom {
-            self.scrollToBottom(animated: false)
-        }
+        self.pendingEntries = entries
+        self.applyPendingEntriesIfPossible()
     }
     
     private func updateTitle(state: ChatPresentationInterfaceState) {
@@ -381,15 +397,33 @@ final class ChatVoiceOverOverlayView: UIView, UITableViewDataSource, UITableView
         guard scrollView === self.tableView else {
             return
         }
-        
-        let threshold: CGFloat = 180.0
+        guard !self.isWaitingForLoadEarlier else {
+            return
+        }
+        let threshold: CGFloat = 120.0
         if scrollView.contentOffset.y <= threshold {
             let now = CACurrentMediaTime()
-            if now - self.lastLoadEarlierRequestTimestamp > 0.9 {
+            if now - self.lastLoadEarlierRequestTimestamp >= 1.0 {
                 self.lastLoadEarlierRequestTimestamp = now
-                self.actions.requestLoadEarlier?()
+                self.triggerLoadEarlierRequest()
             }
         }
+    }
+    
+    func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
+        guard scrollView === self.tableView else {
+            return
+        }
+        if !decelerate {
+            self.applyPendingEntriesIfPossible()
+        }
+    }
+    
+    func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
+        guard scrollView === self.tableView else {
+            return
+        }
+        self.applyPendingEntriesIfPossible()
     }
     
     // MARK: - UITextViewDelegate
@@ -434,7 +468,146 @@ final class ChatVoiceOverOverlayView: UIView, UITableViewDataSource, UITableView
         self.inputTextView.text = ""
     }
     
+    @objc private func refreshTriggered() {
+        guard self.refreshControl.isRefreshing else {
+            return
+        }
+        self.triggerLoadEarlierRequest()
+    }
+
+    override func accessibilityPerformEscape() -> Bool {
+        if let back = self.actions.back {
+            back()
+            return true
+        }
+        return false
+    }
+    
     // MARK: - Helpers
+    
+    private func applyPendingEntriesIfPossible(force: Bool = false) {
+        guard let entries = self.pendingEntries else {
+            return
+        }
+        if !force && (self.tableView.isDragging || self.tableView.isDecelerating) {
+            return
+        }
+        self.pendingEntries = nil
+        self.applyEntries(entries)
+    }
+    
+    private func applyEntries(_ entries: [ChatHistoryEntry]) {
+        let newRows = self.makeRows(from: entries)
+        
+        let previousWasNearBottom = self.isNearBottom()
+        let previousContentHeight = self.tableView.contentSize.height
+        let previousContentOffsetY = self.tableView.contentOffset.y
+        let previousStableIds = self.rows.map(\.stableId)
+        let newStableIds = newRows.map(\.stableId)
+        
+        if previousStableIds == newStableIds {
+            return
+        }
+        
+        if self.rows.isEmpty || !self.didInitialScrollToBottom {
+            self.rows = newRows
+            self.tableView.reloadData()
+            self.tableView.layoutIfNeeded()
+            
+            if !self.didInitialScrollToBottom {
+                self.didInitialScrollToBottom = true
+                self.scrollToBottom(animated: false)
+                self.focusLastMessageIfPossible()
+            }
+            
+            if self.refreshControl.isRefreshing {
+                self.refreshControl.endRefreshing()
+            }
+            self.isWaitingForLoadEarlier = false
+            return
+        }
+        
+        if newStableIds.count > previousStableIds.count, Array(newStableIds.suffix(previousStableIds.count)) == previousStableIds {
+            let insertedCount = newStableIds.count - previousStableIds.count
+            self.rows = newRows
+            
+            UIView.performWithoutAnimation {
+                self.tableView.performBatchUpdates {
+                    let indexPaths = (0 ..< insertedCount).map { IndexPath(row: $0, section: 0) }
+                    self.tableView.insertRows(at: indexPaths, with: .none)
+                } completion: { [weak self] _ in
+                    guard let self else {
+                        return
+                    }
+                    self.tableView.layoutIfNeeded()
+                    let delta = self.tableView.contentSize.height - previousContentHeight
+                    self.tableView.setContentOffset(CGPoint(x: 0.0, y: previousContentOffsetY + delta), animated: false)
+                    if self.refreshControl.isRefreshing {
+                        self.refreshControl.endRefreshing()
+                    }
+                    self.isWaitingForLoadEarlier = false
+                }
+            }
+            
+            return
+        }
+        
+        if newStableIds.count > previousStableIds.count, Array(newStableIds.prefix(previousStableIds.count)) == previousStableIds {
+            let insertedCount = newStableIds.count - previousStableIds.count
+            self.rows = newRows
+            
+            UIView.performWithoutAnimation {
+                self.tableView.performBatchUpdates {
+                    let startIndex = previousStableIds.count
+                    let indexPaths = (0 ..< insertedCount).map { IndexPath(row: startIndex + $0, section: 0) }
+                    self.tableView.insertRows(at: indexPaths, with: .none)
+                } completion: { [weak self] _ in
+                    guard let self else {
+                        return
+                    }
+                    if self.refreshControl.isRefreshing {
+                        self.refreshControl.endRefreshing()
+                    }
+                    self.isWaitingForLoadEarlier = false
+                    if previousWasNearBottom {
+                        self.scrollToBottom(animated: false)
+                    }
+                }
+            }
+            
+            return
+        }
+        
+        self.rows = newRows
+        self.tableView.reloadData()
+        if previousWasNearBottom {
+            self.scrollToBottom(animated: false)
+        }
+        if self.refreshControl.isRefreshing {
+            self.refreshControl.endRefreshing()
+        }
+        self.isWaitingForLoadEarlier = false
+    }
+    
+    private func triggerLoadEarlierRequest() {
+        self.loadEarlierRequestId += 1
+        let requestId = self.loadEarlierRequestId
+        self.isWaitingForLoadEarlier = true
+        self.actions.requestLoadEarlier?()
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+            guard let self else {
+                return
+            }
+            guard self.isWaitingForLoadEarlier, self.loadEarlierRequestId == requestId else {
+                return
+            }
+            self.isWaitingForLoadEarlier = false
+            if self.refreshControl.isRefreshing {
+                self.refreshControl.endRefreshing()
+            }
+        }
+    }
     
     private func resolveRow(_ row: Row, state: ChatPresentationInterfaceState) -> (title: String, subtitle: String?, accessibilityLabel: String, hint: String?, traits: UIAccessibilityTraits) {
         switch row.kind {
