@@ -477,7 +477,7 @@ public final class ChatVoiceOverOverlayView: UIView {
         self.triggerLoadEarlierRequest()
     }
 
-    override func accessibilityPerformEscape() -> Bool {
+    public override func accessibilityPerformEscape() -> Bool {
         if let back = self.actions.back {
             back()
             return true
