@@ -342,12 +342,13 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
     private var voiceOverOverlayView: ChatVoiceOverOverlayView?
     private var voiceOverOverlayConstraints: [NSLayoutConstraint] = []
     private struct VoiceOverOverlaySavedState {
-        var viewAccessibilityElements: [Any]?
         var navigationBarIsHidden: Bool
         var navigationBarIsUserInteractionEnabled: Bool
     }
     private var voiceOverOverlaySavedState: VoiceOverOverlaySavedState?
     private var voiceOverStatusObserver: NSObjectProtocol?
+    private var voiceOverContextMenuAnchorNode: ASDisplayNode?
+    private var didRequestVoiceOverScrollToEnd: Bool = false
     private let keyboardGestureRecognizerDelegate = WindowKeyboardGestureRecognizerDelegate()
     private var upperInputPositionBound: CGFloat?
     private var keyboardGestureBeginLocation: CGPoint?
@@ -1049,6 +1050,15 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                 overlay = ChatVoiceOverOverlayView(frame: .zero)
                 overlay.translatesAutoresizingMaskIntoConstraints = false
                 
+                let contextMenuAnchorNode = ASDisplayNode()
+                contextMenuAnchorNode.isUserInteractionEnabled = false
+                contextMenuAnchorNode.view.isUserInteractionEnabled = false
+                contextMenuAnchorNode.view.backgroundColor = .clear
+                contextMenuAnchorNode.view.alpha = 0.01
+                contextMenuAnchorNode.frame = .zero
+                overlay.addSubview(contextMenuAnchorNode.view)
+                self.voiceOverContextMenuAnchorNode = contextMenuAnchorNode
+                
                 overlay.actions.back = { [weak self] in
                     self?.controller?.navigationButtonAction(.dismiss)
                 }
@@ -1079,6 +1089,13 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                     }
                     let _ = self.controllerInteraction.openMessage(message, OpenMessageParams(mode: .default))
                 }
+                overlay.actions.openMessageContextMenu = { [weak self] message, sourceRect in
+                    guard let self, let anchorNode = self.voiceOverContextMenuAnchorNode else {
+                        return
+                    }
+                    anchorNode.view.frame = sourceRect
+                    self.controllerInteraction.openMessageContextMenu(message, false, anchorNode, anchorNode.bounds, nil, nil)
+                }
                 
                 self.view.addSubview(overlay)
                 self.voiceOverOverlayConstraints = [
@@ -1092,7 +1109,9 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                 self.voiceOverOverlayView = overlay
                 
                 self.historyNode.voiceOverHistoryEntriesUpdated = { [weak self] entries in
-                    self?.voiceOverOverlayView?.updateEntries(entries)
+                    DispatchQueue.main.async {
+                        self?.voiceOverOverlayView?.updateEntries(entries)
+                    }
                 }
             }
             
@@ -1100,23 +1119,25 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
             overlay.updateEntries(self.historyNode.voiceOverHistoryEntries)
             
             self.view.bringSubviewToFront(overlay)
+            
+            if !self.didRequestVoiceOverScrollToEnd {
+                self.didRequestVoiceOverScrollToEnd = true
+                self.historyNode.scrollToEndOfHistory()
+            }
 
             // Make VoiceOver see only the native UIKit overlay to avoid interacting with
             // the underlying Texture/ListView hierarchy (which can stutter/hang).
             if self.voiceOverOverlaySavedState == nil, let navigationBarView = self.navigationBar?.view {
                 self.voiceOverOverlaySavedState = VoiceOverOverlaySavedState(
-                    viewAccessibilityElements: self.view.accessibilityElements,
                     navigationBarIsHidden: navigationBarView.isHidden,
                     navigationBarIsUserInteractionEnabled: navigationBarView.isUserInteractionEnabled
                 )
             } else if self.voiceOverOverlaySavedState == nil {
                 self.voiceOverOverlaySavedState = VoiceOverOverlaySavedState(
-                    viewAccessibilityElements: self.view.accessibilityElements,
                     navigationBarIsHidden: false,
                     navigationBarIsUserInteractionEnabled: true
                 )
             }
-            self.view.accessibilityElements = [overlay]
             
             self.wrappingNode.view.accessibilityElementsHidden = true
             self.wrappingNode.view.isUserInteractionEnabled = false
@@ -1132,12 +1153,10 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
             if let savedState = self.voiceOverOverlaySavedState {
                 self.navigationBar?.view.isHidden = savedState.navigationBarIsHidden
                 self.navigationBar?.view.isUserInteractionEnabled = savedState.navigationBarIsUserInteractionEnabled
-                self.view.accessibilityElements = savedState.viewAccessibilityElements
                 self.voiceOverOverlaySavedState = nil
             } else {
                 self.navigationBar?.view.isHidden = false
                 self.navigationBar?.view.isUserInteractionEnabled = true
-                self.view.accessibilityElements = nil
             }
             
             self.historyNode.voiceOverHistoryEntriesUpdated = nil
@@ -1146,10 +1165,13 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                 overlay.removeFromSuperview()
             }
             self.voiceOverOverlayView = nil
+            self.voiceOverContextMenuAnchorNode?.view.removeFromSuperview()
+            self.voiceOverContextMenuAnchorNode = nil
             if !self.voiceOverOverlayConstraints.isEmpty {
                 NSLayoutConstraint.deactivate(self.voiceOverOverlayConstraints)
                 self.voiceOverOverlayConstraints.removeAll()
             }
+            self.didRequestVoiceOverScrollToEnd = false
         }
     }
     

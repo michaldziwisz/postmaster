@@ -1184,6 +1184,11 @@ public final class ChatListNode: ListView {
             return 0
         }
     }
+    
+    var voiceOverChatListEntriesUpdated: (([ChatListNodeEntry]) -> Void)?
+    var voiceOverChatListEntries: [ChatListNodeEntry] {
+        return self.chatListView?.filteredEntries ?? []
+    }
     public var entryPeerIds: [EnginePeer.Id] {
         if let chatListView = self.chatListView {
             return chatListView.filteredEntries.compactMap { item -> EnginePeer.Id? in
@@ -3223,6 +3228,7 @@ public final class ChatListNode: ListView {
             let completion: (ListViewDisplayedItemRange) -> Void = { [weak self] visibleRange in
                 if let strongSelf = self {
                     strongSelf.chatListView = transition.chatListView
+                    strongSelf.voiceOverChatListEntriesUpdated?(transition.chatListView.filteredEntries)
                     
                     if strongSelf.fillPreloadItems {
                         let filteredEntries = transition.chatListView.filteredEntries

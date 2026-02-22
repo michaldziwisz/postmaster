@@ -19,6 +19,7 @@ public final class ChatVoiceOverOverlayView: UIView {
         public var requestLoadEarlier: (() -> Void)?
         public var scrollToLatest: (() -> Void)?
         public var activateMessage: ((Message) -> Void)?
+        public var openMessageContextMenu: ((Message, CGRect) -> Void)?
         
         public init(
             back: (() -> Void)? = nil,
@@ -29,7 +30,8 @@ public final class ChatVoiceOverOverlayView: UIView {
             finishVoiceRecordingAndSend: (() -> Void)? = nil,
             requestLoadEarlier: (() -> Void)? = nil,
             scrollToLatest: (() -> Void)? = nil,
-            activateMessage: ((Message) -> Void)? = nil
+            activateMessage: ((Message) -> Void)? = nil,
+            openMessageContextMenu: ((Message, CGRect) -> Void)? = nil
         ) {
             self.back = back
             self.openProfile = openProfile
@@ -40,6 +42,7 @@ public final class ChatVoiceOverOverlayView: UIView {
             self.requestLoadEarlier = requestLoadEarlier
             self.scrollToLatest = scrollToLatest
             self.activateMessage = activateMessage
+            self.openMessageContextMenu = openMessageContextMenu
         }
     }
     
@@ -75,6 +78,7 @@ public final class ChatVoiceOverOverlayView: UIView {
     
     private var didInitialScrollToBottom = false
     private var pendingEntries: [ChatHistoryEntry]?
+    private var pendingEntriesWorkItem: DispatchWorkItem?
     private var isWaitingForLoadEarlier = false
     private var lastLoadEarlierRequestTimestamp: CFTimeInterval = 0.0
     private var loadEarlierRequestId: Int = 0
@@ -99,7 +103,7 @@ public final class ChatVoiceOverOverlayView: UIView {
         super.init(frame: frame)
         
         self.isAccessibilityElement = false
-        self.accessibilityViewIsModal = true
+        self.accessibilityViewIsModal = false
         
         self.topBarView.translatesAutoresizingMaskIntoConstraints = false
         self.addSubview(self.topBarView)
@@ -267,9 +271,32 @@ public final class ChatVoiceOverOverlayView: UIView {
     
     func updateEntries(_ entries: [ChatHistoryEntry]) {
         self.pendingEntries = entries
-        self.applyPendingEntriesIfPossible()
+        self.schedulePendingEntriesApplyIfNeeded()
     }
-    
+
+    private func schedulePendingEntriesApplyIfNeeded() {
+        guard self.pendingEntries != nil else {
+            return
+        }
+        if self.tableView.isDragging || self.tableView.isDecelerating {
+            return
+        }
+        guard self.pendingEntriesWorkItem == nil else {
+            return
+        }
+        
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self else {
+                return
+            }
+            self.pendingEntriesWorkItem = nil
+            self.applyPendingEntriesIfPossible()
+            self.schedulePendingEntriesApplyIfNeeded()
+        }
+        self.pendingEntriesWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05, execute: workItem)
+    }
+
     private func updateTitle(state: ChatPresentationInterfaceState) {
         var title: String?
         
@@ -365,8 +392,9 @@ public final class ChatVoiceOverOverlayView: UIView {
         cell.detailTextLabel?.font = UIFont.preferredFont(forTextStyle: .caption1)
         cell.detailTextLabel?.adjustsFontForContentSizeCategory = true
         
-        cell.selectionStyle = .default
+        cell.selectionStyle = .none
         cell.isAccessibilityElement = true
+        cell.accessibilityCustomActions = nil
         
         guard let state = self.interfaceState else {
             cell.textLabel?.text = ""
@@ -385,12 +413,59 @@ public final class ChatVoiceOverOverlayView: UIView {
         
         cell.accessibilityLabel = resolved.accessibilityLabel
         cell.accessibilityHint = resolved.hint
-        cell.accessibilityTraits = resolved.traits
+        var traits = resolved.traits
+        traits.remove(.button)
+        cell.accessibilityTraits = traits
+
+        if case let .message(message) = row.kind, self.isMessageActivatable(message) {
+            cell.selectionStyle = .default
+        }
+
+        if case let .message(message) = row.kind {
+            var customActions: [UIAccessibilityCustomAction] = []
+            
+            let moreTitle = state.strings.Conversation_ContextMenuMore
+            customActions.append(UIAccessibilityCustomAction(name: moreTitle, actionHandler: { [weak self] _ in
+                guard let self else {
+                    return false
+                }
+                let rect = self.tableView.convert(self.tableView.rectForRow(at: indexPath), to: self)
+                self.actions.openMessageContextMenu?(message, rect)
+                return true
+            }))
+            
+            let messageText = message.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !messageText.isEmpty {
+                let copyTitle = state.strings.Conversation_ContextMenuCopy
+                customActions.append(UIAccessibilityCustomAction(name: copyTitle, actionHandler: { _ in
+                    UIPasteboard.general.string = messageText
+                    if UIAccessibility.isVoiceOverRunning {
+                        UIAccessibility.post(notification: .announcement, argument: state.strings.Conversation_TextCopied)
+                    }
+                    return true
+                }))
+            }
+            
+            cell.accessibilityCustomActions = customActions
+        }
         
         return cell
     }
     
     // MARK: - UITableViewDelegate
+
+    public func tableView(_ tableView: UITableView, willSelectRowAt indexPath: IndexPath) -> IndexPath? {
+        guard indexPath.row >= 0, indexPath.row < self.rows.count else {
+            return nil
+        }
+        let row = self.rows[indexPath.row]
+        switch row.kind {
+        case let .message(message):
+            return self.isMessageActivatable(message) ? indexPath : nil
+        case .info:
+            return nil
+        }
+    }
     
     public func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
@@ -659,7 +734,7 @@ public final class ChatVoiceOverOverlayView: UIView {
         var title = message.text.trimmingCharacters(in: .whitespacesAndNewlines)
         var accessibilityLabel = ""
         var hint: String?
-        var traits: UIAccessibilityTraits = [.button]
+        var traits: UIAccessibilityTraits = [.staticText]
         
         if title.isEmpty {
             title = state.strings.VoiceOver_Chat_Message
@@ -733,6 +808,18 @@ public final class ChatVoiceOverOverlayView: UIView {
         }
         
         return (title, subtitle, accessibilityLabel, nil, traits)
+    }
+
+    private func isMessageActivatable(_ message: Message) -> Bool {
+        for media in message.media {
+            if media is TelegramMediaImage {
+                return true
+            }
+            if media is TelegramMediaFile {
+                return true
+            }
+        }
+        return false
     }
     
     private func isNearBottom() -> Bool {

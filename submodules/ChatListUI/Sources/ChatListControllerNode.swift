@@ -1133,6 +1133,10 @@ final class ChatListControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
     var navigationBar: NavigationBar?
     let navigationBarView = ComponentView<Empty>()
     weak var controller: ChatListControllerImpl?
+
+    private var voiceOverOverlayView: ChatListVoiceOverOverlayView?
+    private weak var voiceOverBoundListNode: ChatListNode?
+    private var voiceOverStatusObserver: NSObjectProtocol?
     
     var toolbar: Toolbar?
     private var toolbarNode: ToolbarNode?
@@ -1263,6 +1267,9 @@ final class ChatListControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
         self.mainContainerNode.onFilterSwitch = { [weak self] in
             if let strongSelf = self {
                 strongSelf.controller?.dismissAllUndoControllers()
+                if UIAccessibility.isVoiceOverRunning {
+                    strongSelf.updateVoiceOverOverlay(isEnabled: true)
+                }
             }
         }
         
@@ -1316,6 +1323,101 @@ final class ChatListControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
         self.tapRecognizer = tapRecognizer
         self.view.addGestureRecognizer(tapRecognizer)
         tapRecognizer.isEnabled = false
+
+        self.voiceOverStatusObserver = NotificationCenter.default.addObserver(forName: UIAccessibility.voiceOverStatusDidChangeNotification, object: nil, queue: .main) { [weak self] _ in
+            guard let self else {
+                return
+            }
+            self.updateVoiceOverOverlay(isEnabled: UIAccessibility.isVoiceOverRunning)
+        }
+        self.updateVoiceOverOverlay(isEnabled: UIAccessibility.isVoiceOverRunning)
+    }
+
+    deinit {
+        if let observer = self.voiceOverStatusObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
+        self.voiceOverBoundListNode?.voiceOverChatListEntriesUpdated = nil
+    }
+
+    private func updateVoiceOverOverlay(isEnabled: Bool) {
+        if isEnabled {
+            let overlay: ChatListVoiceOverOverlayView
+            if let current = self.voiceOverOverlayView {
+                overlay = current
+            } else {
+                overlay = ChatListVoiceOverOverlayView(frame: .zero)
+                overlay.actions.openEntry = { [weak self] entry in
+                    self?.openVoiceOverEntry(entry)
+                }
+                self.view.addSubview(overlay)
+                self.voiceOverOverlayView = overlay
+            }
+            
+            overlay.updatePresentationData(self.presentationData)
+            
+            let listNode = self.effectiveContainerNode.currentItemNode
+            if self.voiceOverBoundListNode !== listNode {
+                self.voiceOverBoundListNode?.voiceOverChatListEntriesUpdated = nil
+                listNode.voiceOverChatListEntriesUpdated = { [weak self] entries in
+                    DispatchQueue.main.async {
+                        self?.voiceOverOverlayView?.updateEntries(entries)
+                    }
+                }
+                self.voiceOverBoundListNode = listNode
+            }
+            overlay.updateEntries(listNode.voiceOverChatListEntries)
+            
+            if let (layout, navigationBarHeight, _, _, _) = self.containerLayout {
+                let bottom: CGFloat
+                if let toolbarNode = self.toolbarNode {
+                    bottom = toolbarNode.frame.minY
+                } else {
+                    bottom = layout.size.height
+                }
+                overlay.frame = CGRect(x: 0.0, y: navigationBarHeight, width: layout.size.width, height: max(0.0, bottom - navigationBarHeight))
+            } else {
+                overlay.frame = self.view.bounds
+            }
+            self.view.bringSubviewToFront(overlay)
+            
+            listNode.view.accessibilityElementsHidden = true
+            listNode.view.isUserInteractionEnabled = false
+        } else {
+            if let listNode = self.voiceOverBoundListNode {
+                listNode.voiceOverChatListEntriesUpdated = nil
+                listNode.view.accessibilityElementsHidden = false
+                listNode.view.isUserInteractionEnabled = true
+                self.voiceOverBoundListNode = nil
+            }
+            if let overlay = self.voiceOverOverlayView {
+                overlay.removeFromSuperview()
+            }
+            self.voiceOverOverlayView = nil
+        }
+    }
+
+    private func openVoiceOverEntry(_ entry: ChatListNodeEntry) {
+        let listNode = self.effectiveContainerNode.currentItemNode
+        
+        switch entry {
+        case let .PeerEntry(peerEntry):
+            guard let peer = peerEntry.peer.peer else {
+                return
+            }
+            switch peerEntry.index {
+            case .chatList:
+                listNode.peerSelected?(peer, nil, false, false, peerEntry.promoInfo)
+            case let .forum(_, _, threadId, _, _):
+                listNode.peerSelected?(peer, threadId, true, true, peerEntry.promoInfo)
+            }
+        case let .ContactEntry(contactEntry):
+            listNode.peerSelected?(contactEntry.peer, nil, false, false, nil)
+        case let .AdditionalCategory(index, _, _, _, _, _, _):
+            listNode.additionalCategorySelected?(index)
+        case .HeaderEntry, .HoleEntry, .GroupReferenceEntry, .ArchiveIntro, .EmptyIntro, .SectionHeader:
+            break
+        }
     }
     
     @objc private func tapGesture(_ recognizer: UITapGestureRecognizer) {
@@ -1929,6 +2031,18 @@ final class ChatListControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
         if let navigationBarComponentView = self.navigationBarView.view as? ChatListNavigationBar.View {
             navigationBarComponentView.deferScrollApplication = false
             navigationBarComponentView.applyCurrentScroll(transition: ComponentTransition(transition))
+        }
+        
+        if UIAccessibility.isVoiceOverRunning, let overlay = self.voiceOverOverlayView {
+            let bottom: CGFloat
+            if let toolbarNode = self.toolbarNode {
+                bottom = toolbarNode.frame.minY
+            } else {
+                bottom = layout.size.height
+            }
+            let frame = CGRect(x: 0.0, y: navigationBarHeight, width: layout.size.width, height: max(0.0, bottom - navigationBarHeight))
+            transition.updateFrame(view: overlay, frame: frame)
+            self.view.bringSubviewToFront(overlay)
         }
     }
     
