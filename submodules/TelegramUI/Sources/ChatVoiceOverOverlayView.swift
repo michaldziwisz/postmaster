@@ -5,8 +5,10 @@ import TelegramCore
 import TelegramPresentationData
 import ChatPresentationInterfaceState
 import TelegramStringFormatting
+import ChatHistoryEntry
+import TelegramUIPreferences
 
-public final class ChatVoiceOverOverlayView: UIView, UITableViewDataSource, UITableViewDelegate, UITextViewDelegate {
+public final class ChatVoiceOverOverlayView: UIView {
     public struct Actions {
         public var back: (() -> Void)?
         public var openProfile: (() -> Void)?
@@ -219,7 +221,7 @@ public final class ChatVoiceOverOverlayView: UIView, UITableViewDataSource, UITa
         self.interfaceState = state
         
         self.backgroundColor = state.theme.list.plainBackgroundColor
-        self.topBarView.backgroundColor = state.theme.rootController.navigationBar.backgroundColor
+        self.topBarView.backgroundColor = state.theme.rootController.navigationBar.opaqueBackgroundColor
         self.composerView.backgroundColor = state.theme.chat.inputPanel.panelBackgroundColor
         self.tableView.backgroundColor = state.theme.list.plainBackgroundColor
         
@@ -502,8 +504,8 @@ public final class ChatVoiceOverOverlayView: UIView, UITableViewDataSource, UITa
         let previousWasNearBottom = self.isNearBottom()
         let previousContentHeight = self.tableView.contentSize.height
         let previousContentOffsetY = self.tableView.contentOffset.y
-        let previousStableIds = self.rows.map(\.stableId)
-        let newStableIds = newRows.map(\.stableId)
+        let previousStableIds = self.rows.map { $0.stableId }
+        let newStableIds = newRows.map { $0.stableId }
         
         if previousStableIds == newStableIds {
             return
@@ -780,4 +782,7 @@ public final class ChatVoiceOverOverlayView: UIView, UITableViewDataSource, UITa
             self.layoutIfNeeded()
         }
     }
+}
+
+extension ChatVoiceOverOverlayView: UITableViewDataSource, UITableViewDelegate, UITextViewDelegate {
 }
