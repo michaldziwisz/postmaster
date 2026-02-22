@@ -88,7 +88,7 @@ public final class ListViewBackingView: UIView {
         return super.hitTest(point, with: event)
     }
 
-    override public func accessibilityHitTest(_ point: CGPoint) -> Any? {
+    private func voiceOverScrollBarAccessibilityHitTest(_ point: CGPoint) -> Any? {
         if UIAccessibility.isVoiceOverRunning, let target = self.target, target.voiceOverScrollBarEnabled {
             let hitFrame = target.voiceOverScrollBarHitTestFrame(size: self.bounds.size)
             if hitFrame.contains(point) {
@@ -104,7 +104,23 @@ public final class ListViewBackingView: UIView {
                 return element
             }
         }
-        return super.accessibilityHitTest(point)
+        return nil
+    }
+
+    @objc(accessibilityHitTest:)
+    public func legacy_accessibilityHitTest(_ point: CGPoint) -> Any? {
+        if let result = self.voiceOverScrollBarAccessibilityHitTest(point) {
+            return result
+        }
+        return super.hitTest(point, with: nil)
+    }
+
+    @available(iOS 18.0, *)
+    override public func accessibilityHitTest(_ point: CGPoint, event: UIEvent?) -> Any? {
+        if let result = self.voiceOverScrollBarAccessibilityHitTest(point) {
+            return result
+        }
+        return super.accessibilityHitTest(point, event: event)
     }
     
     override public func accessibilityScroll(_ direction: UIAccessibilityScrollDirection) -> Bool {
