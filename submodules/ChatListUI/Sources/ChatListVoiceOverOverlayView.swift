@@ -25,6 +25,7 @@ final class ChatListVoiceOverOverlayView: UIView {
     private var rows: [Row] = []
     private var presentationData: PresentationData?
     private var didInitialScrollToTop = false
+    private var lastLoadMoreAnchorStableId: ChatListNodeEntryId?
     
     var actions = Actions()
     
@@ -85,6 +86,24 @@ final class ChatListVoiceOverOverlayView: UIView {
             self.tableView.layoutIfNeeded()
         }
         self.scrollToTopIfNeeded()
+    }
+
+    private func requestLoadMoreIfNeeded() {
+        guard let anchorStableId = self.rows.lazy.reversed().first(where: { row in
+            switch row.entry {
+            case .PeerEntry, .ContactEntry, .AdditionalCategory:
+                return true
+            default:
+                return false
+            }
+        })?.stableId else {
+            return
+        }
+        if anchorStableId == self.lastLoadMoreAnchorStableId {
+            return
+        }
+        self.lastLoadMoreAnchorStableId = anchorStableId
+        self.actions.requestLoadMore?()
     }
     
     private func scrollToTopIfNeeded() {
@@ -243,6 +262,12 @@ extension ChatListVoiceOverOverlayView: UITableViewDataSource, UITableViewDelega
             self.actions.requestLoadMore?()
         default:
             self.actions.openEntry?(row.entry)
+        }
+    }
+
+    func tableView(_ tableView: UITableView, willDisplay cell: UITableViewCell, forRowAt indexPath: IndexPath) {
+        if indexPath.row >= self.rows.count - 3 {
+            self.requestLoadMoreIfNeeded()
         }
     }
 }
