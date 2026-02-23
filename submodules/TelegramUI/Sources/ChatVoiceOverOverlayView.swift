@@ -83,6 +83,7 @@ public final class ChatVoiceOverOverlayView: UIView {
     private var lastLoadEarlierRequestTimestamp: CFTimeInterval = 0.0
     private var loadEarlierRequestId: Int = 0
     private var forceScrollToBottomOnNextApply = false
+    private var stickToTopOnNextApply = false
     
     public var actions = Actions()
     
@@ -278,23 +279,26 @@ public final class ChatVoiceOverOverlayView: UIView {
         guard self.pendingEntries != nil else {
             return
         }
-        if self.tableView.isDragging || self.tableView.isDecelerating {
-            return
-        }
         guard self.pendingEntriesWorkItem == nil else {
             return
         }
         
+        let delay: TimeInterval = (self.tableView.isDragging || self.tableView.isDecelerating) ? 0.2 : 0.05
         let workItem = DispatchWorkItem { [weak self] in
             guard let self else {
                 return
             }
             self.pendingEntriesWorkItem = nil
+            
+            if self.tableView.isDragging || self.tableView.isDecelerating {
+                self.schedulePendingEntriesApplyIfNeeded()
+                return
+            }
             self.applyPendingEntriesIfPossible()
             self.schedulePendingEntriesApplyIfNeeded()
         }
         self.pendingEntriesWorkItem = workItem
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05, execute: workItem)
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: workItem)
     }
 
     private func updateTitle(state: ChatPresentationInterfaceState) {
@@ -596,6 +600,8 @@ public final class ChatVoiceOverOverlayView: UIView {
         let newRows = self.makeRows(from: entries)
         
         let previousWasNearBottom = self.isNearBottom()
+        let previousWasNearTop = self.isNearTop()
+        let previousWasWaitingForLoadEarlier = self.isWaitingForLoadEarlier
 
         let previousStableIds = self.rows.map { $0.stableId }
         let newStableIds = newRows.map { $0.stableId }
@@ -634,6 +640,9 @@ public final class ChatVoiceOverOverlayView: UIView {
             self.focusLastMessageIfPossible()
         } else if previousWasNearBottom {
             self.scrollToBottom(animated: false)
+        } else if (self.stickToTopOnNextApply || (previousWasNearTop && previousWasWaitingForLoadEarlier)) {
+            self.stickToTopOnNextApply = false
+            self.scrollToTop(animated: false)
         } else if let anchorStableId, let newIndex = self.rows.firstIndex(where: { $0.stableId == anchorStableId }) {
             let indexPath = IndexPath(row: newIndex, section: 0)
             let rect = self.tableView.rectForRow(at: indexPath)
@@ -647,12 +656,18 @@ public final class ChatVoiceOverOverlayView: UIView {
             self.refreshControl.endRefreshing()
         }
         self.isWaitingForLoadEarlier = false
+        
+        if previousWasNearTop && previousWasWaitingForLoadEarlier && self.isNearTop() {
+            self.maybeTriggerLoadEarlierIfNeeded()
+        }
     }
     
     private func triggerLoadEarlierRequest() {
         self.loadEarlierRequestId += 1
         let requestId = self.loadEarlierRequestId
         self.isWaitingForLoadEarlier = true
+        self.lastLoadEarlierRequestTimestamp = CACurrentMediaTime()
+        self.stickToTopOnNextApply = self.isNearTop()
         self.actions.requestLoadEarlier?()
         
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
@@ -674,7 +689,8 @@ public final class ChatVoiceOverOverlayView: UIView {
             return
         }
         let threshold: CGFloat = 120.0
-        if self.tableView.contentOffset.y <= threshold {
+        let minOffset = -self.tableView.adjustedContentInset.top
+        if self.tableView.contentOffset.y - minOffset <= threshold {
             let now = CACurrentMediaTime()
             if now - self.lastLoadEarlierRequestTimestamp >= 1.0 {
                 self.lastLoadEarlierRequestTimestamp = now
@@ -834,12 +850,23 @@ public final class ChatVoiceOverOverlayView: UIView {
         return y + visibleHeight + threshold >= contentHeight
     }
     
+    private func isNearTop() -> Bool {
+        let minOffset = -self.tableView.adjustedContentInset.top
+        let threshold: CGFloat = 120.0
+        return self.tableView.contentOffset.y - minOffset <= threshold
+    }
+
     private func scrollToBottom(animated: Bool) {
         guard !self.rows.isEmpty else {
             return
         }
         let indexPath = IndexPath(row: self.rows.count - 1, section: 0)
         self.tableView.scrollToRow(at: indexPath, at: .bottom, animated: animated)
+    }
+
+    private func scrollToTop(animated: Bool) {
+        let minOffset = -self.tableView.adjustedContentInset.top
+        self.tableView.setContentOffset(CGPoint(x: 0.0, y: minOffset), animated: animated)
     }
     
     private func focusLastMessageIfPossible() {
