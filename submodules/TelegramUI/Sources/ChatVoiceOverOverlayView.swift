@@ -12,13 +12,53 @@ private final class ChatVoiceOverOverlayTableView: UITableView {
     var onAccessibilityScrollBoundary: ((UIAccessibilityScrollDirection) -> Bool)?
     
     override func accessibilityScroll(_ direction: UIAccessibilityScrollDirection) -> Bool {
-        if super.accessibilityScroll(direction) {
+        let normalizedDirection: UIAccessibilityScrollDirection
+        switch direction {
+        case .next:
+            normalizedDirection = .down
+        case .previous:
+            normalizedDirection = .up
+        default:
+            normalizedDirection = direction
+        }
+        
+        if super.accessibilityScroll(normalizedDirection) {
             return true
         }
-        if let onAccessibilityScrollBoundary, onAccessibilityScrollBoundary(direction) {
+        if self.performManualAccessibilityScrollIfPossible(direction: normalizedDirection) {
+            return true
+        }
+        if let onAccessibilityScrollBoundary, onAccessibilityScrollBoundary(normalizedDirection) {
             return true
         }
         return false
+    }
+    
+    private func performManualAccessibilityScrollIfPossible(direction: UIAccessibilityScrollDirection) -> Bool {
+        let minOffset = -self.adjustedContentInset.top
+        let maxOffset = max(minOffset, self.contentSize.height - self.bounds.height + self.adjustedContentInset.bottom)
+        
+        let currentOffset = self.contentOffset.y
+        let pageHeight = max(1.0, self.bounds.height - self.adjustedContentInset.top - self.adjustedContentInset.bottom)
+        let delta = pageHeight * 0.85
+        
+        let targetOffset: CGFloat
+        switch direction {
+        case .up:
+            targetOffset = max(minOffset, currentOffset - delta)
+        case .down:
+            targetOffset = min(maxOffset, currentOffset + delta)
+        default:
+            return false
+        }
+        
+        if abs(targetOffset - currentOffset) < 1.0 {
+            return false
+        }
+        
+        self.setContentOffset(CGPoint(x: self.contentOffset.x, y: targetOffset), animated: false)
+        UIAccessibility.post(notification: .pageScrolled, argument: nil)
+        return true
     }
 }
 
@@ -67,6 +107,7 @@ public final class ChatVoiceOverOverlayView: UIView {
         }
         
         var stableId: UInt64
+        var index: MessageIndex
         var kind: Kind
     }
     
@@ -122,7 +163,7 @@ public final class ChatVoiceOverOverlayView: UIView {
         super.init(frame: frame)
         
         self.isAccessibilityElement = false
-        self.accessibilityViewIsModal = false
+        self.accessibilityViewIsModal = true
         
         self.topBarView.translatesAutoresizingMaskIntoConstraints = false
         self.addSubview(self.topBarView)
@@ -367,13 +408,14 @@ public final class ChatVoiceOverOverlayView: UIView {
     private func makeRows(from entries: [ChatHistoryEntry]) -> [Row] {
         var result: [Row] = []
         
-        for entry in entries {
+        let sortedEntries = entries.sorted(by: { $0.index < $1.index })
+        for entry in sortedEntries {
             switch entry {
             case let .MessageEntry(message, _, _, _, _, _):
-                result.append(Row(stableId: entry.stableId, kind: .message(message)))
+                result.append(Row(stableId: entry.stableId, index: message.index, kind: .message(message)))
             case let .MessageGroupEntry(_, messages, _):
                 if let message = messages.last?.0 {
-                    result.append(Row(stableId: entry.stableId, kind: .message(message)))
+                    result.append(Row(stableId: entry.stableId, index: message.index, kind: .message(message)))
                 }
             case .UnreadEntry:
                 break
@@ -381,9 +423,9 @@ public final class ChatVoiceOverOverlayView: UIView {
                 switch info {
                 case let .botInfo(title, text, _, _):
                     let combined = "\(title)\n\(text)"
-                    result.append(Row(stableId: entry.stableId, kind: .info(combined)))
+                    result.append(Row(stableId: entry.stableId, index: entry.index, kind: .info(combined)))
                 case let .userInfo(peer, _, _, _, _):
-                    result.append(Row(stableId: entry.stableId, kind: .info(peer.displayTitle(strings: self.interfaceState?.strings ?? defaultPresentationStrings, displayOrder: PresentationPersonNameOrder.firstLast))))
+                    result.append(Row(stableId: entry.stableId, index: entry.index, kind: .info(peer.displayTitle(strings: self.interfaceState?.strings ?? defaultPresentationStrings, displayOrder: PresentationPersonNameOrder.firstLast))))
                 case .newThreadInfo:
                     break
                 }
@@ -638,7 +680,8 @@ public final class ChatVoiceOverOverlayView: UIView {
     }
     
     private func applyEntries(_ entries: [ChatHistoryEntry]) {
-        let newRows = self.makeRows(from: entries)
+        let incomingRows = self.makeRows(from: entries)
+        let newRows = self.mergeRows(existing: self.rows, incoming: incomingRows)
         
         let previousWasNearBottom = self.isNearBottom()
         let previousWasNearTop = self.isNearTop()
@@ -706,6 +749,33 @@ public final class ChatVoiceOverOverlayView: UIView {
         }
     }
     
+    private func mergeRows(existing: [Row], incoming: [Row]) -> [Row] {
+        guard !existing.isEmpty else {
+            return incoming
+        }
+        guard !incoming.isEmpty else {
+            return existing
+        }
+        
+        var byStableId: [UInt64: Row] = [:]
+        byStableId.reserveCapacity(existing.count + incoming.count)
+        for row in existing {
+            byStableId[row.stableId] = row
+        }
+        for row in incoming {
+            byStableId[row.stableId] = row
+        }
+        
+        var result = Array(byStableId.values)
+        result.sort { lhs, rhs in
+            if lhs.index != rhs.index {
+                return lhs.index < rhs.index
+            }
+            return lhs.stableId < rhs.stableId
+        }
+        return result
+    }
+    
     private func triggerLoadEarlierRequest() {
         guard self.loadEarlierNoProgressCount < Self.maxLoadEarlierNoProgressCount else {
             return
@@ -758,7 +828,7 @@ public final class ChatVoiceOverOverlayView: UIView {
         }
         
         switch direction {
-        case .up, .down, .previous:
+        case .up, .down, .next, .previous:
             break
         default:
             return false
@@ -782,6 +852,10 @@ public final class ChatVoiceOverOverlayView: UIView {
         
         self.triggerLoadEarlierRequest()
         return true
+    }
+
+    public override func accessibilityScroll(_ direction: UIAccessibilityScrollDirection) -> Bool {
+        return self.tableView.accessibilityScroll(direction)
     }
 
     private func maybeEnsureAtLatestIfNeeded() {

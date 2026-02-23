@@ -3378,17 +3378,18 @@ public final class ChatHistoryListNodeImpl: ListView, ChatHistoryNode, ChatHisto
         if historyView.originalView.earlierId == nil && historyView.originalView.holeEarlier {
             locationInput = .Navigation(index: .lowerBound, anchorIndex: .lowerBound, count: historyMessageCount, highlight: false)
         } else {
-            guard let firstMessageEntry = historyView.filteredEntries.first(where: { entry in
+            let messageEntries = historyView.filteredEntries.filter { entry in
                 switch entry {
                 case .MessageEntry, .MessageGroupEntry:
                     return true
                 case .UnreadEntry, .ReplyCountEntry, .ChatInfoEntry:
                     return false
                 }
-            }) else {
+            }
+            guard let oldestMessageEntry = messageEntries.min(by: { $0.index < $1.index }) else {
                 return
             }
-            locationInput = .Navigation(index: .message(firstMessageEntry.index), anchorIndex: .message(firstMessageEntry.index), count: historyMessageCount, highlight: false)
+            locationInput = .Navigation(index: .message(oldestMessageEntry.index), anchorIndex: .message(oldestMessageEntry.index), count: historyMessageCount, highlight: false)
         }
         
         self.chatHistoryLocationValue = ChatHistoryLocationInput(content: locationInput, id: self.takeNextHistoryLocationId())
