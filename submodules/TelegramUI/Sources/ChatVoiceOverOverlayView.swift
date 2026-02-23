@@ -82,6 +82,7 @@ public final class ChatVoiceOverOverlayView: UIView {
     private var isWaitingForLoadEarlier = false
     private var lastLoadEarlierRequestTimestamp: CFTimeInterval = 0.0
     private var loadEarlierRequestId: Int = 0
+    private var loadEarlierNoProgressCount: Int = 0
     private var forceScrollToBottomOnNextApply = false
     private var stickToTopOnNextApply = false
     
@@ -479,6 +480,14 @@ public final class ChatVoiceOverOverlayView: UIView {
             self.actions.activateMessage?(message)
         }
     }
+    
+    public func tableView(_ tableView: UITableView, willDisplay _: UITableViewCell, forRowAt indexPath: IndexPath) {
+        // VoiceOver scrollbar jumps don't always trigger scroll callbacks reliably.
+        // When the table is showing the first rows, request more history proactively.
+        if indexPath.row <= 3 {
+            self.maybeTriggerLoadEarlierIfNeeded()
+        }
+    }
 
     public func tableView(_ tableView: UITableView, estimatedHeightForRowAt indexPath: IndexPath) -> CGFloat {
         guard indexPath.row >= 0, indexPath.row < self.rows.count else {
@@ -504,6 +513,9 @@ public final class ChatVoiceOverOverlayView: UIView {
         // Request earlier messages proactively when reaching the top.
         // Updates are still applied only after scrolling ends to avoid VoiceOver stutter.
         self.maybeTriggerLoadEarlierIfNeeded()
+        if !self.isNearTop() {
+            self.loadEarlierNoProgressCount = 0
+        }
     }
     
     public func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
@@ -518,6 +530,15 @@ public final class ChatVoiceOverOverlayView: UIView {
     }
     
     public func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
+        guard scrollView === self.tableView else {
+            return
+        }
+        self.applyPendingEntriesIfPossible()
+        self.maybeTriggerLoadEarlierIfNeeded()
+        self.maybeEnsureAtLatestIfNeeded()
+    }
+    
+    public func scrollViewDidEndScrollingAnimation(_ scrollView: UIScrollView) {
         guard scrollView === self.tableView else {
             return
         }
@@ -609,10 +630,17 @@ public final class ChatVoiceOverOverlayView: UIView {
             if self.refreshControl.isRefreshing {
                 self.refreshControl.endRefreshing()
             }
+            if previousWasWaitingForLoadEarlier {
+                self.loadEarlierNoProgressCount += 1
+            }
             self.isWaitingForLoadEarlier = false
+            if previousWasNearTop {
+                self.maybeTriggerLoadEarlierIfNeeded()
+            }
             return
         }
 
+        self.loadEarlierNoProgressCount = 0
         var anchorStableId: UInt64?
         var anchorOffset: CGFloat = 0.0
         if !previousWasNearBottom, let anchorIndexPath = self.tableView.indexPathsForVisibleRows?.sorted().first, anchorIndexPath.row >= 0, anchorIndexPath.row < self.rows.count {
@@ -663,6 +691,9 @@ public final class ChatVoiceOverOverlayView: UIView {
     }
     
     private func triggerLoadEarlierRequest() {
+        guard self.loadEarlierNoProgressCount < 8 else {
+            return
+        }
         self.loadEarlierRequestId += 1
         let requestId = self.loadEarlierRequestId
         self.isWaitingForLoadEarlier = true
@@ -678,13 +709,20 @@ public final class ChatVoiceOverOverlayView: UIView {
                 return
             }
             self.isWaitingForLoadEarlier = false
+            self.loadEarlierNoProgressCount += 1
             if self.refreshControl.isRefreshing {
                 self.refreshControl.endRefreshing()
+            }
+            if self.isNearTop() {
+                self.maybeTriggerLoadEarlierIfNeeded()
             }
         }
     }
 
     private func maybeTriggerLoadEarlierIfNeeded() {
+        guard self.loadEarlierNoProgressCount < 8 else {
+            return
+        }
         guard !self.isWaitingForLoadEarlier else {
             return
         }
