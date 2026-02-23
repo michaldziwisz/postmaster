@@ -6,9 +6,11 @@ import TelegramPresentationData
 final class ChatListVoiceOverOverlayView: UIView {
     struct Actions {
         var openEntry: ((ChatListNodeEntry) -> Void)?
+        var activateSearch: (() -> Void)?
         
-        init(openEntry: ((ChatListNodeEntry) -> Void)? = nil) {
+        init(openEntry: ((ChatListNodeEntry) -> Void)? = nil, activateSearch: (() -> Void)? = nil) {
             self.openEntry = openEntry
+            self.activateSearch = activateSearch
         }
     }
     
@@ -80,7 +82,9 @@ final class ChatListVoiceOverOverlayView: UIView {
             switch entry {
             case .PeerEntry, .ContactEntry, .AdditionalCategory:
                 result.append(Row(stableId: entry.stableId, entry: entry))
-            case .HeaderEntry, .HoleEntry:
+            case .HeaderEntry:
+                result.append(Row(stableId: entry.stableId, entry: entry))
+            case .HoleEntry:
                 break
             case .GroupReferenceEntry, .ArchiveIntro, .EmptyIntro, .SectionHeader:
                 break
@@ -92,6 +96,9 @@ final class ChatListVoiceOverOverlayView: UIView {
     
     private func resolveRow(_ row: Row, presentationData: PresentationData) -> (title: String, subtitle: String?, accessibilityLabel: String, hint: String?, traits: UIAccessibilityTraits) {
         switch row.entry {
+        case .HeaderEntry:
+            let title = presentationData.strings.Common_Search
+            return (title, nil, title, nil, [.searchField])
         case let .PeerEntry(peerEntry):
             let title: String
             if let peer = peerEntry.peer.chatMainPeer {
@@ -118,7 +125,7 @@ final class ChatListVoiceOverOverlayView: UIView {
             return (title, nil, title, presentationData.strings.VoiceOver_Chat_OpenHint, [.button])
         case let .AdditionalCategory(_, _, title, _, _, _, _):
             return (title, nil, title, presentationData.strings.VoiceOver_Chat_OpenHint, [.button])
-        case .HeaderEntry, .HoleEntry:
+        case .HoleEntry:
             return ("", nil, "", nil, [.staticText])
         case .GroupReferenceEntry, .ArchiveIntro, .EmptyIntro, .SectionHeader:
             return ("", nil, "", nil, [.staticText])
@@ -189,6 +196,11 @@ extension ChatListVoiceOverOverlayView: UITableViewDataSource, UITableViewDelega
             return
         }
         let row = self.rows[indexPath.row]
-        self.actions.openEntry?(row.entry)
+        switch row.entry {
+        case .HeaderEntry:
+            self.actions.activateSearch?()
+        default:
+            self.actions.openEntry?(row.entry)
+        }
     }
 }

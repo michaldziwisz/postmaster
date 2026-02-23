@@ -8,6 +8,20 @@ import TelegramStringFormatting
 import ChatHistoryEntry
 import TelegramUIPreferences
 
+private final class ChatVoiceOverOverlayTableView: UITableView {
+    var onAccessibilityScrollBoundary: ((UIAccessibilityScrollDirection) -> Bool)?
+    
+    override func accessibilityScroll(_ direction: UIAccessibilityScrollDirection) -> Bool {
+        if super.accessibilityScroll(direction) {
+            return true
+        }
+        if let onAccessibilityScrollBoundary, onAccessibilityScrollBoundary(direction) {
+            return true
+        }
+        return false
+    }
+}
+
 public final class ChatVoiceOverOverlayView: UIView {
     public struct Actions {
         public var back: (() -> Void)?
@@ -61,7 +75,7 @@ public final class ChatVoiceOverOverlayView: UIView {
     private let titleLabel = UILabel()
     private let profileButton = UIButton(type: .system)
     
-    private let tableView = UITableView(frame: .zero, style: .plain)
+    private let tableView = ChatVoiceOverOverlayTableView(frame: .zero, style: .plain)
     private let refreshControl = UIRefreshControl()
     
     private let composerView = UIView()
@@ -87,6 +101,9 @@ public final class ChatVoiceOverOverlayView: UIView {
     private var stickToTopOnNextApply = false
     
     public var actions = Actions()
+    
+    private static let maxLoadEarlierNoProgressCount: Int = 40
+    private static let loadEarlierTimeout: TimeInterval = 4.0
     
     private static let voiceMessageDurationFormatter: DateComponentsFormatter = {
         let formatter = DateComponentsFormatter()
@@ -136,6 +153,9 @@ public final class ChatVoiceOverOverlayView: UIView {
         self.tableView.rowHeight = UITableView.automaticDimension
         self.tableView.keyboardDismissMode = .interactive
         self.tableView.alwaysBounceVertical = true
+        self.tableView.onAccessibilityScrollBoundary = { [weak self] direction in
+            return self?.handleAccessibilityScrollBoundary(direction) ?? false
+        }
         self.refreshControl.addTarget(self, action: #selector(self.refreshTriggered), for: .valueChanged)
         self.tableView.refreshControl = self.refreshControl
         self.addSubview(self.tableView)
@@ -627,14 +647,10 @@ public final class ChatVoiceOverOverlayView: UIView {
         let previousStableIds = self.rows.map { $0.stableId }
         let newStableIds = newRows.map { $0.stableId }
         if previousStableIds == newStableIds {
-            if self.refreshControl.isRefreshing {
+            if self.refreshControl.isRefreshing, !previousWasWaitingForLoadEarlier {
                 self.refreshControl.endRefreshing()
             }
-            if previousWasWaitingForLoadEarlier {
-                self.loadEarlierNoProgressCount += 1
-            }
-            self.isWaitingForLoadEarlier = false
-            if previousWasNearTop {
+            if previousWasNearTop, !previousWasWaitingForLoadEarlier {
                 self.maybeTriggerLoadEarlierIfNeeded()
             }
             return
@@ -691,7 +707,7 @@ public final class ChatVoiceOverOverlayView: UIView {
     }
     
     private func triggerLoadEarlierRequest() {
-        guard self.loadEarlierNoProgressCount < 8 else {
+        guard self.loadEarlierNoProgressCount < Self.maxLoadEarlierNoProgressCount else {
             return
         }
         self.loadEarlierRequestId += 1
@@ -701,7 +717,7 @@ public final class ChatVoiceOverOverlayView: UIView {
         self.stickToTopOnNextApply = self.isNearTop()
         self.actions.requestLoadEarlier?()
         
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.loadEarlierTimeout) { [weak self] in
             guard let self else {
                 return
             }
@@ -720,7 +736,7 @@ public final class ChatVoiceOverOverlayView: UIView {
     }
 
     private func maybeTriggerLoadEarlierIfNeeded() {
-        guard self.loadEarlierNoProgressCount < 8 else {
+        guard self.loadEarlierNoProgressCount < Self.maxLoadEarlierNoProgressCount else {
             return
         }
         guard !self.isWaitingForLoadEarlier else {
@@ -731,10 +747,41 @@ public final class ChatVoiceOverOverlayView: UIView {
         if self.tableView.contentOffset.y - minOffset <= threshold {
             let now = CACurrentMediaTime()
             if now - self.lastLoadEarlierRequestTimestamp >= 1.0 {
-                self.lastLoadEarlierRequestTimestamp = now
                 self.triggerLoadEarlierRequest()
             }
         }
+    }
+
+    private func handleAccessibilityScrollBoundary(_ direction: UIAccessibilityScrollDirection) -> Bool {
+        guard UIAccessibility.isVoiceOverRunning else {
+            return false
+        }
+        
+        switch direction {
+        case .up, .down, .previous:
+            break
+        default:
+            return false
+        }
+        
+        guard self.isNearTop() else {
+            return false
+        }
+        guard self.loadEarlierNoProgressCount < Self.maxLoadEarlierNoProgressCount else {
+            return false
+        }
+        
+        if self.isWaitingForLoadEarlier {
+            return true
+        }
+        
+        let now = CACurrentMediaTime()
+        if now - self.lastLoadEarlierRequestTimestamp < 0.6 {
+            return true
+        }
+        
+        self.triggerLoadEarlierRequest()
+        return true
     }
 
     private func maybeEnsureAtLatestIfNeeded() {
