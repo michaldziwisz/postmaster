@@ -234,3 +234,29 @@ ios_unit_test(
     ],
     visibility = ["//visibility:public"],
 )
+
+swift_library(
+    name = "VoiceOverOverlayTestsLib",
+    testonly = True,
+    srcs = [
+        "Sources/ChatListVoiceOverOverlayViewTests.swift",
+        "Sources/ChatVoiceOverOverlayViewTests.swift",
+    ],
+    deps = [
+        "//submodules/ChatListUI",
+        "//submodules/TelegramCore:TelegramCore",
+        "//submodules/TelegramPresentationData",
+        "//submodules/TelegramUI",
+    ],
+)
+
+ios_unit_test(
+    name = "VoiceOverOverlayTests",
+    minimum_os_version = "13.0",
+    timeout = "long",
+    test_host = ":{}".format(module_name),
+    deps = [
+        ":VoiceOverOverlayTestsLib",
+    ],
+    visibility = ["//visibility:public"],
+)

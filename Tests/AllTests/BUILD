@@ -3,6 +3,18 @@ test_suite(
     name = "AllTests",
     tests = [
         ":AccessibilityStringsLintTests",
+        "//Tests/AccessibilityTests:VoiceOverOverlayTests",
+    ],
+    visibility = [
+        "//visibility:public",
+    ],
+)
+
+test_suite(
+    name = "AllTestsExtended",
+    tests = [
+        ":AccessibilityStringsLintTests",
+        "//Tests/AccessibilityTests:VoiceOverOverlayTests",
         "//Tests/AccessibilityTests:AccessibilitySmokeTests",
     ],
     visibility = [
