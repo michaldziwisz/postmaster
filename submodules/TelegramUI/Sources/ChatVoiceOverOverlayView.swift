@@ -497,8 +497,9 @@ public final class ChatVoiceOverOverlayView: UIView {
     }
     
     public func scrollViewDidScroll(_ _: UIScrollView) {
-        // Do not trigger loading earlier while the user is actively scrolling.
-        // This can cause large updates and VoiceOver stutter/hangs on long chats.
+        // Request earlier messages proactively when reaching the top.
+        // Updates are still applied only after scrolling ends to avoid VoiceOver stutter.
+        self.maybeTriggerLoadEarlierIfNeeded()
     }
     
     public func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {

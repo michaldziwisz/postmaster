@@ -3371,11 +3371,19 @@ public final class ChatHistoryListNodeImpl: ListView, ChatHistoryNode, ChatHisto
         guard !historyView.originalView.isLoadingEarlier else {
             return
         }
-        guard let firstEntry = historyView.filteredEntries.first else {
+
+        guard let firstMessageEntry = historyView.filteredEntries.first(where: { entry in
+            switch entry {
+            case .MessageEntry, .MessageGroupEntry:
+                return true
+            case .UnreadEntry, .ReplyCountEntry, .ChatInfoEntry:
+                return false
+            }
+        }) else {
             return
         }
 
-        let locationInput: ChatHistoryLocation = .Navigation(index: .message(firstEntry.index), anchorIndex: .message(firstEntry.index), count: historyMessageCount, highlight: false)
+        let locationInput: ChatHistoryLocation = .Navigation(index: .message(firstMessageEntry.index), anchorIndex: .message(firstMessageEntry.index), count: historyMessageCount, highlight: false)
         if self.chatHistoryLocationValue?.content != locationInput {
             self.chatHistoryLocationValue = ChatHistoryLocationInput(content: locationInput, id: self.takeNextHistoryLocationId())
         }
