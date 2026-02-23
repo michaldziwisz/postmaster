@@ -21,10 +21,7 @@ private final class ChatVoiceOverOverlayTableView: UITableView {
         default:
             normalizedDirection = direction
         }
-        
-        if super.accessibilityScroll(normalizedDirection) {
-            return true
-        }
+
         if self.performManualAccessibilityScrollIfPossible(direction: normalizedDirection) {
             return true
         }
@@ -59,6 +56,19 @@ private final class ChatVoiceOverOverlayTableView: UITableView {
         self.setContentOffset(CGPoint(x: self.contentOffset.x, y: targetOffset), animated: false)
         UIAccessibility.post(notification: .pageScrolled, argument: nil)
         return true
+    }
+}
+
+private final class ChatVoiceOverOverlayCell: UITableViewCell {
+    override func accessibilityScroll(_ direction: UIAccessibilityScrollDirection) -> Bool {
+        var current: UIView? = self
+        while let view = current {
+            if let tableView = view as? UITableView {
+                return tableView.accessibilityScroll(direction)
+            }
+            current = view.superview
+        }
+        return super.accessibilityScroll(direction)
     }
 }
 
@@ -143,8 +153,8 @@ public final class ChatVoiceOverOverlayView: UIView {
     
     public var actions = Actions()
     
-    private static let maxLoadEarlierNoProgressCount: Int = 40
-    private static let loadEarlierTimeout: TimeInterval = 4.0
+    private static let maxLoadEarlierNoProgressCount: Int = 200
+    private static let loadEarlierTimeout: TimeInterval = 12.0
     
     private static let voiceMessageDurationFormatter: DateComponentsFormatter = {
         let formatter = DateComponentsFormatter()
@@ -445,10 +455,10 @@ public final class ChatVoiceOverOverlayView: UIView {
     
     public func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         let cell: UITableViewCell
-        if let current = tableView.dequeueReusableCell(withIdentifier: "Cell") {
+        if let current = tableView.dequeueReusableCell(withIdentifier: "Cell") as? ChatVoiceOverOverlayCell {
             cell = current
         } else {
-            cell = UITableViewCell(style: .subtitle, reuseIdentifier: "Cell")
+            cell = ChatVoiceOverOverlayCell(style: .subtitle, reuseIdentifier: "Cell")
         }
         
         cell.textLabel?.numberOfLines = 0

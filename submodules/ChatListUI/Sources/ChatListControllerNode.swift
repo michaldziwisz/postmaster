@@ -2093,6 +2093,15 @@ final class ChatListControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
         }
         
         if UIAccessibility.isVoiceOverRunning, let overlay = self.voiceOverOverlayView {
+            if let navigationBarView = self.navigationBarView.view {
+                navigationBarView.accessibilityElementsHidden = true
+                navigationBarView.isUserInteractionEnabled = false
+            }
+            if let legacyNavigationBarView = self.navigationBar?.view {
+                legacyNavigationBarView.accessibilityElementsHidden = true
+                legacyNavigationBarView.isUserInteractionEnabled = false
+            }
+
             let bottom: CGFloat
             if let toolbarNode = self.toolbarNode {
                 bottom = toolbarNode.frame.minY

@@ -3374,9 +3374,11 @@ public final class ChatHistoryListNodeImpl: ListView, ChatHistoryNode, ChatHisto
 
         self.beganDragging?()
         
+        let voiceOverHistoryMessageCount = max(historyMessageCount, 128)
+        
         let locationInput: ChatHistoryLocation
         if historyView.originalView.earlierId == nil && historyView.originalView.holeEarlier {
-            locationInput = .Navigation(index: .lowerBound, anchorIndex: .lowerBound, count: historyMessageCount, highlight: false)
+            locationInput = .Navigation(index: .lowerBound, anchorIndex: .lowerBound, count: voiceOverHistoryMessageCount, highlight: false)
         } else {
             let messageEntries = historyView.filteredEntries.filter { entry in
                 switch entry {
@@ -3389,7 +3391,7 @@ public final class ChatHistoryListNodeImpl: ListView, ChatHistoryNode, ChatHisto
             guard let oldestMessageEntry = messageEntries.min(by: { $0.index < $1.index }) else {
                 return
             }
-            locationInput = .Navigation(index: .message(oldestMessageEntry.index), anchorIndex: .message(oldestMessageEntry.index), count: historyMessageCount, highlight: false)
+            locationInput = .Navigation(index: .message(oldestMessageEntry.index), anchorIndex: .message(oldestMessageEntry.index), count: voiceOverHistoryMessageCount, highlight: false)
         }
         
         self.chatHistoryLocationValue = ChatHistoryLocationInput(content: locationInput, id: self.takeNextHistoryLocationId())
