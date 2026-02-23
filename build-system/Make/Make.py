@@ -170,6 +170,9 @@ class BazelCommandLine:
                 # Build single-architecture binaries. It is almost 2 times faster is 32-bit support is not required.
                 '--ios_multi_cpus=sim_arm64',
 
+                # Avoid legacy simulator defaults that may not be available on newer Xcode images.
+                '--ios_simulator_device=iPhone 15',
+
                 # Always build universal Watch binaries.
                 '--watchos_cpus=arm64_32'
             ] + self.common_debug_args
@@ -180,6 +183,9 @@ class BazelCommandLine:
 
                 # Build single-architecture binaries. It is almost 2 times faster is 32-bit support is not required.
                 '--ios_multi_cpus=sim_arm64',
+
+                # Avoid legacy simulator defaults that may not be available on newer Xcode images.
+                '--ios_simulator_device=iPhone 15',
 
                 # Always build universal Watch binaries.
                 '--watchos_cpus=arm64_32'
