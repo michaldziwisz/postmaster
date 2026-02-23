@@ -76,14 +76,17 @@ final class ChatListVoiceOverOverlayView: UIView {
     
     private func makeRows(from entries: [ChatListNodeEntry]) -> [Row] {
         var result: [Row] = []
-        result.reserveCapacity(entries.count)
+        result.reserveCapacity(entries.count + 1)
+        
+        // Always expose search first to keep VoiceOver flick navigation stable.
+        result.append(Row(stableId: .Header, entry: .HeaderEntry))
         
         for entry in entries {
             switch entry {
             case .PeerEntry, .ContactEntry, .AdditionalCategory:
                 result.append(Row(stableId: entry.stableId, entry: entry))
             case .HeaderEntry:
-                result.append(Row(stableId: entry.stableId, entry: entry))
+                break
             case .HoleEntry:
                 break
             case .GroupReferenceEntry, .ArchiveIntro, .EmptyIntro, .SectionHeader:

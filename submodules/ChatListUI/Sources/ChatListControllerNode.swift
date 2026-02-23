@@ -1138,6 +1138,8 @@ final class ChatListControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
     private weak var voiceOverBoundListNode: ChatListNode?
     private var voiceOverStatusObserver: NSObjectProtocol?
     private var voiceOverSavedSearchPlaceholderIsAccessibilityElement: Bool?
+    private var voiceOverSavedNavigationBarAccessibilityElementsHidden: Bool?
+    private var voiceOverSavedNavigationBarIsUserInteractionEnabled: Bool?
     
     var toolbar: Toolbar?
     private var toolbarNode: ToolbarNode?
@@ -1388,6 +1390,15 @@ final class ChatListControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
             listNode.view.accessibilityElementsHidden = true
             listNode.view.isUserInteractionEnabled = false
             
+            if let navigationBarView = self.navigationBarView.view {
+                if self.voiceOverSavedNavigationBarAccessibilityElementsHidden == nil {
+                    self.voiceOverSavedNavigationBarAccessibilityElementsHidden = navigationBarView.accessibilityElementsHidden
+                    self.voiceOverSavedNavigationBarIsUserInteractionEnabled = navigationBarView.isUserInteractionEnabled
+                }
+                navigationBarView.accessibilityElementsHidden = true
+                navigationBarView.isUserInteractionEnabled = false
+            }
+            
             if let navigationBarComponentView = self.navigationBarView.view as? ChatListNavigationBar.View, let searchContentNode = navigationBarComponentView.searchContentNode {
                 if self.voiceOverSavedSearchPlaceholderIsAccessibilityElement == nil {
                     self.voiceOverSavedSearchPlaceholderIsAccessibilityElement = searchContentNode.placeholderNode.isAccessibilityElement
@@ -1401,6 +1412,16 @@ final class ChatListControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
                 listNode.view.isUserInteractionEnabled = true
                 self.voiceOverBoundListNode = nil
             }
+            if let navigationBarView = self.navigationBarView.view {
+                if let saved = self.voiceOverSavedNavigationBarAccessibilityElementsHidden {
+                    navigationBarView.accessibilityElementsHidden = saved
+                }
+                if let saved = self.voiceOverSavedNavigationBarIsUserInteractionEnabled {
+                    navigationBarView.isUserInteractionEnabled = saved
+                }
+            }
+            self.voiceOverSavedNavigationBarAccessibilityElementsHidden = nil
+            self.voiceOverSavedNavigationBarIsUserInteractionEnabled = nil
             if let saved = self.voiceOverSavedSearchPlaceholderIsAccessibilityElement, let navigationBarComponentView = self.navigationBarView.view as? ChatListNavigationBar.View, let searchContentNode = navigationBarComponentView.searchContentNode {
                 searchContentNode.placeholderNode.isAccessibilityElement = saved
             }

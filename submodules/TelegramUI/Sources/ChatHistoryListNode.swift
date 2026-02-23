@@ -3372,21 +3372,26 @@ public final class ChatHistoryListNodeImpl: ListView, ChatHistoryNode, ChatHisto
             return
         }
 
-        guard let firstMessageEntry = historyView.filteredEntries.first(where: { entry in
-            switch entry {
-            case .MessageEntry, .MessageGroupEntry:
-                return true
-            case .UnreadEntry, .ReplyCountEntry, .ChatInfoEntry:
-                return false
+        self.beganDragging?()
+        
+        let locationInput: ChatHistoryLocation
+        if historyView.originalView.earlierId == nil && historyView.originalView.holeEarlier {
+            locationInput = .Navigation(index: .lowerBound, anchorIndex: .lowerBound, count: historyMessageCount, highlight: false)
+        } else {
+            guard let firstMessageEntry = historyView.filteredEntries.first(where: { entry in
+                switch entry {
+                case .MessageEntry, .MessageGroupEntry:
+                    return true
+                case .UnreadEntry, .ReplyCountEntry, .ChatInfoEntry:
+                    return false
+                }
+            }) else {
+                return
             }
-        }) else {
-            return
+            locationInput = .Navigation(index: .message(firstMessageEntry.index), anchorIndex: .message(firstMessageEntry.index), count: historyMessageCount, highlight: false)
         }
-
-        let locationInput: ChatHistoryLocation = .Navigation(index: .message(firstMessageEntry.index), anchorIndex: .message(firstMessageEntry.index), count: historyMessageCount, highlight: false)
-        if self.chatHistoryLocationValue?.content != locationInput {
-            self.chatHistoryLocationValue = ChatHistoryLocationInput(content: locationInput, id: self.takeNextHistoryLocationId())
-        }
+        
+        self.chatHistoryLocationValue = ChatHistoryLocationInput(content: locationInput, id: self.takeNextHistoryLocationId())
     }
     
     public func scrollToStartOfHistory() {
