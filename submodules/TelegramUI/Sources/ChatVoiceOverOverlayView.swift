@@ -1,5 +1,6 @@
 import Foundation
 import UIKit
+import AppBundle
 import Postbox
 import TelegramCore
 import TelegramPresentationData
@@ -12,6 +13,10 @@ private final class ChatVoiceOverOverlayTableView: UITableView {
     var onAccessibilityScrollBoundary: ((UIAccessibilityScrollDirection) -> Bool)?
     
     override func accessibilityScroll(_ direction: UIAccessibilityScrollDirection) -> Bool {
+        if super.accessibilityScroll(direction) {
+            return true
+        }
+        
         let normalizedDirection: UIAccessibilityScrollDirection
         switch direction {
         case .next:
@@ -22,6 +27,9 @@ private final class ChatVoiceOverOverlayTableView: UITableView {
             normalizedDirection = direction
         }
 
+        if normalizedDirection != direction, super.accessibilityScroll(normalizedDirection) {
+            return true
+        }
         if self.performManualAccessibilityScrollIfPossible(direction: normalizedDirection) {
             return true
         }
@@ -140,6 +148,17 @@ public final class ChatVoiceOverOverlayView: UIView {
     
     private var interfaceState: ChatPresentationInterfaceState?
     private var rows: [Row] = []
+
+    private var canLoadEarlierHistory = false
+    private var isLoadingEarlierHistory = false
+    
+    private var shouldShowLoadEarlierRow: Bool {
+        return self.canLoadEarlierHistory || self.isLoadingEarlierHistory
+    }
+    
+    private var loadEarlierRowOffset: Int {
+        return self.shouldShowLoadEarlierRow ? 1 : 0
+    }
     
     private var didInitialScrollToBottom = false
     private var pendingEntries: [ChatHistoryEntry]?
@@ -346,6 +365,21 @@ public final class ChatVoiceOverOverlayView: UIView {
         self.pendingEntries = entries
         self.schedulePendingEntriesApplyIfNeeded()
     }
+    
+    public func updateLoadEarlierState(canLoadEarlier: Bool, isLoadingEarlier: Bool) {
+        let didChange = (self.canLoadEarlierHistory != canLoadEarlier) || (self.isLoadingEarlierHistory != isLoadingEarlier)
+        self.canLoadEarlierHistory = canLoadEarlier
+        self.isLoadingEarlierHistory = isLoadingEarlier
+        
+        guard didChange else {
+            return
+        }
+        
+        UIView.performWithoutAnimation {
+            self.tableView.reloadData()
+            self.tableView.layoutIfNeeded()
+        }
+    }
 
     private func schedulePendingEntriesApplyIfNeeded() {
         guard self.pendingEntries != nil else {
@@ -450,7 +484,7 @@ public final class ChatVoiceOverOverlayView: UIView {
     // MARK: - UITableViewDataSource
     
     public func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        return self.rows.count
+        return self.rows.count + self.loadEarlierRowOffset
     }
     
     public func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
@@ -472,15 +506,53 @@ public final class ChatVoiceOverOverlayView: UIView {
         cell.selectionStyle = .none
         cell.isAccessibilityElement = true
         cell.accessibilityCustomActions = nil
+
+        if self.shouldShowLoadEarlierRow, indexPath.row == 0 {
+            let bundle = getAppBundle()
+            let titleKey = self.isLoadingEarlierHistory ? "VoiceOver.Chat.LoadEarlier.Loading" : "VoiceOver.Chat.LoadEarlier"
+            let titleFallback = self.isLoadingEarlierHistory ? "Loading older messages" : "Load older messages"
+            let title = bundle.localizedString(forKey: titleKey, value: titleFallback, table: nil)
+
+            cell.textLabel?.text = title
+            cell.detailTextLabel?.text = nil
+            
+            if let state = self.interfaceState {
+                cell.backgroundColor = state.theme.list.plainBackgroundColor
+                cell.textLabel?.textColor = state.theme.list.itemAccentColor
+            }
+            
+            cell.accessibilityLabel = title
+            cell.accessibilityHint = nil
+            
+            var traits: UIAccessibilityTraits = [.button]
+            if self.isLoadingEarlierHistory || !self.canLoadEarlierHistory {
+                traits.insert(.notEnabled)
+                cell.selectionStyle = .none
+            } else {
+                cell.selectionStyle = .default
+            }
+            cell.accessibilityTraits = traits
+            return cell
+        }
         
-        guard let state = self.interfaceState else {
+        let rowIndex = indexPath.row - self.loadEarlierRowOffset
+        guard rowIndex >= 0, rowIndex < self.rows.count else {
             cell.textLabel?.text = ""
+            cell.detailTextLabel?.text = nil
             cell.accessibilityLabel = ""
             cell.accessibilityTraits = [.staticText]
             return cell
         }
         
-        let row = self.rows[indexPath.row]
+        guard let state = self.interfaceState else {
+            cell.textLabel?.text = ""
+            cell.detailTextLabel?.text = nil
+            cell.accessibilityLabel = ""
+            cell.accessibilityTraits = [.staticText]
+            return cell
+        }
+        
+        let row = self.rows[rowIndex]
         let resolved = self.resolveRow(row, state: state)
         
         cell.textLabel?.text = resolved.title
@@ -491,7 +563,9 @@ public final class ChatVoiceOverOverlayView: UIView {
         cell.accessibilityLabel = resolved.accessibilityLabel
         cell.accessibilityHint = resolved.hint
         var traits = resolved.traits
-        traits.remove(.button)
+        if case .message = row.kind {
+            traits.remove(.button)
+        }
         cell.accessibilityTraits = traits
 
         if case let .message(message) = row.kind, self.isMessageActivatable(message) {
@@ -532,10 +606,18 @@ public final class ChatVoiceOverOverlayView: UIView {
     // MARK: - UITableViewDelegate
 
     public func tableView(_ tableView: UITableView, willSelectRowAt indexPath: IndexPath) -> IndexPath? {
-        guard indexPath.row >= 0, indexPath.row < self.rows.count else {
+        if self.shouldShowLoadEarlierRow, indexPath.row == 0 {
+            guard self.canLoadEarlierHistory, !self.isLoadingEarlierHistory else {
+                return nil
+            }
+            return indexPath
+        }
+        
+        let rowIndex = indexPath.row - self.loadEarlierRowOffset
+        guard rowIndex >= 0, rowIndex < self.rows.count else {
             return nil
         }
-        let row = self.rows[indexPath.row]
+        let row = self.rows[rowIndex]
         switch row.kind {
         case let .message(message):
             return self.isMessageActivatable(message) ? indexPath : nil
@@ -547,26 +629,32 @@ public final class ChatVoiceOverOverlayView: UIView {
     public func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
         
-        let row = self.rows[indexPath.row]
+        if self.shouldShowLoadEarlierRow, indexPath.row == 0 {
+            self.triggerLoadEarlierRequest()
+            return
+        }
+        
+        let rowIndex = indexPath.row - self.loadEarlierRowOffset
+        guard rowIndex >= 0, rowIndex < self.rows.count else {
+            return
+        }
+        let row = self.rows[rowIndex]
         if case let .message(message) = row.kind {
             self.actions.activateMessage?(message)
         }
     }
-    
-    public func tableView(_ tableView: UITableView, willDisplay _: UITableViewCell, forRowAt indexPath: IndexPath) {
-        // VoiceOver scrollbar jumps don't always trigger scroll callbacks reliably.
-        // When the table is showing the first rows, request more history proactively.
-        if indexPath.row <= 3 {
-            self.maybeTriggerLoadEarlierIfNeeded()
-        }
-    }
 
     public func tableView(_ tableView: UITableView, estimatedHeightForRowAt indexPath: IndexPath) -> CGFloat {
-        guard indexPath.row >= 0, indexPath.row < self.rows.count else {
+        if self.shouldShowLoadEarlierRow, indexPath.row == 0 {
+            return 64.0
+        }
+        
+        let rowIndex = indexPath.row - self.loadEarlierRowOffset
+        guard rowIndex >= 0, rowIndex < self.rows.count else {
             return tableView.estimatedRowHeight
         }
         
-        let row = self.rows[indexPath.row]
+        let row = self.rows[rowIndex]
         switch row.kind {
         case let .info(text):
             let lines = max(1, min(6, (text.count / 44) + 1))
@@ -582,9 +670,6 @@ public final class ChatVoiceOverOverlayView: UIView {
     }
     
     public func scrollViewDidScroll(_ _: UIScrollView) {
-        // Request earlier messages proactively when reaching the top.
-        // Updates are still applied only after scrolling ends to avoid VoiceOver stutter.
-        self.maybeTriggerLoadEarlierIfNeeded()
         if !self.isNearTop() {
             self.loadEarlierNoProgressCount = 0
         }
@@ -712,10 +797,14 @@ public final class ChatVoiceOverOverlayView: UIView {
         self.loadEarlierNoProgressCount = 0
         var anchorStableId: UInt64?
         var anchorOffset: CGFloat = 0.0
-        if !previousWasNearBottom, let anchorIndexPath = self.tableView.indexPathsForVisibleRows?.sorted().first, anchorIndexPath.row >= 0, anchorIndexPath.row < self.rows.count {
-            anchorStableId = self.rows[anchorIndexPath.row].stableId
-            let rect = self.tableView.rectForRow(at: anchorIndexPath)
-            anchorOffset = rect.minY - self.tableView.contentOffset.y
+        if !previousWasNearBottom, let visibleIndexPaths = self.tableView.indexPathsForVisibleRows?.sorted() {
+            let rowOffset = self.loadEarlierRowOffset
+            if let anchorIndexPath = visibleIndexPaths.first(where: { $0.row >= rowOffset && ($0.row - rowOffset) >= 0 && ($0.row - rowOffset) < self.rows.count }) {
+                let anchorRowIndex = anchorIndexPath.row - rowOffset
+                anchorStableId = self.rows[anchorRowIndex].stableId
+                let rect = self.tableView.rectForRow(at: anchorIndexPath)
+                anchorOffset = rect.minY - self.tableView.contentOffset.y
+            }
         }
 
         self.rows = newRows
@@ -741,7 +830,7 @@ public final class ChatVoiceOverOverlayView: UIView {
             self.stickToTopOnNextApply = false
             self.scrollToTop(animated: false)
         } else if let anchorStableId, let newIndex = self.rows.firstIndex(where: { $0.stableId == anchorStableId }) {
-            let indexPath = IndexPath(row: newIndex, section: 0)
+            let indexPath = IndexPath(row: newIndex + self.loadEarlierRowOffset, section: 0)
             let rect = self.tableView.rectForRow(at: indexPath)
             let targetOffset = rect.minY - anchorOffset
             let minOffset = -self.tableView.adjustedContentInset.top
@@ -1029,7 +1118,7 @@ public final class ChatVoiceOverOverlayView: UIView {
         guard !self.rows.isEmpty else {
             return
         }
-        let indexPath = IndexPath(row: self.rows.count - 1, section: 0)
+        let indexPath = IndexPath(row: self.rows.count - 1 + self.loadEarlierRowOffset, section: 0)
         self.tableView.scrollToRow(at: indexPath, at: .bottom, animated: animated)
     }
 
@@ -1045,7 +1134,7 @@ public final class ChatVoiceOverOverlayView: UIView {
         guard !self.rows.isEmpty else {
             return
         }
-        let lastIndexPath = IndexPath(row: self.rows.count - 1, section: 0)
+        let lastIndexPath = IndexPath(row: self.rows.count - 1 + self.loadEarlierRowOffset, section: 0)
         if let cell = self.tableView.cellForRow(at: lastIndexPath) {
             UIAccessibility.post(notification: .screenChanged, argument: cell)
         }

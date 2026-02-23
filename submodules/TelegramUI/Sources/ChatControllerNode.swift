@@ -1110,13 +1110,25 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                 
                 self.historyNode.voiceOverHistoryEntriesUpdated = { [weak self] entries in
                     DispatchQueue.main.async {
-                        self?.voiceOverOverlayView?.updateEntries(entries)
+                        guard let self, let overlay = self.voiceOverOverlayView else {
+                            return
+                        }
+                        overlay.updateEntries(entries)
+                        
+                        let originalView = self.historyNode.originalHistoryView
+                        let canLoadEarlier = (originalView?.earlierId != nil) || (originalView?.holeEarlier == true)
+                        let isLoadingEarlier = originalView?.isLoadingEarlier ?? false
+                        overlay.updateLoadEarlierState(canLoadEarlier: canLoadEarlier, isLoadingEarlier: isLoadingEarlier)
                     }
                 }
             }
             
             overlay.updateInterfaceState(self.chatPresentationInterfaceState)
             overlay.updateEntries(self.historyNode.voiceOverHistoryEntries)
+            let originalView = self.historyNode.originalHistoryView
+            let canLoadEarlier = (originalView?.earlierId != nil) || (originalView?.holeEarlier == true)
+            let isLoadingEarlier = originalView?.isLoadingEarlier ?? false
+            overlay.updateLoadEarlierState(canLoadEarlier: canLoadEarlier, isLoadingEarlier: isLoadingEarlier)
             
             self.view.bringSubviewToFront(overlay)
             

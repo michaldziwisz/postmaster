@@ -22,6 +22,7 @@ final class ChatListVoiceOverOverlayView: UIView {
     private let tableView = UITableView(frame: .zero, style: .plain)
     private var rows: [Row] = []
     private var presentationData: PresentationData?
+    private var didInitialScrollToTop = false
     
     var actions = Actions()
     
@@ -43,6 +44,15 @@ final class ChatListVoiceOverOverlayView: UIView {
             self.tableView.trailingAnchor.constraint(equalTo: self.trailingAnchor),
             self.tableView.bottomAnchor.constraint(equalTo: self.bottomAnchor)
         ])
+    }
+
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+
+        if self.window != nil {
+            self.didInitialScrollToTop = false
+            self.scrollToTopIfNeeded()
+        }
     }
     
     required init?(coder: NSCoder) {
@@ -72,8 +82,25 @@ final class ChatListVoiceOverOverlayView: UIView {
             self.tableView.reloadData()
             self.tableView.layoutIfNeeded()
         }
+        self.scrollToTopIfNeeded()
     }
     
+    private func scrollToTopIfNeeded() {
+        guard !self.didInitialScrollToTop else {
+            return
+        }
+        guard self.window != nil else {
+            return
+        }
+        guard !self.rows.isEmpty else {
+            return
+        }
+
+        self.didInitialScrollToTop = true
+        let minOffset = -self.tableView.adjustedContentInset.top
+        self.tableView.setContentOffset(CGPoint(x: 0.0, y: minOffset), animated: false)
+    }
+
     private func makeRows(from entries: [ChatListNodeEntry]) -> [Row] {
         var result: [Row] = []
         result.reserveCapacity(entries.count + 1)
@@ -81,7 +108,9 @@ final class ChatListVoiceOverOverlayView: UIView {
         // Always expose search first to keep VoiceOver flick navigation stable.
         result.append(Row(stableId: .Header, entry: .HeaderEntry))
         
-        for entry in entries {
+        // ChatListNode entries are ordered for the underlying reversed ListView. Mirror
+        // the on-screen order by iterating in reverse so VoiceOver reads newest chats first.
+        for entry in entries.reversed() {
             switch entry {
             case .PeerEntry, .ContactEntry, .AdditionalCategory:
                 result.append(Row(stableId: entry.stableId, entry: entry))

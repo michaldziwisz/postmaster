@@ -86,4 +86,41 @@ final class ChatVoiceOverOverlayViewTests: XCTestCase {
         
         XCTAssertTrue(didRequestScrollToLatest)
     }
+    
+    func testLoadEarlierRowIsHiddenByDefault() {
+        let view = ChatVoiceOverOverlayView(frame: .zero)
+        
+        let tableView = view.subviews.compactMap { $0 as? UITableView }.first
+        XCTAssertNotNil(tableView)
+        XCTAssertEqual(tableView?.numberOfRows(inSection: 0), 0)
+    }
+    
+    func testLoadEarlierRowAppearsWhenCanLoadEarlierIsTrue() {
+        let view = ChatVoiceOverOverlayView(frame: .zero)
+        view.updateLoadEarlierState(canLoadEarlier: true, isLoadingEarlier: false)
+        
+        let tableView = view.subviews.compactMap { $0 as? UITableView }.first
+        XCTAssertNotNil(tableView)
+        XCTAssertEqual(tableView?.numberOfRows(inSection: 0), 1)
+    }
+    
+    func testSelectingLoadEarlierRowRequestsLoadEarlier() {
+        let view = ChatVoiceOverOverlayView(frame: .zero)
+        
+        var didRequestLoadEarlier = false
+        view.actions.requestLoadEarlier = {
+            didRequestLoadEarlier = true
+        }
+        
+        view.updateLoadEarlierState(canLoadEarlier: true, isLoadingEarlier: false)
+        
+        let tableView = view.subviews.compactMap { $0 as? UITableView }.first
+        XCTAssertNotNil(tableView)
+        
+        if let tableView {
+            view.tableView(tableView, didSelectRowAt: IndexPath(row: 0, section: 0))
+        }
+        
+        XCTAssertTrue(didRequestLoadEarlier)
+    }
 }
