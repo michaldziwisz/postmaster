@@ -1189,6 +1189,23 @@ public final class ChatListNode: ListView {
     var voiceOverChatListEntries: [ChatListNodeEntry] {
         return self.chatListView?.filteredEntries ?? []
     }
+    
+    func voiceOverRequestLoadEarlier() {
+        guard let chatListView = self.chatListView else {
+            return
+        }
+        
+        let originalList = chatListView.originalList
+        guard originalList.hasEarlier, let firstItem = originalList.items.first else {
+            return
+        }
+        
+        let location: ChatListNodeLocation = .navigation(index: firstItem.index, filter: self.chatListFilter)
+        guard location != self.currentLocation else {
+            return
+        }
+        self.setChatListLocation(location)
+    }
     public var entryPeerIds: [EnginePeer.Id] {
         if let chatListView = self.chatListView {
             return chatListView.filteredEntries.compactMap { item -> EnginePeer.Id? in

@@ -7,10 +7,12 @@ final class ChatListVoiceOverOverlayView: UIView {
     struct Actions {
         var openEntry: ((ChatListNodeEntry) -> Void)?
         var activateSearch: (() -> Void)?
+        var requestLoadMore: (() -> Void)?
         
-        init(openEntry: ((ChatListNodeEntry) -> Void)? = nil, activateSearch: (() -> Void)? = nil) {
+        init(openEntry: ((ChatListNodeEntry) -> Void)? = nil, activateSearch: (() -> Void)? = nil, requestLoadMore: (() -> Void)? = nil) {
             self.openEntry = openEntry
             self.activateSearch = activateSearch
+            self.requestLoadMore = requestLoadMore
         }
     }
     
@@ -103,13 +105,14 @@ final class ChatListVoiceOverOverlayView: UIView {
 
     private func makeRows(from entries: [ChatListNodeEntry]) -> [Row] {
         var result: [Row] = []
-        result.reserveCapacity(entries.count + 1)
+        result.reserveCapacity(entries.count + 2)
         
         // Always expose search first to keep VoiceOver flick navigation stable.
         result.append(Row(stableId: .Header, entry: .HeaderEntry))
         
         // ChatListNode entries are ordered for the underlying reversed ListView. Mirror
         // the on-screen order by iterating in reverse so VoiceOver reads newest chats first.
+        var loadMoreEntry: ChatListNodeEntry?
         for entry in entries.reversed() {
             switch entry {
             case .PeerEntry, .ContactEntry, .AdditionalCategory:
@@ -117,10 +120,14 @@ final class ChatListVoiceOverOverlayView: UIView {
             case .HeaderEntry:
                 break
             case .HoleEntry:
-                break
+                loadMoreEntry = entry
             case .GroupReferenceEntry, .ArchiveIntro, .EmptyIntro, .SectionHeader:
                 break
             }
+        }
+
+        if let loadMoreEntry {
+            result.append(Row(stableId: .Hole(Int64.min), entry: loadMoreEntry))
         }
         
         return result
@@ -158,7 +165,8 @@ final class ChatListVoiceOverOverlayView: UIView {
         case let .AdditionalCategory(_, _, title, _, _, _, _):
             return (title, nil, title, presentationData.strings.VoiceOver_Chat_OpenHint, [.button])
         case .HoleEntry:
-            return ("", nil, "", nil, [.staticText])
+            let title = presentationData.strings.ChatList_Search_ShowMore
+            return (title, nil, title, nil, [.button])
         case .GroupReferenceEntry, .ArchiveIntro, .EmptyIntro, .SectionHeader:
             return ("", nil, "", nil, [.staticText])
         }
@@ -231,6 +239,8 @@ extension ChatListVoiceOverOverlayView: UITableViewDataSource, UITableViewDelega
         switch row.entry {
         case .HeaderEntry:
             self.actions.activateSearch?()
+        case .HoleEntry:
+            self.actions.requestLoadMore?()
         default:
             self.actions.openEntry?(row.entry)
         }
