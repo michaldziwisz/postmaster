@@ -3376,22 +3376,20 @@ public final class ChatHistoryListNodeImpl: ListView, ChatHistoryNode, ChatHisto
         
         let voiceOverHistoryMessageCount = max(historyMessageCount, 128)
         
+        let messageEntries = historyView.filteredEntries.filter { entry in
+            switch entry {
+            case .MessageEntry, .MessageGroupEntry:
+                return true
+            case .UnreadEntry, .ReplyCountEntry, .ChatInfoEntry:
+                return false
+            }
+        }
+        
         let locationInput: ChatHistoryLocation
-        if historyView.originalView.earlierId == nil && historyView.originalView.holeEarlier {
-            locationInput = .Navigation(index: .lowerBound, anchorIndex: .lowerBound, count: voiceOverHistoryMessageCount, highlight: false)
-        } else {
-            let messageEntries = historyView.filteredEntries.filter { entry in
-                switch entry {
-                case .MessageEntry, .MessageGroupEntry:
-                    return true
-                case .UnreadEntry, .ReplyCountEntry, .ChatInfoEntry:
-                    return false
-                }
-            }
-            guard let oldestMessageEntry = messageEntries.min(by: { $0.index < $1.index }) else {
-                return
-            }
+        if let oldestMessageEntry = messageEntries.min(by: { $0.index < $1.index }) {
             locationInput = .Navigation(index: .message(oldestMessageEntry.index), anchorIndex: .message(oldestMessageEntry.index), count: voiceOverHistoryMessageCount, highlight: false)
+        } else {
+            locationInput = .Navigation(index: .lowerBound, anchorIndex: .lowerBound, count: voiceOverHistoryMessageCount, highlight: false)
         }
         
         self.chatHistoryLocationValue = ChatHistoryLocationInput(content: locationInput, id: self.takeNextHistoryLocationId())

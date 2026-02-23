@@ -5,14 +5,14 @@ import UIKit
 import XCTest
 
 final class ChatListVoiceOverOverlayViewTests: XCTestCase {
-    func testIncludesSearchRowByDefault() {
+    func testHasNoRowsByDefault() {
         let view = ChatListVoiceOverOverlayView(frame: .zero)
         view.updatePresentationData(defaultPresentationData())
         view.updateEntries([])
         
         let tableView = view.subviews.compactMap { $0 as? UITableView }.first
         XCTAssertNotNil(tableView)
-        XCTAssertEqual(tableView?.numberOfRows(inSection: 0), 1)
+        XCTAssertEqual(tableView?.numberOfRows(inSection: 0), 0)
     }
     
     func testLoadMoreRowAppearsWhenHoleEntryIsPresent() {
@@ -27,7 +27,7 @@ final class ChatListVoiceOverOverlayViewTests: XCTestCase {
         
         let tableView = view.subviews.compactMap { $0 as? UITableView }.first
         XCTAssertNotNil(tableView)
-        XCTAssertEqual(tableView?.numberOfRows(inSection: 0), 2)
+        XCTAssertEqual(tableView?.numberOfRows(inSection: 0), 1)
     }
     
     func testSelectingLoadMoreRowRequestsLoadMore() {
@@ -49,7 +49,7 @@ final class ChatListVoiceOverOverlayViewTests: XCTestCase {
         XCTAssertNotNil(tableView)
         
         if let tableView {
-            view.tableView(tableView, didSelectRowAt: IndexPath(row: 1, section: 0))
+            view.tableView(tableView, didSelectRowAt: IndexPath(row: 0, section: 0))
         }
         
         XCTAssertTrue(didRequestLoadMore)
@@ -90,13 +90,13 @@ final class ChatListVoiceOverOverlayViewTests: XCTestCase {
         XCTAssertNotNil(tableView)
 
         if let tableView {
-            view.tableView(tableView, willDisplay: UITableViewCell(), forRowAt: IndexPath(row: 7, section: 0))
+            view.tableView(tableView, willDisplay: UITableViewCell(), forRowAt: IndexPath(row: 6, section: 0))
             XCTAssertEqual(didRequestLoadMoreCount, 0)
 
-            view.tableView(tableView, willDisplay: UITableViewCell(), forRowAt: IndexPath(row: 9, section: 0))
+            view.tableView(tableView, willDisplay: UITableViewCell(), forRowAt: IndexPath(row: 7, section: 0))
             XCTAssertEqual(didRequestLoadMoreCount, 1)
 
-            view.tableView(tableView, willDisplay: UITableViewCell(), forRowAt: IndexPath(row: 10, section: 0))
+            view.tableView(tableView, willDisplay: UITableViewCell(), forRowAt: IndexPath(row: 9, section: 0))
             XCTAssertEqual(didRequestLoadMoreCount, 1)
         }
     }

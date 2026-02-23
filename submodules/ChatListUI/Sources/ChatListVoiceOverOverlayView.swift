@@ -124,10 +124,7 @@ final class ChatListVoiceOverOverlayView: UIView {
 
     private func makeRows(from entries: [ChatListNodeEntry]) -> [Row] {
         var result: [Row] = []
-        result.reserveCapacity(entries.count + 2)
-        
-        // Always expose search first to keep VoiceOver flick navigation stable.
-        result.append(Row(stableId: .Header, entry: .HeaderEntry))
+        result.reserveCapacity(entries.count + 1)
         
         // ChatListNode entries are ordered for the underlying reversed ListView. Mirror
         // the on-screen order by iterating in reverse so VoiceOver reads newest chats first.

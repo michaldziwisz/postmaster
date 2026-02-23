@@ -1137,11 +1137,8 @@ final class ChatListControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
     private var voiceOverOverlayView: ChatListVoiceOverOverlayView?
     private weak var voiceOverBoundListNode: ChatListNode?
     private var voiceOverStatusObserver: NSObjectProtocol?
-    private var voiceOverSavedSearchPlaceholderIsAccessibilityElement: Bool?
-    private var voiceOverSavedNavigationBarAccessibilityElementsHidden: Bool?
-    private var voiceOverSavedNavigationBarIsUserInteractionEnabled: Bool?
-    private var voiceOverSavedLegacyNavigationBarAccessibilityElementsHidden: Bool?
-    private var voiceOverSavedLegacyNavigationBarIsUserInteractionEnabled: Bool?
+    private var voiceOverSavedRootAccessibilityElements: [Any]?
+    private var voiceOverSavedRootShouldGroupAccessibilityChildren: Bool?
     
     var toolbar: Toolbar?
     private var toolbarNode: ToolbarNode?
@@ -1344,6 +1341,47 @@ final class ChatListControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
         }
         self.voiceOverBoundListNode?.voiceOverChatListEntriesUpdated = nil
     }
+    
+    private func updateVoiceOverRootAccessibilityOrderIfNeeded() {
+        guard UIAccessibility.isVoiceOverRunning, self.voiceOverOverlayView != nil else {
+            return
+        }
+        
+        if self.voiceOverSavedRootAccessibilityElements == nil {
+            self.voiceOverSavedRootAccessibilityElements = self.view.accessibilityElements
+            self.voiceOverSavedRootShouldGroupAccessibilityChildren = self.view.shouldGroupAccessibilityChildren
+        }
+        
+        var elements: [Any] = []
+        if let navigationBarView = self.navigationBarView.view {
+            elements.append(navigationBarView)
+        } else if let legacyNavigationBarView = self.navigationBar?.view {
+            elements.append(legacyNavigationBarView)
+        }
+        if let overlay = self.voiceOverOverlayView {
+            elements.append(overlay)
+        }
+        if let toolbarNode = self.toolbarNode {
+            elements.append(toolbarNode.view)
+        }
+        self.view.accessibilityElements = elements
+        self.view.shouldGroupAccessibilityChildren = true
+    }
+    
+    private func resetVoiceOverRootAccessibilityOrderIfNeeded() {
+        if let saved = self.voiceOverSavedRootAccessibilityElements {
+            self.view.accessibilityElements = saved
+        } else {
+            self.view.accessibilityElements = nil
+        }
+        if let saved = self.voiceOverSavedRootShouldGroupAccessibilityChildren {
+            self.view.shouldGroupAccessibilityChildren = saved
+        } else {
+            self.view.shouldGroupAccessibilityChildren = false
+        }
+        self.voiceOverSavedRootAccessibilityElements = nil
+        self.voiceOverSavedRootShouldGroupAccessibilityChildren = nil
+    }
 
     private func updateVoiceOverOverlay(isEnabled: Bool) {
         if isEnabled {
@@ -1397,13 +1435,7 @@ final class ChatListControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
             
             listNode.view.accessibilityElementsHidden = true
             listNode.view.isUserInteractionEnabled = false
-            
-            if let navigationBarComponentView = self.navigationBarView.view as? ChatListNavigationBar.View, let searchContentNode = navigationBarComponentView.searchContentNode {
-                if self.voiceOverSavedSearchPlaceholderIsAccessibilityElement == nil {
-                    self.voiceOverSavedSearchPlaceholderIsAccessibilityElement = searchContentNode.placeholderNode.isAccessibilityElement
-                }
-                searchContentNode.placeholderNode.isAccessibilityElement = false
-            }
+            self.updateVoiceOverRootAccessibilityOrderIfNeeded()
         } else {
             if let listNode = self.voiceOverBoundListNode {
                 listNode.voiceOverChatListEntriesUpdated = nil
@@ -1411,36 +1443,11 @@ final class ChatListControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
                 listNode.view.isUserInteractionEnabled = true
                 self.voiceOverBoundListNode = nil
             }
-            if let navigationBarView = self.navigationBarView.view {
-                if let saved = self.voiceOverSavedNavigationBarAccessibilityElementsHidden {
-                    navigationBarView.accessibilityElementsHidden = saved
-                }
-                if let saved = self.voiceOverSavedNavigationBarIsUserInteractionEnabled {
-                    navigationBarView.isUserInteractionEnabled = saved
-                }
-            }
-            self.voiceOverSavedNavigationBarAccessibilityElementsHidden = nil
-            self.voiceOverSavedNavigationBarIsUserInteractionEnabled = nil
-
-            if let legacyNavigationBarView = self.navigationBar?.view {
-                if let saved = self.voiceOverSavedLegacyNavigationBarAccessibilityElementsHidden {
-                    legacyNavigationBarView.accessibilityElementsHidden = saved
-                }
-                if let saved = self.voiceOverSavedLegacyNavigationBarIsUserInteractionEnabled {
-                    legacyNavigationBarView.isUserInteractionEnabled = saved
-                }
-            }
-            self.voiceOverSavedLegacyNavigationBarAccessibilityElementsHidden = nil
-            self.voiceOverSavedLegacyNavigationBarIsUserInteractionEnabled = nil
-
-            if let saved = self.voiceOverSavedSearchPlaceholderIsAccessibilityElement, let navigationBarComponentView = self.navigationBarView.view as? ChatListNavigationBar.View, let searchContentNode = navigationBarComponentView.searchContentNode {
-                searchContentNode.placeholderNode.isAccessibilityElement = saved
-            }
-            self.voiceOverSavedSearchPlaceholderIsAccessibilityElement = nil
             if let overlay = self.voiceOverOverlayView {
                 overlay.removeFromSuperview()
             }
             self.voiceOverOverlayView = nil
+            self.resetVoiceOverRootAccessibilityOrderIfNeeded()
         }
     }
 
@@ -2090,6 +2097,7 @@ final class ChatListControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
             let frame = CGRect(x: 0.0, y: navigationBarHeight, width: layout.size.width, height: max(0.0, bottom - navigationBarHeight))
             transition.updateFrame(view: overlay, frame: frame)
             self.view.bringSubviewToFront(overlay)
+            self.updateVoiceOverRootAccessibilityOrderIfNeeded()
         }
     }
     
