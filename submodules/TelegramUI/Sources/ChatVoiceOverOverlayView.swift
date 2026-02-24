@@ -869,6 +869,7 @@ public final class ChatVoiceOverOverlayView: UIView {
         let previousWasWaitingForLoadEarlier = self.isWaitingForLoadEarlier
         let previousOldestIndex = self.rows.first?.index
         let loadEarlierAnchor = previousWasWaitingForLoadEarlier ? self.loadEarlierScrollAnchor : nil
+        var loadEarlierRestoredIndexPath: IndexPath?
 
         let previousStableIds = self.rows.map { $0.stableId }
         let newStableIds = newRows.map { $0.stableId }
@@ -927,6 +928,7 @@ public final class ChatVoiceOverOverlayView: UIView {
                 let minOffset = -self.tableView.adjustedContentInset.top
                 let maxOffset = max(minOffset, self.tableView.contentSize.height - self.tableView.bounds.height + self.tableView.adjustedContentInset.bottom)
                 self.tableView.setContentOffset(CGPoint(x: 0.0, y: min(max(targetOffset, minOffset), maxOffset)), animated: false)
+                loadEarlierRestoredIndexPath = indexPath
             }
         } else if previousWasNearBottom {
             self.scrollToBottom(animated: false)
@@ -943,9 +945,28 @@ public final class ChatVoiceOverOverlayView: UIView {
             self.refreshControl.endRefreshing()
         }
 
+        let didLoadEarlierProgress: Bool
         if previousWasWaitingForLoadEarlier, let before = self.loadEarlierOldestIndexBeforeRequest ?? previousOldestIndex, let after = self.rows.first?.index, after < before {
+            didLoadEarlierProgress = true
             self.endWaitingForLoadEarlierIfNeeded()
             self.reloadLoadEarlierRow()
+        } else {
+            didLoadEarlierProgress = false
+        }
+        
+        if didLoadEarlierProgress, UIAccessibility.isVoiceOverRunning, let loadEarlierRestoredIndexPath {
+            DispatchQueue.main.async { [weak self] in
+                guard let self else {
+                    return
+                }
+                let focusTarget: Any?
+                if let cell = self.tableView.cellForRow(at: loadEarlierRestoredIndexPath) {
+                    focusTarget = cell
+                } else {
+                    focusTarget = self.tableView
+                }
+                UIAccessibility.post(notification: .layoutChanged, argument: focusTarget)
+            }
         }
     }
     
@@ -1065,21 +1086,67 @@ public final class ChatVoiceOverOverlayView: UIView {
 
     private func currentScrollAnchor() -> ScrollAnchor? {
         let rowOffset = self.loadEarlierRowOffset
-        guard let anchorIndexPath = self.tableView.indexPathsForVisibleRows?.sorted().first(where: { $0.row >= rowOffset && ($0.row - rowOffset) >= 0 && ($0.row - rowOffset) < self.rows.count }) else {
+        
+        func makeAnchor(for indexPath: IndexPath) -> ScrollAnchor? {
+            let anchorRowIndex = indexPath.row - rowOffset
+            guard anchorRowIndex >= 0, anchorRowIndex < self.rows.count else {
+                return nil
+            }
+            let row = self.rows[anchorRowIndex]
+            let stableId = row.stableId
+            let messageId: MessageId?
+            if case let .message(message) = row.kind {
+                messageId = message.id
+            } else {
+                messageId = nil
+            }
+            let rect = self.tableView.rectForRow(at: indexPath)
+            let offset = rect.minY - self.tableView.contentOffset.y
+            return ScrollAnchor(stableId: stableId, messageId: messageId, offset: offset)
+        }
+        
+        if UIAccessibility.isVoiceOverRunning, let focusedView = UIAccessibility.focusedElement(using: .notificationVoiceOver) as? UIView {
+            var current: UIView? = focusedView
+            while let view = current {
+                if let cell = view as? UITableViewCell, cell.isDescendant(of: self.tableView) {
+                    if let indexPath = self.tableView.indexPath(for: cell), indexPath.row >= rowOffset {
+                        let rowIndex = indexPath.row - rowOffset
+                        if rowIndex >= 0, rowIndex < self.rows.count, case .message = self.rows[rowIndex].kind {
+                            if let anchor = makeAnchor(for: indexPath) {
+                                return anchor
+                            }
+                        }
+                    }
+                    break
+                }
+                current = view.superview
+            }
+        }
+        
+        guard let visibleIndexPaths = self.tableView.indexPathsForVisibleRows?.sorted() else {
             return nil
         }
-        let anchorRowIndex = anchorIndexPath.row - rowOffset
-        let row = self.rows[anchorRowIndex]
-        let stableId = row.stableId
-        let messageId: MessageId?
-        if case let .message(message) = row.kind {
-            messageId = message.id
-        } else {
-            messageId = nil
+        
+        for indexPath in visibleIndexPaths {
+            guard indexPath.row >= rowOffset else {
+                continue
+            }
+            let rowIndex = indexPath.row - rowOffset
+            guard rowIndex >= 0, rowIndex < self.rows.count else {
+                continue
+            }
+            if case .message = self.rows[rowIndex].kind {
+                if let anchor = makeAnchor(for: indexPath) {
+                    return anchor
+                }
+            }
         }
-        let rect = self.tableView.rectForRow(at: anchorIndexPath)
-        let offset = rect.minY - self.tableView.contentOffset.y
-        return ScrollAnchor(stableId: stableId, messageId: messageId, offset: offset)
+        
+        if let indexPath = visibleIndexPaths.first(where: { $0.row >= rowOffset && ($0.row - rowOffset) >= 0 && ($0.row - rowOffset) < self.rows.count }) {
+            return makeAnchor(for: indexPath)
+        }
+        
+        return nil
     }
     
     private func resolveRow(_ row: Row, state: ChatPresentationInterfaceState) -> (title: String, subtitle: String?, accessibilityLabel: String, hint: String?, traits: UIAccessibilityTraits) {
@@ -1118,6 +1185,12 @@ public final class ChatVoiceOverOverlayView: UIView {
         var traits: UIAccessibilityTraits = [.staticText]
         
         if title.isEmpty {
+            if let service = plainServiceMessageString(strings: state.strings, nameDisplayOrder: state.nameDisplayOrder, dateTimeFormat: state.dateTimeFormat, message: EngineMessage(message), accountPeerId: state.accountPeerId, forChatList: false, forForumOverview: false)?.text {
+                let trimmed = service.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !trimmed.isEmpty {
+                    title = trimmed
+                }
+            }
             for media in message.media {
                 if let action = media as? TelegramMediaAction {
                     if case let .customText(text, _, _) = action.action {
