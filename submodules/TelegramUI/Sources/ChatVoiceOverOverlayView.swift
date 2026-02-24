@@ -161,7 +161,7 @@ public final class ChatVoiceOverOverlayView: UIView {
     }
     
     private var isLoadEarlierInProgress: Bool {
-        return self.isWaitingForLoadEarlier
+        return self.isWaitingForLoadEarlier || self.isLoadingEarlierHistory
     }
     
     private var loadEarlierRowOffset: Int {
@@ -866,13 +866,16 @@ public final class ChatVoiceOverOverlayView: UIView {
         
         let previousWasNearBottom = self.isNearBottom()
         let previousWasWaitingForLoadEarlier = self.isWaitingForLoadEarlier
-        let previousOldestIndex = self.rows.first?.index
+        let previousRows = self.rows
+        let previousOldestIndex = previousRows.first?.index
         let loadEarlierAnchor = previousWasWaitingForLoadEarlier ? self.loadEarlierScrollAnchor : nil
         var loadEarlierRestoredIndexPath: IndexPath?
 
-        let previousStableIds = self.rows.map { $0.stableId }
+        let previousStableIds = previousRows.map { $0.stableId }
         let newStableIds = newRows.map { $0.stableId }
         if previousStableIds == newStableIds {
+            self.rows = newRows
+            self.reloadVisibleRows()
             if self.refreshControl.isRefreshing, !previousWasWaitingForLoadEarlier {
                 self.refreshControl.endRefreshing()
             }
@@ -880,16 +883,25 @@ public final class ChatVoiceOverOverlayView: UIView {
         }
 
         self.loadEarlierNoProgressCount = 0
+        let previousContentOffsetY = self.tableView.contentOffset.y
+        let previousContentSizeHeight = self.tableView.contentSize.height
         var anchorStableId: UInt64?
         var anchorOffset: CGFloat = 0.0
         if !previousWasNearBottom {
             let rowOffset = self.loadEarlierRowOffset
-            if let anchorIndexPath = self.tableView.indexPathsForVisibleRows?.sorted().first(where: { $0.row >= rowOffset && ($0.row - rowOffset) >= 0 && ($0.row - rowOffset) < self.rows.count }) {
+            if let anchorIndexPath = self.tableView.indexPathsForVisibleRows?.sorted().first(where: { $0.row >= rowOffset && ($0.row - rowOffset) >= 0 && ($0.row - rowOffset) < previousRows.count }) {
                 let anchorRowIndex = anchorIndexPath.row - rowOffset
-                anchorStableId = self.rows[anchorRowIndex].stableId
+                anchorStableId = previousRows[anchorRowIndex].stableId
                 let rect = self.tableView.rectForRow(at: anchorIndexPath)
                 anchorOffset = rect.minY - self.tableView.contentOffset.y
             }
+        }
+
+        let didLoadEarlierProgressPreview: Bool
+        if previousWasWaitingForLoadEarlier, let before = self.loadEarlierOldestIndexBeforeRequest ?? previousOldestIndex, let after = newRows.first?.index, after < before {
+            didLoadEarlierProgressPreview = true
+        } else {
+            didLoadEarlierProgressPreview = false
         }
 
         self.rows = newRows
@@ -909,24 +921,21 @@ public final class ChatVoiceOverOverlayView: UIView {
             self.forceScrollToBottomOnNextApply = false
             self.scrollToBottom(animated: false)
             self.focusLastMessageIfPossible()
-        } else if let loadEarlierAnchor {
-            let anchoredIndex: Int? = loadEarlierAnchor.messageId.flatMap { messageId in
-                return self.rows.firstIndex(where: { row in
-                    if case let .message(message) = row.kind {
-                        return message.id == messageId
-                    } else {
-                        return false
-                    }
-                })
-            } ?? self.rows.firstIndex(where: { $0.stableId == loadEarlierAnchor.stableId })
-            
+        } else if let loadEarlierAnchor, previousWasWaitingForLoadEarlier, didLoadEarlierProgressPreview {
+            let anchoredIndex: Int? = self.indexOfRow(for: loadEarlierAnchor)
             if let anchoredIndex {
                 let indexPath = IndexPath(row: anchoredIndex + self.loadEarlierRowOffset, section: 0)
-                let rect = self.tableView.rectForRow(at: indexPath)
-                let targetOffset = rect.minY - loadEarlierAnchor.offset
-                let minOffset = -self.tableView.adjustedContentInset.top
-                let maxOffset = max(minOffset, self.tableView.contentSize.height - self.tableView.bounds.height + self.tableView.adjustedContentInset.bottom)
-                self.tableView.setContentOffset(CGPoint(x: 0.0, y: min(max(targetOffset, minOffset), maxOffset)), animated: false)
+                self.restoreScrollPosition(to: loadEarlierAnchor, at: indexPath)
+                loadEarlierRestoredIndexPath = indexPath
+            } else {
+                let delta = self.tableView.contentSize.height - previousContentSizeHeight
+                self.tableView.setContentOffset(CGPoint(x: 0.0, y: self.clampContentOffsetY(previousContentOffsetY + delta)), animated: false)
+            }
+        } else if let loadEarlierAnchor, previousWasWaitingForLoadEarlier {
+            let anchoredIndex: Int? = self.indexOfRow(for: loadEarlierAnchor)
+            if let anchoredIndex {
+                let indexPath = IndexPath(row: anchoredIndex + self.loadEarlierRowOffset, section: 0)
+                self.restoreScrollPosition(to: loadEarlierAnchor, at: indexPath)
                 loadEarlierRestoredIndexPath = indexPath
             }
         } else if previousWasNearBottom {
@@ -935,9 +944,7 @@ public final class ChatVoiceOverOverlayView: UIView {
             let indexPath = IndexPath(row: newIndex + self.loadEarlierRowOffset, section: 0)
             let rect = self.tableView.rectForRow(at: indexPath)
             let targetOffset = rect.minY - anchorOffset
-            let minOffset = -self.tableView.adjustedContentInset.top
-            let maxOffset = max(minOffset, self.tableView.contentSize.height - self.tableView.bounds.height + self.tableView.adjustedContentInset.bottom)
-            self.tableView.setContentOffset(CGPoint(x: 0.0, y: min(max(targetOffset, minOffset), maxOffset)), animated: false)
+            self.tableView.setContentOffset(CGPoint(x: 0.0, y: self.clampContentOffsetY(targetOffset)), animated: false)
         }
 
         if self.refreshControl.isRefreshing {
@@ -967,6 +974,43 @@ public final class ChatVoiceOverOverlayView: UIView {
                 UIAccessibility.post(notification: .layoutChanged, argument: focusTarget)
             }
         }
+    }
+
+    private func reloadVisibleRows() {
+        guard let visibleIndexPaths = self.tableView.indexPathsForVisibleRows, !visibleIndexPaths.isEmpty else {
+            return
+        }
+        UIView.performWithoutAnimation {
+            self.tableView.reloadRows(at: visibleIndexPaths, with: .none)
+            self.tableView.layoutIfNeeded()
+        }
+    }
+
+    private func clampContentOffsetY(_ y: CGFloat) -> CGFloat {
+        let minOffset = -self.tableView.adjustedContentInset.top
+        let maxOffset = max(minOffset, self.tableView.contentSize.height - self.tableView.bounds.height + self.tableView.adjustedContentInset.bottom)
+        return min(max(y, minOffset), maxOffset)
+    }
+
+    private func indexOfRow(for anchor: ScrollAnchor) -> Int? {
+        if let messageId = anchor.messageId {
+            if let index = self.rows.firstIndex(where: { row in
+                if case let .message(message) = row.kind {
+                    return message.id == messageId
+                } else {
+                    return false
+                }
+            }) {
+                return index
+            }
+        }
+        return self.rows.firstIndex(where: { $0.stableId == anchor.stableId })
+    }
+
+    private func restoreScrollPosition(to anchor: ScrollAnchor, at indexPath: IndexPath) {
+        let rect = self.tableView.rectForRow(at: indexPath)
+        let targetOffset = rect.minY - anchor.offset
+        self.tableView.setContentOffset(CGPoint(x: 0.0, y: self.clampContentOffsetY(targetOffset)), animated: false)
     }
     
     private func mergeRows(existing: [Row], incoming: [Row]) -> [Row] {
