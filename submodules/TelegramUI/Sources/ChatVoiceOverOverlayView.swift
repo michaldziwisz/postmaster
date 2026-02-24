@@ -413,7 +413,11 @@ public final class ChatVoiceOverOverlayView: UIView {
         }
         
         UIView.performWithoutAnimation {
-            self.tableView.reloadData()
+            if !didReceiveChange, self.shouldShowLoadEarlierRow, self.tableView.numberOfRows(inSection: 0) > 0 {
+                self.tableView.reloadRows(at: [IndexPath(row: 0, section: 0)], with: .none)
+            } else {
+                self.tableView.reloadData()
+            }
             self.tableView.layoutIfNeeded()
         }
     }
@@ -1035,7 +1039,11 @@ public final class ChatVoiceOverOverlayView: UIView {
 
     private func reloadLoadEarlierRow() {
         UIView.performWithoutAnimation {
-            self.tableView.reloadData()
+            if self.shouldShowLoadEarlierRow, self.tableView.numberOfRows(inSection: 0) > 0 {
+                self.tableView.reloadRows(at: [IndexPath(row: 0, section: 0)], with: .none)
+            } else {
+                self.tableView.reloadData()
+            }
             self.tableView.layoutIfNeeded()
         }
     }
