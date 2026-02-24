@@ -123,4 +123,23 @@ final class ChatVoiceOverOverlayViewTests: XCTestCase {
         
         XCTAssertTrue(didRequestLoadEarlier)
     }
+    
+    func testLoadEarlierRowIsDisabledWhileWaitingForLoad() {
+        let view = ChatVoiceOverOverlayView(frame: .zero)
+        
+        view.actions.requestLoadEarlier = {}
+        view.updateLoadEarlierState(canLoadEarlier: true, isLoadingEarlier: false)
+        
+        let tableView = view.subviews.compactMap { $0 as? UITableView }.first
+        XCTAssertNotNil(tableView)
+        
+        guard let tableView else {
+            return
+        }
+        
+        view.tableView(tableView, didSelectRowAt: IndexPath(row: 0, section: 0))
+        let cell = view.tableView(tableView, cellForRowAt: IndexPath(row: 0, section: 0))
+        XCTAssertTrue(cell.accessibilityTraits.contains(.notEnabled))
+        XCTAssertNil(view.tableView(tableView, willSelectRowAt: IndexPath(row: 0, section: 0)))
+    }
 }
