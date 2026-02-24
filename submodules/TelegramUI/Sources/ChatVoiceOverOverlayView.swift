@@ -407,12 +407,7 @@ public final class ChatVoiceOverOverlayView: UIView {
         let didChange = didReceiveChange || (self.canLoadEarlierHistory != canLoadEarlier) || (self.isLoadingEarlierHistory != isLoadingEarlier)
         self.canLoadEarlierHistory = canLoadEarlier
         self.isLoadingEarlierHistory = isLoadingEarlier
-        
-        if self.isWaitingForLoadEarlier, !canLoadEarlier, !isLoadingEarlier {
-            self.endWaitingForLoadEarlierIfNeeded()
-            self.reloadLoadEarlierRow()
-        }
-        
+
         guard didChange else {
             return
         }
@@ -1179,7 +1174,14 @@ public final class ChatVoiceOverOverlayView: UIView {
             subtitle = state.strings.DialogList_You
         }
         
-        var title = message.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        var title = descriptionStringForMessage(
+            contentSettings: ContentSettings.default,
+            message: EngineMessage(message),
+            strings: state.strings,
+            nameDisplayOrder: state.nameDisplayOrder,
+            dateTimeFormat: state.dateTimeFormat,
+            accountPeerId: state.accountPeerId
+        ).0.string.trimmingCharacters(in: .whitespacesAndNewlines)
         var accessibilityLabel = ""
         var hint: String?
         var traits: UIAccessibilityTraits = [.staticText]
