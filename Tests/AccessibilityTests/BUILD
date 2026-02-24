@@ -240,10 +240,12 @@ swift_library(
     testonly = True,
     srcs = [
         "Sources/ChatListVoiceOverOverlayViewTests.swift",
+        "Sources/ChatHistoryListNodeVoiceOverLoadEarlierTests.swift",
         "Sources/ChatVoiceOverOverlayViewTests.swift",
     ],
     deps = [
         "//submodules/ChatListUI",
+        "//submodules/Postbox:Postbox",
         "//submodules/TelegramCore:TelegramCore",
         "//submodules/TelegramPresentationData",
         "//submodules/TelegramUI",
