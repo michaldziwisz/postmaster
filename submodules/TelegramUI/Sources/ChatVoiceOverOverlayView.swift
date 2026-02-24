@@ -89,6 +89,7 @@ public final class ChatVoiceOverOverlayView: UIView {
         public var beginVoiceRecording: (() -> Void)?
         public var finishVoiceRecordingAndSend: (() -> Void)?
         public var requestLoadEarlier: (() -> Void)?
+        public var didEndLoadEarlier: (() -> Void)?
         public var scrollToLatest: (() -> Void)?
         public var activateMessage: ((Message) -> Void)?
         public var openMessageContextMenu: ((Message, CGRect) -> Void)?
@@ -101,6 +102,7 @@ public final class ChatVoiceOverOverlayView: UIView {
             beginVoiceRecording: (() -> Void)? = nil,
             finishVoiceRecordingAndSend: (() -> Void)? = nil,
             requestLoadEarlier: (() -> Void)? = nil,
+            didEndLoadEarlier: (() -> Void)? = nil,
             scrollToLatest: (() -> Void)? = nil,
             activateMessage: ((Message) -> Void)? = nil,
             openMessageContextMenu: ((Message, CGRect) -> Void)? = nil
@@ -112,6 +114,7 @@ public final class ChatVoiceOverOverlayView: UIView {
             self.beginVoiceRecording = beginVoiceRecording
             self.finishVoiceRecordingAndSend = finishVoiceRecordingAndSend
             self.requestLoadEarlier = requestLoadEarlier
+            self.didEndLoadEarlier = didEndLoadEarlier
             self.scrollToLatest = scrollToLatest
             self.activateMessage = activateMessage
             self.openMessageContextMenu = openMessageContextMenu
@@ -151,9 +154,10 @@ public final class ChatVoiceOverOverlayView: UIView {
 
     private var canLoadEarlierHistory = false
     private var isLoadingEarlierHistory = false
+    private var didReceiveLoadEarlierState = false
     
     private var shouldShowLoadEarlierRow: Bool {
-        return self.canLoadEarlierHistory || self.isWaitingForLoadEarlier
+        return self.didReceiveLoadEarlierState || self.canLoadEarlierHistory || self.isLoadEarlierInProgress
     }
     
     private var isLoadEarlierInProgress: Bool {
@@ -173,6 +177,7 @@ public final class ChatVoiceOverOverlayView: UIView {
     private var loadEarlierNoProgressCount: Int = 0
     private var forceScrollToBottomOnNextApply = false
     private var stickToTopOnNextApply = false
+    private var loadEarlierOldestIndexBeforeRequest: MessageIndex?
     
     public var actions = Actions()
     
@@ -371,9 +376,19 @@ public final class ChatVoiceOverOverlayView: UIView {
     }
     
     public func updateLoadEarlierState(canLoadEarlier: Bool, isLoadingEarlier: Bool) {
-        let didChange = (self.canLoadEarlierHistory != canLoadEarlier) || (self.isLoadingEarlierHistory != isLoadingEarlier)
+        let didReceiveChange = !self.didReceiveLoadEarlierState
+        if didReceiveChange {
+            self.didReceiveLoadEarlierState = true
+        }
+        
+        let didChange = didReceiveChange || (self.canLoadEarlierHistory != canLoadEarlier) || (self.isLoadingEarlierHistory != isLoadingEarlier)
         self.canLoadEarlierHistory = canLoadEarlier
         self.isLoadingEarlierHistory = isLoadingEarlier
+        
+        if self.isWaitingForLoadEarlier, !canLoadEarlier, !isLoadingEarlier {
+            self.endWaitingForLoadEarlierIfNeeded()
+            self.reloadLoadEarlierRow()
+        }
         
         guard didChange else {
             return
@@ -513,30 +528,57 @@ public final class ChatVoiceOverOverlayView: UIView {
 
         if self.shouldShowLoadEarlierRow, indexPath.row == 0 {
             let bundle = getAppBundle()
-            let isLoading = self.isLoadEarlierInProgress
-            let titleKey = isLoading ? "VoiceOver.Chat.LoadEarlier.Loading" : "VoiceOver.Chat.LoadEarlier"
-            let titleFallback = isLoading ? "Loading older messages" : "Load older messages"
-            let title = bundle.localizedString(forKey: titleKey, value: titleFallback, table: nil)
+            
+            let title: String
+            let traits: UIAccessibilityTraits
+            if self.isLoadEarlierInProgress {
+                let titleKey = "VoiceOver.Chat.LoadEarlier.Loading"
+                let titleFallback = "Loading older messages"
+                title = bundle.localizedString(forKey: titleKey, value: titleFallback, table: nil)
+                traits = [.button, .notEnabled]
+                cell.selectionStyle = .none
+            } else if self.canLoadEarlierHistory {
+                let titleKey = "VoiceOver.Chat.LoadEarlier"
+                let titleFallback = "Load older messages"
+                title = bundle.localizedString(forKey: titleKey, value: titleFallback, table: nil)
+                traits = [.button]
+                cell.selectionStyle = .default
+            } else {
+                let titleKey = "VoiceOver.Chat.LoadEarlier.None"
+                let titleFallback = "No older messages"
+                title = bundle.localizedString(forKey: titleKey, value: titleFallback, table: nil)
+                traits = [.staticText]
+                cell.selectionStyle = .none
+            }
 
             cell.textLabel?.text = title
             cell.detailTextLabel?.text = nil
             
             if let state = self.interfaceState {
                 cell.backgroundColor = state.theme.list.plainBackgroundColor
-                cell.textLabel?.textColor = state.theme.list.itemAccentColor
+                cell.textLabel?.textColor = (traits.contains(.button) ? state.theme.list.itemAccentColor : state.theme.list.itemSecondaryTextColor)
             }
             
             cell.accessibilityLabel = title
             cell.accessibilityHint = nil
-            
-            var traits: UIAccessibilityTraits = [.button]
-            if isLoading || !self.canLoadEarlierHistory {
-                traits.insert(.notEnabled)
-                cell.selectionStyle = .none
-            } else {
-                cell.selectionStyle = .default
-            }
             cell.accessibilityTraits = traits
+
+            #if DEBUG
+            let debugTitle = "Speak debug state"
+            cell.accessibilityCustomActions = [
+                UIAccessibilityCustomAction(name: debugTitle, actionHandler: { [weak self] _ in
+                    guard let self else {
+                        return false
+                    }
+                    let now = CACurrentMediaTime()
+                    let lastRequestAgeMs = Int((now - self.lastLoadEarlierRequestTimestamp) * 1000.0)
+                    let message = "Load earlier debug. waiting \(self.isWaitingForLoadEarlier ? "true" : "false"). canLoadEarlier \(self.canLoadEarlierHistory ? "true" : "false"). isLoadingEarlier \(self.isLoadingEarlierHistory ? "true" : "false"). requestId \(self.loadEarlierRequestId). noProgressCount \(self.loadEarlierNoProgressCount). lastRequestAge \(lastRequestAgeMs) ms."
+                    UIAccessibility.post(notification: .announcement, argument: message)
+                    return true
+                })
+            ]
+            #endif
+            
             return cell
         }
         
@@ -686,7 +728,6 @@ public final class ChatVoiceOverOverlayView: UIView {
         }
         if !decelerate {
             self.applyPendingEntriesIfPossible()
-            self.maybeTriggerLoadEarlierIfNeeded()
             self.maybeEnsureAtLatestIfNeeded()
         }
     }
@@ -696,7 +737,6 @@ public final class ChatVoiceOverOverlayView: UIView {
             return
         }
         self.applyPendingEntriesIfPossible()
-        self.maybeTriggerLoadEarlierIfNeeded()
         self.maybeEnsureAtLatestIfNeeded()
     }
     
@@ -705,7 +745,6 @@ public final class ChatVoiceOverOverlayView: UIView {
             return
         }
         self.applyPendingEntriesIfPossible()
-        self.maybeTriggerLoadEarlierIfNeeded()
         self.maybeEnsureAtLatestIfNeeded()
     }
     
@@ -786,6 +825,7 @@ public final class ChatVoiceOverOverlayView: UIView {
         let previousWasNearBottom = self.isNearBottom()
         let previousWasNearTop = self.isNearTop()
         let previousWasWaitingForLoadEarlier = self.isWaitingForLoadEarlier
+        let previousOldestIndex = self.rows.first?.index
 
         let previousStableIds = self.rows.map { $0.stableId }
         let newStableIds = newRows.map { $0.stableId }
@@ -843,7 +883,11 @@ public final class ChatVoiceOverOverlayView: UIView {
         if self.refreshControl.isRefreshing {
             self.refreshControl.endRefreshing()
         }
-        self.isWaitingForLoadEarlier = false
+
+        if previousWasWaitingForLoadEarlier, let before = self.loadEarlierOldestIndexBeforeRequest ?? previousOldestIndex, let after = self.rows.first?.index, after < before {
+            self.endWaitingForLoadEarlierIfNeeded()
+            self.reloadLoadEarlierRow()
+        }
     }
     
     private func mergeRows(existing: [Row], incoming: [Row]) -> [Row] {
@@ -883,6 +927,7 @@ public final class ChatVoiceOverOverlayView: UIView {
             }
             return
         }
+        self.loadEarlierOldestIndexBeforeRequest = self.rows.first?.index
         self.loadEarlierRequestId += 1
         let requestId = self.loadEarlierRequestId
         self.isWaitingForLoadEarlier = true
@@ -898,7 +943,7 @@ public final class ChatVoiceOverOverlayView: UIView {
             guard self.isWaitingForLoadEarlier, self.loadEarlierRequestId == requestId else {
                 return
             }
-            self.isWaitingForLoadEarlier = false
+            self.endWaitingForLoadEarlierIfNeeded()
             self.loadEarlierNoProgressCount += 1
             if self.refreshControl.isRefreshing {
                 self.refreshControl.endRefreshing()
@@ -913,54 +958,9 @@ public final class ChatVoiceOverOverlayView: UIView {
             self.tableView.layoutIfNeeded()
         }
     }
-
-    private func maybeTriggerLoadEarlierIfNeeded() {
-        guard self.loadEarlierNoProgressCount < Self.maxLoadEarlierNoProgressCount else {
-            return
-        }
-        guard !self.isWaitingForLoadEarlier else {
-            return
-        }
-        let threshold: CGFloat = 120.0
-        let minOffset = -self.tableView.adjustedContentInset.top
-        if self.tableView.contentOffset.y - minOffset <= threshold {
-            let now = CACurrentMediaTime()
-            if now - self.lastLoadEarlierRequestTimestamp >= 1.0 {
-                self.triggerLoadEarlierRequest()
-            }
-        }
-    }
-
+    
     private func handleAccessibilityScrollBoundary(_ direction: UIAccessibilityScrollDirection) -> Bool {
-        guard UIAccessibility.isVoiceOverRunning else {
-            return false
-        }
-        
-        switch direction {
-        case .up, .down, .next, .previous:
-            break
-        default:
-            return false
-        }
-        
-        guard self.isNearTop() else {
-            return false
-        }
-        guard self.loadEarlierNoProgressCount < Self.maxLoadEarlierNoProgressCount else {
-            return false
-        }
-        
-        if self.isWaitingForLoadEarlier {
-            return true
-        }
-        
-        let now = CACurrentMediaTime()
-        if now - self.lastLoadEarlierRequestTimestamp < 0.6 {
-            return true
-        }
-        
-        self.triggerLoadEarlierRequest()
-        return true
+        return false
     }
 
     public override func accessibilityScroll(_ direction: UIAccessibilityScrollDirection) -> Bool {
@@ -984,6 +984,18 @@ public final class ChatVoiceOverOverlayView: UIView {
         let minOffset = -self.tableView.adjustedContentInset.top
         let maxOffset = max(minOffset, self.tableView.contentSize.height - visibleHeight + self.tableView.adjustedContentInset.bottom)
         return maxOffset - self.tableView.contentOffset.y <= epsilon
+    }
+
+    private func endWaitingForLoadEarlierIfNeeded() {
+        guard self.isWaitingForLoadEarlier else {
+            return
+        }
+        self.isWaitingForLoadEarlier = false
+        self.loadEarlierOldestIndexBeforeRequest = nil
+        if self.refreshControl.isRefreshing {
+            self.refreshControl.endRefreshing()
+        }
+        self.actions.didEndLoadEarlier?()
     }
     
     private func resolveRow(_ row: Row, state: ChatPresentationInterfaceState) -> (title: String, subtitle: String?, accessibilityLabel: String, hint: String?, traits: UIAccessibilityTraits) {

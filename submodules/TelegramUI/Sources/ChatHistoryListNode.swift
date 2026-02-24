@@ -490,6 +490,12 @@ public final class ChatHistoryListNodeImpl: ListView, ChatHistoryNode, ChatHisto
     public var voiceOverHistoryEntries: [ChatHistoryEntry] {
         return self.historyView?.filteredEntries ?? []
     }
+
+    private struct VoiceOverFillHoleOverride {
+        var requestedIndex: MessageHistoryAnchorIndex
+        var count: Int
+    }
+    private var voiceOverFillHoleOverride: VoiceOverFillHoleOverride?
     
     private let historyDisposable = MetaDisposable()
     private let readHistoryDisposable = MetaDisposable()
@@ -1855,6 +1861,12 @@ public final class ChatHistoryListNodeImpl: ListView, ChatHistoryNode, ChatHisto
                 Queue.mainQueue().async {
                     if let strongSelf = self {
                         if update.2 != strongSelf.chatHistoryLocationValue {
+                            return
+                        }
+
+                        if strongSelf.voiceOverHistoryEntriesUpdated != nil, let override = strongSelf.voiceOverFillHoleOverride {
+                            let count = max(historyMessageCount, override.count)
+                            strongSelf.chatHistoryLocationValue = ChatHistoryLocationInput(content: .Navigation(index: override.requestedIndex, anchorIndex: override.requestedIndex, count: count, highlight: false), id: (strongSelf.chatHistoryLocationValue?.id).flatMap({ $0 + 1 }) ?? 0)
                             return
                         }
                         
@@ -3383,8 +3395,13 @@ public final class ChatHistoryListNodeImpl: ListView, ChatHistoryNode, ChatHisto
         }
 
         let locationInput: ChatHistoryLocation = .Navigation(index: requestedIndex, anchorIndex: requestedIndex, count: voiceOverHistoryMessageCount, highlight: false)
+        self.voiceOverFillHoleOverride = VoiceOverFillHoleOverride(requestedIndex: requestedIndex, count: voiceOverHistoryMessageCount)
         
         self.chatHistoryLocationValue = ChatHistoryLocationInput(content: locationInput, id: self.takeNextHistoryLocationId())
+    }
+
+    public func voiceOverDidFinishLoadEarlier() {
+        self.voiceOverFillHoleOverride = nil
     }
     
     public func scrollToStartOfHistory() {

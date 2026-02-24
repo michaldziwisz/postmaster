@@ -1080,6 +1080,9 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                 overlay.actions.requestLoadEarlier = { [weak self] in
                     self?.historyNode.voiceOverRequestLoadEarlier()
                 }
+                overlay.actions.didEndLoadEarlier = { [weak self] in
+                    self?.historyNode.voiceOverDidFinishLoadEarlier()
+                }
                 overlay.actions.scrollToLatest = { [weak self] in
                     self?.historyNode.scrollToEndOfHistory()
                 }
@@ -1172,6 +1175,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
             }
             
             self.historyNode.voiceOverHistoryEntriesUpdated = nil
+            self.historyNode.voiceOverDidFinishLoadEarlier()
             
             if let overlay = self.voiceOverOverlayView {
                 overlay.removeFromSuperview()

@@ -65,7 +65,7 @@ final class ChatVoiceOverOverlayViewTests: XCTestCase {
             view.scrollViewDidEndDecelerating(tableView)
         }
         
-        XCTAssertTrue(didRequestLoadEarlier)
+        XCTAssertFalse(didRequestLoadEarlier)
     }
     
     func testRequestsScrollToLatestAfterScrollingEndsAtBottom() {
@@ -102,6 +102,21 @@ final class ChatVoiceOverOverlayViewTests: XCTestCase {
         let tableView = view.subviews.compactMap { $0 as? UITableView }.first
         XCTAssertNotNil(tableView)
         XCTAssertEqual(tableView?.numberOfRows(inSection: 0), 1)
+    }
+
+    func testLoadEarlierRowShowsNoOlderMessagesWhenCanLoadEarlierIsFalse() {
+        let view = ChatVoiceOverOverlayView(frame: .zero)
+        view.updateLoadEarlierState(canLoadEarlier: false, isLoadingEarlier: false)
+        
+        let tableView = view.subviews.compactMap { $0 as? UITableView }.first
+        XCTAssertNotNil(tableView)
+        XCTAssertEqual(tableView?.numberOfRows(inSection: 0), 1)
+        
+        if let tableView {
+            let cell = view.tableView(tableView, cellForRowAt: IndexPath(row: 0, section: 0))
+            XCTAssertTrue(cell.accessibilityTraits.contains(.staticText))
+            XCTAssertFalse(cell.accessibilityTraits.contains(.button))
+        }
     }
     
     func testSelectingLoadEarlierRowRequestsLoadEarlier() {
