@@ -180,6 +180,7 @@ public final class ChatVoiceOverOverlayView: UIView {
 
     private struct ScrollAnchor: Equatable {
         var stableId: UInt64
+        var messageId: MessageId?
         var offset: CGFloat
     }
     private var loadEarlierScrollAnchor: ScrollAnchor?
@@ -908,13 +909,25 @@ public final class ChatVoiceOverOverlayView: UIView {
             self.forceScrollToBottomOnNextApply = false
             self.scrollToBottom(animated: false)
             self.focusLastMessageIfPossible()
-        } else if let loadEarlierAnchor, let newIndex = self.rows.firstIndex(where: { $0.stableId == loadEarlierAnchor.stableId }) {
-            let indexPath = IndexPath(row: newIndex + self.loadEarlierRowOffset, section: 0)
-            let rect = self.tableView.rectForRow(at: indexPath)
-            let targetOffset = rect.minY - loadEarlierAnchor.offset
-            let minOffset = -self.tableView.adjustedContentInset.top
-            let maxOffset = max(minOffset, self.tableView.contentSize.height - self.tableView.bounds.height + self.tableView.adjustedContentInset.bottom)
-            self.tableView.setContentOffset(CGPoint(x: 0.0, y: min(max(targetOffset, minOffset), maxOffset)), animated: false)
+        } else if let loadEarlierAnchor {
+            let anchoredIndex: Int? = loadEarlierAnchor.messageId.flatMap { messageId in
+                return self.rows.firstIndex(where: { row in
+                    if case let .message(message) = row.kind {
+                        return message.id == messageId
+                    } else {
+                        return false
+                    }
+                })
+            } ?? self.rows.firstIndex(where: { $0.stableId == loadEarlierAnchor.stableId })
+            
+            if let anchoredIndex {
+                let indexPath = IndexPath(row: anchoredIndex + self.loadEarlierRowOffset, section: 0)
+                let rect = self.tableView.rectForRow(at: indexPath)
+                let targetOffset = rect.minY - loadEarlierAnchor.offset
+                let minOffset = -self.tableView.adjustedContentInset.top
+                let maxOffset = max(minOffset, self.tableView.contentSize.height - self.tableView.bounds.height + self.tableView.adjustedContentInset.bottom)
+                self.tableView.setContentOffset(CGPoint(x: 0.0, y: min(max(targetOffset, minOffset), maxOffset)), animated: false)
+            }
         } else if previousWasNearBottom {
             self.scrollToBottom(animated: false)
         } else if let anchorStableId, let newIndex = self.rows.firstIndex(where: { $0.stableId == anchorStableId }) {
@@ -1056,10 +1069,17 @@ public final class ChatVoiceOverOverlayView: UIView {
             return nil
         }
         let anchorRowIndex = anchorIndexPath.row - rowOffset
-        let stableId = self.rows[anchorRowIndex].stableId
+        let row = self.rows[anchorRowIndex]
+        let stableId = row.stableId
+        let messageId: MessageId?
+        if case let .message(message) = row.kind {
+            messageId = message.id
+        } else {
+            messageId = nil
+        }
         let rect = self.tableView.rectForRow(at: anchorIndexPath)
         let offset = rect.minY - self.tableView.contentOffset.y
-        return ScrollAnchor(stableId: stableId, offset: offset)
+        return ScrollAnchor(stableId: stableId, messageId: messageId, offset: offset)
     }
     
     private func resolveRow(_ row: Row, state: ChatPresentationInterfaceState) -> (title: String, subtitle: String?, accessibilityLabel: String, hint: String?, traits: UIAccessibilityTraits) {
@@ -1098,7 +1118,20 @@ public final class ChatVoiceOverOverlayView: UIView {
         var traits: UIAccessibilityTraits = [.staticText]
         
         if title.isEmpty {
-            title = state.strings.VoiceOver_Chat_Message
+            for media in message.media {
+                if let action = media as? TelegramMediaAction {
+                    if case let .customText(text, _, _) = action.action {
+                        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                        if !trimmed.isEmpty {
+                            title = trimmed
+                            break
+                        }
+                    }
+                }
+            }
+            if title.isEmpty {
+                title = state.strings.VoiceOver_Chat_Message
+            }
         }
         
         for media in message.media {
