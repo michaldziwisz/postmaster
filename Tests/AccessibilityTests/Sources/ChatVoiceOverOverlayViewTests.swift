@@ -49,7 +49,7 @@ final class ChatVoiceOverOverlayViewTests: XCTestCase {
         XCTAssertFalse(didRequestLoadEarlier)
     }
     
-    func testRequestsLoadEarlierAfterScrollingEndsNearTop() {
+    func testDoesNotAutoRequestLoadEarlierAfterScrollingEndsNearTop() {
         let view = ChatVoiceOverOverlayView(frame: .zero)
         
         var didRequestLoadEarlier = false
@@ -66,7 +66,7 @@ final class ChatVoiceOverOverlayViewTests: XCTestCase {
             view.scrollViewDidEndDecelerating(tableView)
         }
         
-        XCTAssertTrue(didRequestLoadEarlier)
+        XCTAssertFalse(didRequestLoadEarlier)
     }
 
     func testDoesNotAutoRequestLoadEarlierWhenCanLoadEarlierIsFalse() {

@@ -183,6 +183,8 @@ public final class ChatVoiceOverOverlayView: UIView {
         var offset: CGFloat
     }
     private var loadEarlierScrollAnchor: ScrollAnchor?
+
+    private var isComposerEnabled: Bool = true
     
     public var actions = Actions()
     
@@ -237,9 +239,6 @@ public final class ChatVoiceOverOverlayView: UIView {
         self.tableView.rowHeight = UITableView.automaticDimension
         self.tableView.keyboardDismissMode = .interactive
         self.tableView.alwaysBounceVertical = true
-        self.tableView.onAccessibilityScrollBoundary = { [weak self] direction in
-            return self?.handleAccessibilityScrollBoundary(direction) ?? false
-        }
         self.refreshControl.addTarget(self, action: #selector(self.refreshTriggered), for: .valueChanged)
         self.tableView.refreshControl = self.refreshControl
         self.addSubview(self.tableView)
@@ -335,6 +334,11 @@ public final class ChatVoiceOverOverlayView: UIView {
     
     func updateInterfaceState(_ state: ChatPresentationInterfaceState) {
         self.interfaceState = state
+        if state.renderedPeer?.peer != nil {
+            self.isComposerEnabled = canSendMessagesToChat(state)
+        } else {
+            self.isComposerEnabled = true
+        }
         
         self.backgroundColor = state.theme.list.plainBackgroundColor
         self.topBarView.backgroundColor = state.theme.rootController.navigationBar.opaqueBackgroundColor
@@ -367,6 +371,19 @@ public final class ChatVoiceOverOverlayView: UIView {
         self.sendButton.setTitle("➤", for: .normal)
         self.sendButton.accessibilityLabel = state.strings.MediaPicker_Send
         self.sendButton.accessibilityTraits = [.button]
+
+        let isComposerEnabled = self.isComposerEnabled
+        self.composerView.isUserInteractionEnabled = isComposerEnabled
+        self.composerView.accessibilityElementsHidden = !isComposerEnabled
+
+        self.attachButton.isEnabled = isComposerEnabled
+        self.sendButton.isEnabled = isComposerEnabled
+        self.inputTextView.isEditable = isComposerEnabled
+        self.inputTextView.isSelectable = isComposerEnabled
+        self.inputTextView.isUserInteractionEnabled = isComposerEnabled
+        if !isComposerEnabled, self.inputTextView.isFirstResponder {
+            self.inputTextView.resignFirstResponder()
+        }
         
         self.inputTextView.accessibilityLabel = state.strings.Conversation_InputTextPlaceholder
         self.inputTextView.accessibilityHint = nil
@@ -451,6 +468,15 @@ public final class ChatVoiceOverOverlayView: UIView {
     }
     
     private func updateRecordButton(state: ChatPresentationInterfaceState) {
+        guard self.isComposerEnabled else {
+            self.recordButton.setTitle("●", for: .normal)
+            self.recordButton.accessibilityLabel = state.strings.VoiceOver_Chat_RecordModeVoiceMessage
+            self.recordButton.accessibilityHint = nil
+            self.recordButton.isEnabled = false
+            self.recordButton.accessibilityTraits = [.button, .notEnabled]
+            return
+        }
+
         let isRecording = state.inputTextPanelState.mediaRecordingState != nil
         
         if isRecording {
@@ -735,7 +761,6 @@ public final class ChatVoiceOverOverlayView: UIView {
         }
         if !decelerate {
             self.applyPendingEntriesIfPossible()
-            self.maybeTriggerLoadEarlierIfNeeded()
             self.maybeEnsureAtLatestIfNeeded()
         }
     }
@@ -745,7 +770,6 @@ public final class ChatVoiceOverOverlayView: UIView {
             return
         }
         self.applyPendingEntriesIfPossible()
-        self.maybeTriggerLoadEarlierIfNeeded()
         self.maybeEnsureAtLatestIfNeeded()
     }
     
@@ -754,7 +778,6 @@ public final class ChatVoiceOverOverlayView: UIView {
             return
         }
         self.applyPendingEntriesIfPossible()
-        self.maybeTriggerLoadEarlierIfNeeded()
         self.maybeEnsureAtLatestIfNeeded()
     }
     
@@ -777,10 +800,16 @@ public final class ChatVoiceOverOverlayView: UIView {
     }
     
     @objc private func attachPressed() {
+        guard self.isComposerEnabled else {
+            return
+        }
         self.actions.openAttachments?()
     }
     
     @objc private func recordPressed() {
+        guard self.isComposerEnabled else {
+            return
+        }
         guard let state = self.interfaceState else {
             return
         }
@@ -792,6 +821,9 @@ public final class ChatVoiceOverOverlayView: UIView {
     }
     
     @objc private func sendPressed() {
+        guard self.isComposerEnabled else {
+            return
+        }
         let text = self.inputTextView.text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else {
             return
@@ -979,33 +1011,8 @@ public final class ChatVoiceOverOverlayView: UIView {
         }
     }
     
-    private func handleAccessibilityScrollBoundary(_ direction: UIAccessibilityScrollDirection) -> Bool {
-        if direction == .down {
-            self.maybeTriggerLoadEarlierIfNeeded()
-            return self.isLoadEarlierInProgress
-        }
-        return false
-    }
-
-    private func maybeTriggerLoadEarlierIfNeeded() {
-        guard self.canLoadEarlierHistory else {
-            return
-        }
-        guard !self.isLoadEarlierInProgress else {
-            return
-        }
-        guard self.isNearTop() else {
-            return
-        }
-        self.triggerLoadEarlierRequest()
-    }
-
     public override func accessibilityScroll(_ direction: UIAccessibilityScrollDirection) -> Bool {
-        let didScroll = self.tableView.accessibilityScroll(direction)
-        if didScroll {
-            return true
-        }
-        return self.handleAccessibilityScrollBoundary(direction)
+        return self.tableView.accessibilityScroll(direction)
     }
 
     private func maybeEnsureAtLatestIfNeeded() {
