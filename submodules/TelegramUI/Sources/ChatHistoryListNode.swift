@@ -3368,26 +3368,16 @@ public final class ChatHistoryListNodeImpl: ListView, ChatHistoryNode, ChatHisto
         guard historyView.originalView.earlierId != nil || historyView.originalView.holeEarlier else {
             return
         }
-        guard !historyView.originalView.isLoadingEarlier else {
-            return
-        }
 
         self.beganDragging?()
         
         let voiceOverHistoryMessageCount = max(historyMessageCount, 128)
         
-        let messageEntries = historyView.filteredEntries.filter { entry in
-            switch entry {
-            case .MessageEntry, .MessageGroupEntry:
-                return true
-            case .UnreadEntry, .ReplyCountEntry, .ChatInfoEntry:
-                return false
-            }
-        }
-        
         let requestedIndex: MessageHistoryAnchorIndex
-        if let oldestMessageEntry = messageEntries.min(by: { $0.index < $1.index }) {
-            requestedIndex = .message(oldestMessageEntry.index)
+        if let earlierId = historyView.originalView.earlierId {
+            requestedIndex = .message(earlierId)
+        } else if let oldestIndex = historyView.originalView.entries.first?.index {
+            requestedIndex = .message(oldestIndex)
         } else {
             requestedIndex = .lowerBound
         }

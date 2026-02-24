@@ -153,11 +153,11 @@ public final class ChatVoiceOverOverlayView: UIView {
     private var isLoadingEarlierHistory = false
     
     private var shouldShowLoadEarlierRow: Bool {
-        return self.canLoadEarlierHistory || self.isLoadingEarlierHistory || self.isWaitingForLoadEarlier
+        return self.canLoadEarlierHistory || self.isWaitingForLoadEarlier
     }
     
     private var isLoadEarlierInProgress: Bool {
-        return self.isLoadingEarlierHistory || self.isWaitingForLoadEarlier
+        return self.isWaitingForLoadEarlier
     }
     
     private var loadEarlierRowOffset: Int {
@@ -793,9 +793,6 @@ public final class ChatVoiceOverOverlayView: UIView {
             if self.refreshControl.isRefreshing, !previousWasWaitingForLoadEarlier {
                 self.refreshControl.endRefreshing()
             }
-            if previousWasNearTop, !previousWasWaitingForLoadEarlier {
-                self.maybeTriggerLoadEarlierIfNeeded()
-            }
             return
         }
 
@@ -847,10 +844,6 @@ public final class ChatVoiceOverOverlayView: UIView {
             self.refreshControl.endRefreshing()
         }
         self.isWaitingForLoadEarlier = false
-        
-        if previousWasNearTop && previousWasWaitingForLoadEarlier && self.isNearTop() {
-            self.maybeTriggerLoadEarlierIfNeeded()
-        }
     }
     
     private func mergeRows(existing: [Row], incoming: [Row]) -> [Row] {
@@ -911,9 +904,6 @@ public final class ChatVoiceOverOverlayView: UIView {
                 self.refreshControl.endRefreshing()
             }
             self.reloadLoadEarlierRow()
-            if self.isNearTop() {
-                self.maybeTriggerLoadEarlierIfNeeded()
-            }
         }
     }
 
