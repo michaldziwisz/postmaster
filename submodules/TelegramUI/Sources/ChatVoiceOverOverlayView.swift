@@ -572,7 +572,9 @@ public final class ChatVoiceOverOverlayView: UIView {
                     }
                     let now = CACurrentMediaTime()
                     let lastRequestAgeMs = Int((now - self.lastLoadEarlierRequestTimestamp) * 1000.0)
-                    let message = "Load earlier debug. waiting \(self.isWaitingForLoadEarlier ? "true" : "false"). canLoadEarlier \(self.canLoadEarlierHistory ? "true" : "false"). isLoadingEarlier \(self.isLoadingEarlierHistory ? "true" : "false"). requestId \(self.loadEarlierRequestId). noProgressCount \(self.loadEarlierNoProgressCount). lastRequestAge \(lastRequestAgeMs) ms."
+                    let beforeOldestId = self.loadEarlierOldestIndexBeforeRequest?.id.id
+                    let currentOldestId = self.rows.first?.index.id.id
+                    let message = "Load earlier debug. waiting \(self.isWaitingForLoadEarlier ? "true" : "false"). canLoadEarlier \(self.canLoadEarlierHistory ? "true" : "false"). isLoadingEarlier \(self.isLoadingEarlierHistory ? "true" : "false"). rows \(self.rows.count). beforeOldestId \(String(describing: beforeOldestId)). currentOldestId \(String(describing: currentOldestId)). requestId \(self.loadEarlierRequestId). noProgressCount \(self.loadEarlierNoProgressCount). lastRequestAge \(lastRequestAgeMs) ms."
                     UIAccessibility.post(notification: .announcement, argument: message)
                     return true
                 })

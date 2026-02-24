@@ -3249,7 +3249,7 @@ public final class ChatHistoryListNodeImpl: ListView, ChatHistoryNode, ChatHisto
             return VisibleMessageRange(lowerBound: range.lowerBound, upperBound: range.upperBound)
         })
         
-        if let loaded = displayedRange.visibleRange, let firstEntry = historyView.filteredEntries.first, let lastEntry = historyView.filteredEntries.last {
+        if self.voiceOverHistoryEntriesUpdated == nil, let loaded = displayedRange.visibleRange, let firstEntry = historyView.filteredEntries.first, let lastEntry = historyView.filteredEntries.last {
             var mathesFirst = false
             if loaded.firstIndex <= 5 {
                 var firstHasGroups = false
@@ -3373,6 +3373,25 @@ public final class ChatHistoryListNodeImpl: ListView, ChatHistoryNode, ChatHisto
         }
     }
 
+    static func voiceOverRequestedIndexForLoadEarlier(
+        earlierId: MessageIndex?,
+        holeEarlier: Bool,
+        oldestIndex: MessageIndex?
+    ) -> MessageHistoryAnchorIndex {
+        if let earlierId {
+            return .message(earlierId)
+        } else if holeEarlier, let oldestIndex {
+            // If we're blocked by a history hole (older messages are not yet in the local database),
+            // anchoring on the oldest loaded message can keep sampling the same hole without progress.
+            // Move the anchor one step into the hole to deterministically trigger hole fetching.
+            return .message(oldestIndex.peerLocalPredecessor())
+        } else if let oldestIndex {
+            return .message(oldestIndex)
+        } else {
+            return .lowerBound
+        }
+    }
+
     public func voiceOverRequestLoadEarlier() {
         guard let historyView = self.historyView else {
             return
@@ -3385,14 +3404,11 @@ public final class ChatHistoryListNodeImpl: ListView, ChatHistoryNode, ChatHisto
         
         let voiceOverHistoryMessageCount = max(historyMessageCount, 128)
         
-        let requestedIndex: MessageHistoryAnchorIndex
-        if let earlierId = historyView.originalView.earlierId {
-            requestedIndex = .message(earlierId)
-        } else if let oldestIndex = historyView.originalView.entries.first?.index {
-            requestedIndex = .message(oldestIndex)
-        } else {
-            requestedIndex = .lowerBound
-        }
+        let requestedIndex = Self.voiceOverRequestedIndexForLoadEarlier(
+            earlierId: historyView.originalView.earlierId,
+            holeEarlier: historyView.originalView.holeEarlier,
+            oldestIndex: historyView.originalView.entries.first?.index
+        )
 
         let locationInput: ChatHistoryLocation = .Navigation(index: requestedIndex, anchorIndex: requestedIndex, count: voiceOverHistoryMessageCount, highlight: false)
         self.voiceOverFillHoleOverride = VoiceOverFillHoleOverride(requestedIndex: requestedIndex, count: voiceOverHistoryMessageCount)

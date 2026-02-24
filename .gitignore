@@ -38,6 +38,7 @@ AppBundle.xcworkspace/*
 .idea
 */.idea/*
 submodules/MtProtoKit/TON/macOS/lib/libtonlibjson.0.5.dylib
+.venv-vet/
 submodules/MtProtoKit/TON/macOS/lib/libtonlibjson.dylib
 submodules/MtProtoKit/TON/macOS/lib/cmake/Tonlib/TonlibConfig.cmake
 submodules/MtProtoKit/TON/macOS/lib/cmake/Tonlib/TonlibConfigVersion.cmake
