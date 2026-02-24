@@ -103,7 +103,7 @@ jobs:
           echo "BUILD_NUMBER=$(echo $BUILD_NUMBER)" >> $GITHUB_ENV
           echo "APP_VERSION=$(echo $APP_VERSION)" >> $GITHUB_ENV
 
-          BUILD_CONFIGURATION="${{ inputs.build_configuration }}"
+          BUILD_CONFIGURATION="${{ github.event.inputs.build_configuration }}"
           BUILD_CONFIGURATION="${BUILD_CONFIGURATION:-debug_arm64}"
           echo "BUILD_CONFIGURATION=$(echo $BUILD_CONFIGURATION)" >> $GITHUB_ENV
 
@@ -113,7 +113,7 @@ jobs:
 
           python3 build-system/Make/ImportCertificates.py --path build-system/fake-codesigning/certs
 
-          RUN_TESTS="${{ inputs.run_tests }}"
+          RUN_TESTS="${{ github.event.inputs.run_tests }}"
           TESTS_EXIT_CODE=0
           if [ "$RUN_TESTS" = "true" ]; then
             BAZEL_TEST_OUTPUT=streamed DEBUG_XCTESTRUNNER=1 python3 -u build-system/Make/Make.py \
@@ -125,7 +125,7 @@ jobs:
               --codesigningInformationPath=build-system/fake-codesigning || TESTS_EXIT_CODE=$?
             echo "Tests finished with exit code $TESTS_EXIT_CODE"
           else
-            echo "Skipping tests (inputs.run_tests=$RUN_TESTS)"
+            echo "Skipping tests (run_tests=$RUN_TESTS)"
           fi
           echo "RUN_TESTS=$(echo $RUN_TESTS)" >> $GITHUB_ENV
           echo "TESTS_EXIT_CODE=$(echo $TESTS_EXIT_CODE)" >> $GITHUB_ENV
