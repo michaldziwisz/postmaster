@@ -196,8 +196,14 @@ public final class ChatVoiceOverOverlayView: UIView {
         var messageId: MessageId?
         var offset: CGFloat
     }
+    
+    private enum LoadEarlierInitiationFocus {
+        case loadEarlierRow
+        case message(ScrollAnchor)
+    }
     private var loadEarlierScrollAnchor: ScrollAnchor?
     private var lastUserScrollAnchor: ScrollAnchor?
+    private var loadEarlierInitiationFocus: LoadEarlierInitiationFocus?
 
     private var isComposerEnabled: Bool = true
     
@@ -743,6 +749,7 @@ public final class ChatVoiceOverOverlayView: UIView {
         tableView.deselectRow(at: indexPath, animated: true)
         
         if self.shouldShowLoadEarlierRow, indexPath.row == 0 {
+            self.loadEarlierInitiationFocus = .loadEarlierRow
             self.triggerLoadEarlierRequest()
             return
         }
@@ -872,6 +879,9 @@ public final class ChatVoiceOverOverlayView: UIView {
         guard self.refreshControl.isRefreshing else {
             return
         }
+        if UIAccessibility.isVoiceOverRunning, self.loadEarlierInitiationFocus == nil, let anchor = self.focusedMessageScrollAnchor() ?? self.currentScrollAnchor() {
+            self.loadEarlierInitiationFocus = .message(anchor)
+        }
         self.triggerLoadEarlierRequest()
     }
 
@@ -903,6 +913,7 @@ public final class ChatVoiceOverOverlayView: UIView {
         let previousWasNearBottom = self.isNearBottom()
         let previousWasWaitingForLoadEarlier = self.isWaitingForLoadEarlier
         let previousWasLoadEarlierInProgress = previousWasWaitingForLoadEarlier || self.isLoadingEarlierHistory
+        let loadEarlierInitiationFocus = previousWasLoadEarlierInProgress ? self.loadEarlierInitiationFocus : nil
         let focusedNonTableElementBeforeUpdate = self.focusedNonTableOverlayView()
         let focusedCellIndexPathBeforeUpdate = self.focusedTableViewIndexPath()
         let focusedMessageAnchorBeforeUpdate = self.focusedMessageScrollAnchor()
@@ -1025,36 +1036,59 @@ public final class ChatVoiceOverOverlayView: UIView {
             let shouldRestoreFocusToMessages = focusedMessageAnchorBeforeUpdate != nil
             let shouldRestoreFocusToLoadEarlierRow = (focusedMessageAnchorBeforeUpdate == nil) && (focusedCellIndexPathBeforeUpdate?.row == 0) && self.shouldShowLoadEarlierRow
             
-            if shouldRestoreFocusToLoadEarlierRow || shouldRestoreFocusToMessages {
-                let focusTargetIndexPath: IndexPath? = {
-                    if shouldRestoreFocusToMessages, let focusedMessageAnchorBeforeUpdate, let index = self.indexOfRow(for: focusedMessageAnchorBeforeUpdate) {
-                        return IndexPath(row: index + self.loadEarlierRowOffset, section: 0)
+            let shouldForceRestoreFocusForLoadEarlier = previousWasLoadEarlierInProgress
+            let focusTargetIndexPath: IndexPath? = {
+                if shouldRestoreFocusToMessages, let focusedMessageAnchorBeforeUpdate, let index = self.indexOfRow(for: focusedMessageAnchorBeforeUpdate) {
+                    return IndexPath(row: index + self.loadEarlierRowOffset, section: 0)
+                }
+                if shouldRestoreFocusToLoadEarlierRow {
+                    return IndexPath(row: 0, section: 0)
+                }
+                if let loadEarlierInitiationFocus {
+                    switch loadEarlierInitiationFocus {
+                    case .loadEarlierRow:
+                        if self.shouldShowLoadEarlierRow {
+                            return IndexPath(row: 0, section: 0)
+                        } else {
+                            return nil
+                        }
+                    case let .message(anchor):
+                        if let index = self.indexOfRow(for: anchor) {
+                            return IndexPath(row: index + self.loadEarlierRowOffset, section: 0)
+                        } else {
+                            return nil
+                        }
                     }
-                    if shouldRestoreFocusToLoadEarlierRow {
-                        return IndexPath(row: 0, section: 0)
-                    }
-                    if didLoadEarlierProgress {
+                }
+                if shouldForceRestoreFocusForLoadEarlier {
+                    if let loadEarlierRestoredIndexPath {
                         return loadEarlierRestoredIndexPath
                     }
-                    return nil
-                }()
-                
-                if let focusTargetIndexPath {
-                    DispatchQueue.main.async { [weak self] in
-                        guard let self else {
-                            return
-                        }
-                        let focusTarget: Any? = {
-                            if let cell = self.tableView.cellForRow(at: focusTargetIndexPath) {
-                                return cell
-                            }
-                            if shouldRestoreFocusToLoadEarlierRow, let loadEarlierRestoredIndexPath, let cell = self.tableView.cellForRow(at: loadEarlierRestoredIndexPath) {
-                                return cell
-                            }
-                            return self.tableView
-                        }()
-                        UIAccessibility.post(notification: .layoutChanged, argument: focusTarget)
+                    if let preservedScrollAnchor, let index = self.indexOfRow(for: preservedScrollAnchor) {
+                        return IndexPath(row: index + self.loadEarlierRowOffset, section: 0)
                     }
+                    if self.shouldShowLoadEarlierRow, !self.rows.isEmpty {
+                        return IndexPath(row: self.loadEarlierRowOffset, section: 0)
+                    }
+                }
+                return nil
+            }()
+                
+            if let focusTargetIndexPath {
+                DispatchQueue.main.async { [weak self] in
+                    guard let self else {
+                        return
+                    }
+                    let focusTarget: Any? = {
+                        if let cell = self.tableView.cellForRow(at: focusTargetIndexPath) {
+                            return cell
+                        }
+                        if let loadEarlierRestoredIndexPath, let cell = self.tableView.cellForRow(at: loadEarlierRestoredIndexPath) {
+                            return cell
+                        }
+                        return self.tableView
+                    }()
+                    UIAccessibility.post(notification: .layoutChanged, argument: focusTarget)
                 }
             } else if let focusedNonTableElementBeforeUpdate {
                 DispatchQueue.main.async { [weak focusedNonTableElementBeforeUpdate] in
@@ -1064,6 +1098,10 @@ public final class ChatVoiceOverOverlayView: UIView {
                     UIAccessibility.post(notification: .layoutChanged, argument: focusedNonTableElementBeforeUpdate)
                 }
             }
+        }
+        
+        if didLoadEarlierProgress {
+            self.loadEarlierInitiationFocus = nil
         }
     }
 
@@ -1220,8 +1258,21 @@ public final class ChatVoiceOverOverlayView: UIView {
             }
             return
         }
+        
+        if UIAccessibility.isVoiceOverRunning, self.loadEarlierInitiationFocus == nil {
+            if self.shouldShowLoadEarlierRow, self.focusedTableViewIndexPath()?.row == 0 {
+                self.loadEarlierInitiationFocus = .loadEarlierRow
+            } else if let anchor = self.focusedMessageScrollAnchor() ?? self.currentScrollAnchor() {
+                self.loadEarlierInitiationFocus = .message(anchor)
+            }
+        }
+
         self.forceScrollToBottomOnNextApply = false
-        self.loadEarlierScrollAnchor = self.currentScrollAnchor()
+        if case let .message(anchor)? = self.loadEarlierInitiationFocus {
+            self.loadEarlierScrollAnchor = anchor
+        } else {
+            self.loadEarlierScrollAnchor = self.currentScrollAnchor()
+        }
         self.loadEarlierOldestIndexBeforeRequest = self.rows.first?.index
         self.loadEarlierRequestId += 1
         let requestId = self.loadEarlierRequestId
@@ -1238,6 +1289,7 @@ public final class ChatVoiceOverOverlayView: UIView {
                 return
             }
             self.endWaitingForLoadEarlierIfNeeded()
+            self.loadEarlierInitiationFocus = nil
             self.loadEarlierNoProgressCount += 1
             if self.refreshControl.isRefreshing {
                 self.refreshControl.endRefreshing()
