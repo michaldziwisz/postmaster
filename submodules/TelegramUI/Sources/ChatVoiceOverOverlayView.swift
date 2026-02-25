@@ -444,7 +444,11 @@ public final class ChatVoiceOverOverlayView: UIView {
         
         UIView.performWithoutAnimation {
             if !didReceiveChange, self.shouldShowLoadEarlierRow, self.tableView.numberOfRows(inSection: 0) > 0 {
-                self.tableView.reloadRows(at: [IndexPath(row: 0, section: 0)], with: .none)
+                if let cell = self.tableView.cellForRow(at: IndexPath(row: 0, section: 0)) as? ChatVoiceOverOverlayCell {
+                    self.configureLoadEarlierCell(cell)
+                } else {
+                    self.tableView.reloadRows(at: [IndexPath(row: 0, section: 0)], with: .none)
+                }
             } else {
                 self.tableView.reloadData()
             }
@@ -588,44 +592,9 @@ public final class ChatVoiceOverOverlayView: UIView {
         cell.accessibilityCustomActions = nil
 
         if self.shouldShowLoadEarlierRow, indexPath.row == 0 {
-            (cell as? ChatVoiceOverOverlayCell)?.onDidBecomeFocused = { [weak self] in
-                self?.captureLastUserScrollAnchor()
+            if let cell = cell as? ChatVoiceOverOverlayCell {
+                self.configureLoadEarlierCell(cell)
             }
-            let bundle = getAppBundle()
-            
-            let title: String
-            let traits: UIAccessibilityTraits
-            if self.isLoadEarlierInProgress {
-                let titleKey = "VoiceOver.Chat.LoadEarlier.Loading"
-                let titleFallback = "Loading older messages"
-                title = bundle.localizedString(forKey: titleKey, value: titleFallback, table: nil)
-                traits = [.button, .notEnabled]
-                cell.selectionStyle = .none
-            } else if self.canLoadEarlierHistory {
-                let titleKey = "VoiceOver.Chat.LoadEarlier"
-                let titleFallback = "Load older messages"
-                title = bundle.localizedString(forKey: titleKey, value: titleFallback, table: nil)
-                traits = [.button]
-                cell.selectionStyle = .default
-            } else {
-                let titleKey = "VoiceOver.Chat.LoadEarlier.None"
-                let titleFallback = "No older messages"
-                title = bundle.localizedString(forKey: titleKey, value: titleFallback, table: nil)
-                traits = [.staticText]
-                cell.selectionStyle = .none
-            }
-
-            cell.textLabel?.text = title
-            cell.detailTextLabel?.text = nil
-            
-            if let state = self.interfaceState {
-                cell.backgroundColor = state.theme.list.plainBackgroundColor
-                cell.textLabel?.textColor = (traits.contains(.button) ? state.theme.list.itemAccentColor : state.theme.list.itemSecondaryTextColor)
-            }
-            
-            cell.accessibilityLabel = title
-            cell.accessibilityHint = nil
-            cell.accessibilityTraits = traits
 
             #if DEBUG
             let debugTitle = "Speak debug state"
@@ -720,6 +689,47 @@ public final class ChatVoiceOverOverlayView: UIView {
         }
         
         return cell
+    }
+
+    private func configureLoadEarlierCell(_ cell: ChatVoiceOverOverlayCell) {
+        cell.onDidBecomeFocused = { [weak self] in
+            self?.captureLastUserScrollAnchor()
+        }
+
+        let bundle = getAppBundle()
+        let title: String
+        let traits: UIAccessibilityTraits
+        if self.isLoadEarlierInProgress {
+            let titleKey = "VoiceOver.Chat.LoadEarlier.Loading"
+            let titleFallback = "Loading older messages"
+            title = bundle.localizedString(forKey: titleKey, value: titleFallback, table: nil)
+            traits = [.button, .notEnabled]
+            cell.selectionStyle = .none
+        } else if self.canLoadEarlierHistory {
+            let titleKey = "VoiceOver.Chat.LoadEarlier"
+            let titleFallback = "Load older messages"
+            title = bundle.localizedString(forKey: titleKey, value: titleFallback, table: nil)
+            traits = [.button]
+            cell.selectionStyle = .default
+        } else {
+            let titleKey = "VoiceOver.Chat.LoadEarlier.None"
+            let titleFallback = "No older messages"
+            title = bundle.localizedString(forKey: titleKey, value: titleFallback, table: nil)
+            traits = [.staticText]
+            cell.selectionStyle = .none
+        }
+
+        cell.textLabel?.text = title
+        cell.detailTextLabel?.text = nil
+
+        if let state = self.interfaceState {
+            cell.backgroundColor = state.theme.list.plainBackgroundColor
+            cell.textLabel?.textColor = (traits.contains(.button) ? state.theme.list.itemAccentColor : state.theme.list.itemSecondaryTextColor)
+        }
+
+        cell.accessibilityLabel = title
+        cell.accessibilityHint = nil
+        cell.accessibilityTraits = traits
     }
     
     // MARK: - UITableViewDelegate
@@ -950,6 +960,22 @@ public final class ChatVoiceOverOverlayView: UIView {
         self.loadEarlierNoProgressCount = 0
         let previousContentOffsetY = self.tableView.contentOffset.y
         let previousContentSizeHeight = self.tableView.contentSize.height
+        let insertedCount = newStableIds.count - previousStableIds.count
+        let tableRowOffset = self.loadEarlierRowOffset
+        let canApplyPrependInsertion: Bool = !previousStableIds.isEmpty && insertedCount > 0 && Array(newStableIds.suffix(previousStableIds.count)) == previousStableIds
+        let preservedTopVisibleIndexPathBeforeUpdate: IndexPath? = {
+            guard canApplyPrependInsertion else {
+                return nil
+            }
+            guard let visibleIndexPaths = self.tableView.indexPathsForVisibleRows?.sorted() else {
+                return nil
+            }
+            return visibleIndexPaths.first(where: { $0.row >= tableRowOffset })
+        }()
+        let preservedTopVisibleOffsetBeforeUpdate: CGFloat? = preservedTopVisibleIndexPathBeforeUpdate.flatMap { indexPath in
+            let rect = self.tableView.rectForRow(at: indexPath)
+            return rect.minY - previousContentOffsetY
+        }
         let preservedScrollAnchor: ScrollAnchor? = {
             if previousWasLoadEarlierInProgress {
                 return loadEarlierAnchor
@@ -972,51 +998,82 @@ public final class ChatVoiceOverOverlayView: UIView {
 
         self.rows = newRows
 
-        UIView.performWithoutAnimation {
-            self.tableView.reloadData()
-            self.tableView.layoutIfNeeded()
+        var didReloadTable = true
+        if canApplyPrependInsertion {
+            didReloadTable = false
+            self.forceScrollToBottomOnNextApply = false
+            
+            let insertedIndexPaths = (0 ..< insertedCount).map { IndexPath(row: tableRowOffset + $0, section: 0) }
+            UIView.performWithoutAnimation {
+                self.tableView.beginUpdates()
+                self.tableView.insertRows(at: insertedIndexPaths, with: .none)
+                self.tableView.endUpdates()
+                self.tableView.layoutIfNeeded()
+            }
+            
+            if let preservedTopVisibleIndexPathBeforeUpdate, let preservedTopVisibleOffsetBeforeUpdate {
+                let targetIndexPath = IndexPath(row: preservedTopVisibleIndexPathBeforeUpdate.row + insertedCount, section: 0)
+                if targetIndexPath.row < self.tableView.numberOfRows(inSection: 0) {
+                    let rect = self.tableView.rectForRow(at: targetIndexPath)
+                    let targetOffset = rect.minY - preservedTopVisibleOffsetBeforeUpdate
+                    self.tableView.setContentOffset(CGPoint(x: 0.0, y: self.clampContentOffsetY(targetOffset)), animated: false)
+                } else {
+                    let delta = self.tableView.contentSize.height - previousContentSizeHeight
+                    self.tableView.setContentOffset(CGPoint(x: 0.0, y: self.clampContentOffsetY(previousContentOffsetY + delta)), animated: false)
+                }
+            } else {
+                let delta = self.tableView.contentSize.height - previousContentSizeHeight
+                self.tableView.setContentOffset(CGPoint(x: 0.0, y: self.clampContentOffsetY(previousContentOffsetY + delta)), animated: false)
+            }
+        } else {
+            UIView.performWithoutAnimation {
+                self.tableView.reloadData()
+                self.tableView.layoutIfNeeded()
+            }
         }
-
-        if self.rows.isEmpty || !self.didInitialScrollToBottom {
-            if !self.didInitialScrollToBottom {
-                self.didInitialScrollToBottom = true
+        
+        if didReloadTable {
+            if self.rows.isEmpty || !self.didInitialScrollToBottom {
+                if !self.didInitialScrollToBottom {
+                    self.didInitialScrollToBottom = true
+                    self.scrollToBottom(animated: false)
+                    self.focusLastMessageIfPossible()
+                }
+            } else if self.forceScrollToBottomOnNextApply {
+                self.forceScrollToBottomOnNextApply = false
                 self.scrollToBottom(animated: false)
                 self.focusLastMessageIfPossible()
-            }
-        } else if self.forceScrollToBottomOnNextApply {
-            self.forceScrollToBottomOnNextApply = false
-            self.scrollToBottom(animated: false)
-            self.focusLastMessageIfPossible()
-        } else if previousWasLoadEarlierInProgress {
-            if let preservedScrollAnchor {
-                let anchoredIndex: Int? = self.indexOfRow(for: preservedScrollAnchor)
-                if let anchoredIndex {
-                    let indexPath = IndexPath(row: anchoredIndex + self.loadEarlierRowOffset, section: 0)
-                    self.restoreScrollPosition(to: preservedScrollAnchor, at: indexPath)
-                    loadEarlierRestoredIndexPath = indexPath
+            } else if previousWasLoadEarlierInProgress {
+                if let preservedScrollAnchor {
+                    let anchoredIndex: Int? = self.indexOfRow(for: preservedScrollAnchor)
+                    if let anchoredIndex {
+                        let indexPath = IndexPath(row: anchoredIndex + self.loadEarlierRowOffset, section: 0)
+                        self.restoreScrollPosition(to: preservedScrollAnchor, at: indexPath)
+                        loadEarlierRestoredIndexPath = indexPath
+                    } else if didLoadEarlierProgressPreview {
+                        let delta = self.tableView.contentSize.height - previousContentSizeHeight
+                        self.tableView.setContentOffset(CGPoint(x: 0.0, y: self.clampContentOffsetY(previousContentOffsetY + delta)), animated: false)
+                    } else {
+                        self.tableView.setContentOffset(CGPoint(x: 0.0, y: self.clampContentOffsetY(previousContentOffsetY)), animated: false)
+                    }
                 } else if didLoadEarlierProgressPreview {
                     let delta = self.tableView.contentSize.height - previousContentSizeHeight
                     self.tableView.setContentOffset(CGPoint(x: 0.0, y: self.clampContentOffsetY(previousContentOffsetY + delta)), animated: false)
                 } else {
                     self.tableView.setContentOffset(CGPoint(x: 0.0, y: self.clampContentOffsetY(previousContentOffsetY)), animated: false)
                 }
-            } else if didLoadEarlierProgressPreview {
-                let delta = self.tableView.contentSize.height - previousContentSizeHeight
-                self.tableView.setContentOffset(CGPoint(x: 0.0, y: self.clampContentOffsetY(previousContentOffsetY + delta)), animated: false)
-            } else {
+            } else if previousWasNearBottom {
+                self.scrollToBottom(animated: false)
+            } else if let preservedScrollAnchor {
+                if let anchoredIndex = self.indexOfRow(for: preservedScrollAnchor) {
+                    let indexPath = IndexPath(row: anchoredIndex + self.loadEarlierRowOffset, section: 0)
+                    self.restoreScrollPosition(to: preservedScrollAnchor, at: indexPath)
+                } else {
+                    self.tableView.setContentOffset(CGPoint(x: 0.0, y: self.clampContentOffsetY(previousContentOffsetY)), animated: false)
+                }
+            } else if !previousWasNearBottom {
                 self.tableView.setContentOffset(CGPoint(x: 0.0, y: self.clampContentOffsetY(previousContentOffsetY)), animated: false)
             }
-        } else if previousWasNearBottom {
-            self.scrollToBottom(animated: false)
-        } else if let preservedScrollAnchor {
-            if let anchoredIndex = self.indexOfRow(for: preservedScrollAnchor) {
-                let indexPath = IndexPath(row: anchoredIndex + self.loadEarlierRowOffset, section: 0)
-                self.restoreScrollPosition(to: preservedScrollAnchor, at: indexPath)
-            } else {
-                self.tableView.setContentOffset(CGPoint(x: 0.0, y: self.clampContentOffsetY(previousContentOffsetY)), animated: false)
-            }
-        } else if !previousWasNearBottom {
-            self.tableView.setContentOffset(CGPoint(x: 0.0, y: self.clampContentOffsetY(previousContentOffsetY)), animated: false)
         }
 
         if self.refreshControl.isRefreshing {
@@ -1033,62 +1090,71 @@ public final class ChatVoiceOverOverlayView: UIView {
         }
         
         if UIAccessibility.isVoiceOverRunning {
-            let shouldRestoreFocusToMessages = focusedMessageAnchorBeforeUpdate != nil
-            let shouldRestoreFocusToLoadEarlierRow = (focusedMessageAnchorBeforeUpdate == nil) && (focusedCellIndexPathBeforeUpdate?.row == 0) && self.shouldShowLoadEarlierRow
-            
-            let shouldForceRestoreFocusForLoadEarlier = previousWasLoadEarlierInProgress
-            let focusTargetIndexPath: IndexPath? = {
-                if shouldRestoreFocusToMessages, let focusedMessageAnchorBeforeUpdate, let index = self.indexOfRow(for: focusedMessageAnchorBeforeUpdate) {
-                    return IndexPath(row: index + self.loadEarlierRowOffset, section: 0)
-                }
-                if shouldRestoreFocusToLoadEarlierRow {
-                    return IndexPath(row: 0, section: 0)
-                }
-                if let loadEarlierInitiationFocus {
-                    switch loadEarlierInitiationFocus {
-                    case .loadEarlierRow:
-                        if self.shouldShowLoadEarlierRow {
-                            return IndexPath(row: 0, section: 0)
-                        } else {
-                            return nil
-                        }
-                    case let .message(anchor):
-                        if let index = self.indexOfRow(for: anchor) {
-                            return IndexPath(row: index + self.loadEarlierRowOffset, section: 0)
-                        } else {
-                            return nil
-                        }
-                    }
-                }
-                if shouldForceRestoreFocusForLoadEarlier {
-                    if let loadEarlierRestoredIndexPath {
-                        return loadEarlierRestoredIndexPath
-                    }
-                    if let preservedScrollAnchor, let index = self.indexOfRow(for: preservedScrollAnchor) {
+            if didReloadTable {
+                let shouldRestoreFocusToMessages = focusedMessageAnchorBeforeUpdate != nil
+                let shouldRestoreFocusToLoadEarlierRow = (focusedMessageAnchorBeforeUpdate == nil) && (focusedCellIndexPathBeforeUpdate?.row == 0) && self.shouldShowLoadEarlierRow
+                
+                let shouldForceRestoreFocusForLoadEarlier = previousWasLoadEarlierInProgress
+                let focusTargetIndexPath: IndexPath? = {
+                    if shouldRestoreFocusToMessages, let focusedMessageAnchorBeforeUpdate, let index = self.indexOfRow(for: focusedMessageAnchorBeforeUpdate) {
                         return IndexPath(row: index + self.loadEarlierRowOffset, section: 0)
                     }
-                    if self.shouldShowLoadEarlierRow, !self.rows.isEmpty {
-                        return IndexPath(row: self.loadEarlierRowOffset, section: 0)
+                    if shouldRestoreFocusToLoadEarlierRow {
+                        return IndexPath(row: 0, section: 0)
                     }
-                }
-                return nil
-            }()
-                
-            if let focusTargetIndexPath {
-                DispatchQueue.main.async { [weak self] in
-                    guard let self else {
-                        return
+                    if let loadEarlierInitiationFocus {
+                        switch loadEarlierInitiationFocus {
+                        case .loadEarlierRow:
+                            if self.shouldShowLoadEarlierRow {
+                                return IndexPath(row: 0, section: 0)
+                            } else {
+                                return nil
+                            }
+                        case let .message(anchor):
+                            if let index = self.indexOfRow(for: anchor) {
+                                return IndexPath(row: index + self.loadEarlierRowOffset, section: 0)
+                            } else {
+                                return nil
+                            }
+                        }
                     }
-                    let focusTarget: Any? = {
-                        if let cell = self.tableView.cellForRow(at: focusTargetIndexPath) {
-                            return cell
+                    if shouldForceRestoreFocusForLoadEarlier {
+                        if let loadEarlierRestoredIndexPath {
+                            return loadEarlierRestoredIndexPath
                         }
-                        if let loadEarlierRestoredIndexPath, let cell = self.tableView.cellForRow(at: loadEarlierRestoredIndexPath) {
-                            return cell
+                        if let preservedScrollAnchor, let index = self.indexOfRow(for: preservedScrollAnchor) {
+                            return IndexPath(row: index + self.loadEarlierRowOffset, section: 0)
                         }
-                        return self.tableView
-                    }()
-                    UIAccessibility.post(notification: .layoutChanged, argument: focusTarget)
+                        if self.shouldShowLoadEarlierRow, !self.rows.isEmpty {
+                            return IndexPath(row: self.loadEarlierRowOffset, section: 0)
+                        }
+                    }
+                    return nil
+                }()
+                    
+                if let focusTargetIndexPath {
+                    DispatchQueue.main.async { [weak self] in
+                        guard let self else {
+                            return
+                        }
+                        let focusTarget: Any? = {
+                            if let cell = self.tableView.cellForRow(at: focusTargetIndexPath) {
+                                return cell
+                            }
+                            if let loadEarlierRestoredIndexPath, let cell = self.tableView.cellForRow(at: loadEarlierRestoredIndexPath) {
+                                return cell
+                            }
+                            return self.tableView
+                        }()
+                        UIAccessibility.post(notification: .layoutChanged, argument: focusTarget)
+                    }
+                } else if let focusedNonTableElementBeforeUpdate {
+                    DispatchQueue.main.async { [weak focusedNonTableElementBeforeUpdate] in
+                        guard let focusedNonTableElementBeforeUpdate else {
+                            return
+                        }
+                        UIAccessibility.post(notification: .layoutChanged, argument: focusedNonTableElementBeforeUpdate)
+                    }
                 }
             } else if let focusedNonTableElementBeforeUpdate {
                 DispatchQueue.main.async { [weak focusedNonTableElementBeforeUpdate] in
@@ -1301,7 +1367,11 @@ public final class ChatVoiceOverOverlayView: UIView {
     private func reloadLoadEarlierRow() {
         UIView.performWithoutAnimation {
             if self.shouldShowLoadEarlierRow, self.tableView.numberOfRows(inSection: 0) > 0 {
-                self.tableView.reloadRows(at: [IndexPath(row: 0, section: 0)], with: .none)
+                if let cell = self.tableView.cellForRow(at: IndexPath(row: 0, section: 0)) as? ChatVoiceOverOverlayCell {
+                    self.configureLoadEarlierCell(cell)
+                } else {
+                    self.tableView.reloadRows(at: [IndexPath(row: 0, section: 0)], with: .none)
+                }
             } else {
                 self.tableView.reloadData()
             }
@@ -1314,7 +1384,7 @@ public final class ChatVoiceOverOverlayView: UIView {
     }
 
     private func maybeEnsureAtLatestIfNeeded() {
-        guard !self.isWaitingForLoadEarlier else {
+        guard !self.isLoadEarlierInProgress else {
             return
         }
         guard self.isAtBottom() else {
