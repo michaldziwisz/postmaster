@@ -68,6 +68,8 @@ private final class ChatVoiceOverOverlayTableView: UITableView {
 }
 
 private final class ChatVoiceOverOverlayCell: UITableViewCell {
+    var onDidBecomeFocused: (() -> Void)?
+    
     override func accessibilityScroll(_ direction: UIAccessibilityScrollDirection) -> Bool {
         var current: UIView? = self
         while let view = current {
@@ -77,6 +79,16 @@ private final class ChatVoiceOverOverlayCell: UITableViewCell {
             current = view.superview
         }
         return super.accessibilityScroll(direction)
+    }
+
+    override func accessibilityElementDidBecomeFocused() {
+        super.accessibilityElementDidBecomeFocused()
+        self.onDidBecomeFocused?()
+    }
+    
+    override func prepareForReuse() {
+        super.prepareForReuse()
+        self.onDidBecomeFocused = nil
     }
 }
 
@@ -147,6 +159,7 @@ public final class ChatVoiceOverOverlayView: UIView {
     private let sendButton = UIButton(type: .system)
     
     private var composerBottomConstraint: NSLayoutConstraint?
+    private var composerHeightConstraint: NSLayoutConstraint?
     private var keyboardObservers: [NSObjectProtocol] = []
     
     private var interfaceState: ChatPresentationInterfaceState?
@@ -272,6 +285,8 @@ public final class ChatVoiceOverOverlayView: UIView {
         
         let composerBottom = self.composerView.bottomAnchor.constraint(equalTo: self.safeAreaLayoutGuide.bottomAnchor)
         self.composerBottomConstraint = composerBottom
+        let composerHeight = self.composerView.heightAnchor.constraint(equalToConstant: 64.0)
+        self.composerHeightConstraint = composerHeight
         
         NSLayoutConstraint.activate([
             self.topBarView.topAnchor.constraint(equalTo: self.safeAreaLayoutGuide.topAnchor),
@@ -293,6 +308,7 @@ public final class ChatVoiceOverOverlayView: UIView {
             self.composerView.leadingAnchor.constraint(equalTo: self.leadingAnchor),
             self.composerView.trailingAnchor.constraint(equalTo: self.trailingAnchor),
             composerBottom,
+            composerHeight,
             
             self.attachButton.leadingAnchor.constraint(equalTo: self.composerView.leadingAnchor, constant: 12.0),
             self.attachButton.bottomAnchor.constraint(equalTo: self.composerView.bottomAnchor, constant: -10.0),
@@ -566,6 +582,7 @@ public final class ChatVoiceOverOverlayView: UIView {
         cell.accessibilityCustomActions = nil
 
         if self.shouldShowLoadEarlierRow, indexPath.row == 0 {
+            (cell as? ChatVoiceOverOverlayCell)?.onDidBecomeFocused = nil
             let bundle = getAppBundle()
             
             let title: String
@@ -661,6 +678,10 @@ public final class ChatVoiceOverOverlayView: UIView {
         }
 
         if case let .message(message) = row.kind {
+            (cell as? ChatVoiceOverOverlayCell)?.onDidBecomeFocused = { [weak self] in
+                self?.captureLastUserScrollAnchor()
+            }
+
             var customActions: [UIAccessibilityCustomAction] = []
             
             let moreTitle = state.strings.Conversation_ContextMenuMore
@@ -686,6 +707,8 @@ public final class ChatVoiceOverOverlayView: UIView {
             }
             
             cell.accessibilityCustomActions = customActions
+        } else {
+            (cell as? ChatVoiceOverOverlayCell)?.onDidBecomeFocused = nil
         }
         
         return cell
@@ -877,6 +900,7 @@ public final class ChatVoiceOverOverlayView: UIView {
         
         let previousWasNearBottom = self.isNearBottom()
         let previousWasWaitingForLoadEarlier = self.isWaitingForLoadEarlier
+        let focusedNonTableElementBeforeUpdate = self.focusedNonTableOverlayView()
         let focusedCellIndexPathBeforeUpdate = self.focusedTableViewIndexPath()
         let focusedMessageAnchorBeforeUpdate = self.focusedMessageScrollAnchor()
         let previousRows = self.rows
@@ -891,6 +915,14 @@ public final class ChatVoiceOverOverlayView: UIView {
             self.reloadVisibleRows(excluding: focusedCellIndexPathBeforeUpdate)
             if self.refreshControl.isRefreshing, !previousWasWaitingForLoadEarlier {
                 self.refreshControl.endRefreshing()
+            }
+            if UIAccessibility.isVoiceOverRunning, let focusedNonTableElementBeforeUpdate {
+                DispatchQueue.main.async { [weak focusedNonTableElementBeforeUpdate] in
+                    guard let focusedNonTableElementBeforeUpdate else {
+                        return
+                    }
+                    UIAccessibility.post(notification: .layoutChanged, argument: focusedNonTableElementBeforeUpdate)
+                }
             }
             return
         }
@@ -1012,6 +1044,13 @@ public final class ChatVoiceOverOverlayView: UIView {
                         UIAccessibility.post(notification: .layoutChanged, argument: focusTarget)
                     }
                 }
+            } else if let focusedNonTableElementBeforeUpdate {
+                DispatchQueue.main.async { [weak focusedNonTableElementBeforeUpdate] in
+                    guard let focusedNonTableElementBeforeUpdate else {
+                        return
+                    }
+                    UIAccessibility.post(notification: .layoutChanged, argument: focusedNonTableElementBeforeUpdate)
+                }
             }
         }
     }
@@ -1108,6 +1147,22 @@ public final class ChatVoiceOverOverlayView: UIView {
         let rect = self.tableView.rectForRow(at: indexPath)
         let targetOffset = rect.minY - anchor.offset
         self.tableView.setContentOffset(CGPoint(x: 0.0, y: self.clampContentOffsetY(targetOffset)), animated: false)
+    }
+
+    private func focusedNonTableOverlayView() -> UIView? {
+        guard UIAccessibility.isVoiceOverRunning else {
+            return nil
+        }
+        guard let focusedView = UIAccessibility.focusedElement(using: .notificationVoiceOver) as? UIView else {
+            return nil
+        }
+        guard focusedView.isDescendant(of: self) else {
+            return nil
+        }
+        guard !focusedView.isDescendant(of: self.tableView) else {
+            return nil
+        }
+        return focusedView
     }
     
     private func mergeRows(existing: [Row], incoming: [Row]) -> [Row] {
