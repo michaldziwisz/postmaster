@@ -13,10 +13,6 @@ private final class ChatVoiceOverOverlayTableView: UITableView {
     var onAccessibilityScrollBoundary: ((UIAccessibilityScrollDirection) -> Bool)?
     
     override func accessibilityScroll(_ direction: UIAccessibilityScrollDirection) -> Bool {
-        if super.accessibilityScroll(direction) {
-            return true
-        }
-        
         let normalizedDirection: UIAccessibilityScrollDirection
         switch direction {
         case .next:
@@ -27,8 +23,12 @@ private final class ChatVoiceOverOverlayTableView: UITableView {
             normalizedDirection = direction
         }
 
-        if normalizedDirection != direction, super.accessibilityScroll(normalizedDirection) {
-            return true
+        let previousOffset = self.contentOffset
+        if super.accessibilityScroll(normalizedDirection) {
+            let didMove = abs(self.contentOffset.y - previousOffset.y) >= 0.5 || abs(self.contentOffset.x - previousOffset.x) >= 0.5
+            if didMove {
+                return true
+            }
         }
         if self.performManualAccessibilityScrollIfPossible(direction: normalizedDirection) {
             return true
