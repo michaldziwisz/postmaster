@@ -580,70 +580,81 @@ public final class ChatVoiceOverOverlayView: UIView {
         } else {
             cell = ChatVoiceOverOverlayCell(style: .subtitle, reuseIdentifier: "Cell")
         }
-        
+        if let cell = cell as? ChatVoiceOverOverlayCell {
+            self.configureCell(cell, at: indexPath)
+        }
+        return cell
+    }
+
+    private func configureCell(_ cell: ChatVoiceOverOverlayCell, at indexPath: IndexPath) {
         cell.textLabel?.numberOfLines = 0
         cell.textLabel?.font = UIFont.preferredFont(forTextStyle: .body)
         cell.textLabel?.adjustsFontForContentSizeCategory = true
+        cell.textLabel?.isAccessibilityElement = false
         
         cell.detailTextLabel?.numberOfLines = 0
         cell.detailTextLabel?.font = UIFont.preferredFont(forTextStyle: .caption1)
         cell.detailTextLabel?.adjustsFontForContentSizeCategory = true
+        cell.detailTextLabel?.isAccessibilityElement = false
         
         cell.selectionStyle = .none
         cell.isAccessibilityElement = true
         cell.accessibilityCustomActions = nil
 
         if self.shouldShowLoadEarlierRow, indexPath.row == 0 {
-            if let cell = cell as? ChatVoiceOverOverlayCell {
-                self.configureLoadEarlierCell(cell)
-            }
+            self.configureLoadEarlierCell(cell)
 
             #if DEBUG
             let debugTitle = "Speak debug state"
-            cell.accessibilityCustomActions = [
-                UIAccessibilityCustomAction(name: debugTitle, actionHandler: { [weak self] _ in
-                    guard let self else {
-                        return false
-                    }
-                    let now = CACurrentMediaTime()
-                    let lastRequestAgeMs = Int((now - self.lastLoadEarlierRequestTimestamp) * 1000.0)
-                    let beforeOldestId = self.loadEarlierOldestIndexBeforeRequest?.id.id
-                    let currentOldestId = self.rows.first?.index.id.id
-                    let message = "Load earlier debug. waiting \(self.isWaitingForLoadEarlier ? "true" : "false"). canLoadEarlier \(self.canLoadEarlierHistory ? "true" : "false"). isLoadingEarlier \(self.isLoadingEarlierHistory ? "true" : "false"). rows \(self.rows.count). beforeOldestId \(String(describing: beforeOldestId)). currentOldestId \(String(describing: currentOldestId)). requestId \(self.loadEarlierRequestId). noProgressCount \(self.loadEarlierNoProgressCount). lastRequestAge \(lastRequestAgeMs) ms."
-                    UIAccessibility.post(notification: .announcement, argument: message)
-                    return true
-                })
-            ]
+            var actions = cell.accessibilityCustomActions ?? []
+            actions.append(UIAccessibilityCustomAction(name: debugTitle, actionHandler: { [weak self] _ in
+                guard let self else {
+                    return false
+                }
+                let now = CACurrentMediaTime()
+                let lastRequestAgeMs = Int((now - self.lastLoadEarlierRequestTimestamp) * 1000.0)
+                let beforeOldestId = self.loadEarlierOldestIndexBeforeRequest?.id.id
+                let currentOldestId = self.rows.first?.index.id.id
+                let message = "Load earlier debug. waiting \(self.isWaitingForLoadEarlier ? "true" : "false"). canLoadEarlier \(self.canLoadEarlierHistory ? "true" : "false"). isLoadingEarlier \(self.isLoadingEarlierHistory ? "true" : "false"). rows \(self.rows.count). beforeOldestId \(String(describing: beforeOldestId)). currentOldestId \(String(describing: currentOldestId)). requestId \(self.loadEarlierRequestId). noProgressCount \(self.loadEarlierNoProgressCount). lastRequestAge \(lastRequestAgeMs) ms."
+                UIAccessibility.post(notification: .announcement, argument: message)
+                return true
+            }))
+            cell.accessibilityCustomActions = actions
             #endif
-            
-            return cell
+
+            return
         }
-        
+
         let rowIndex = indexPath.row - self.loadEarlierRowOffset
         guard rowIndex >= 0, rowIndex < self.rows.count else {
             cell.textLabel?.text = ""
             cell.detailTextLabel?.text = nil
             cell.accessibilityLabel = ""
+            cell.accessibilityHint = nil
             cell.accessibilityTraits = [.staticText]
-            return cell
+            cell.onDidBecomeFocused = nil
+            return
         }
-        
+
         guard let state = self.interfaceState else {
             cell.textLabel?.text = ""
             cell.detailTextLabel?.text = nil
             cell.accessibilityLabel = ""
+            cell.accessibilityHint = nil
             cell.accessibilityTraits = [.staticText]
-            return cell
+            cell.onDidBecomeFocused = nil
+            return
         }
-        
+
         let row = self.rows[rowIndex]
         let resolved = self.resolveRow(row, state: state)
-        
+
+        cell.backgroundColor = state.theme.list.plainBackgroundColor
         cell.textLabel?.text = resolved.title
         cell.textLabel?.textColor = state.theme.list.itemPrimaryTextColor
         cell.detailTextLabel?.text = resolved.subtitle
         cell.detailTextLabel?.textColor = state.theme.list.itemSecondaryTextColor
-        
+
         cell.accessibilityLabel = resolved.accessibilityLabel
         cell.accessibilityHint = resolved.hint
         var traits = resolved.traits
@@ -652,17 +663,16 @@ public final class ChatVoiceOverOverlayView: UIView {
         }
         cell.accessibilityTraits = traits
 
-        if case let .message(message) = row.kind, self.isMessageActivatable(message) {
-            cell.selectionStyle = .default
-        }
-
         if case let .message(message) = row.kind {
-            (cell as? ChatVoiceOverOverlayCell)?.onDidBecomeFocused = { [weak self] in
+            cell.onDidBecomeFocused = { [weak self] in
                 self?.captureLastUserScrollAnchor()
             }
 
+            if self.isMessageActivatable(message) {
+                cell.selectionStyle = .default
+            }
+
             var customActions: [UIAccessibilityCustomAction] = []
-            
             let moreTitle = state.strings.Conversation_ContextMenuMore
             customActions.append(UIAccessibilityCustomAction(name: moreTitle, actionHandler: { [weak self] _ in
                 guard let self else {
@@ -672,7 +682,7 @@ public final class ChatVoiceOverOverlayView: UIView {
                 self.actions.openMessageContextMenu?(message, rect)
                 return true
             }))
-            
+
             let messageText = message.text.trimmingCharacters(in: .whitespacesAndNewlines)
             if !messageText.isEmpty {
                 let copyTitle = state.strings.Conversation_ContextMenuCopy
@@ -684,13 +694,11 @@ public final class ChatVoiceOverOverlayView: UIView {
                     return true
                 }))
             }
-            
+
             cell.accessibilityCustomActions = customActions
         } else {
-            (cell as? ChatVoiceOverOverlayCell)?.onDidBecomeFocused = nil
+            cell.onDidBecomeFocused = nil
         }
-        
-        return cell
     }
 
     private func configureLoadEarlierCell(_ cell: ChatVoiceOverOverlayCell) {
@@ -1153,16 +1161,26 @@ public final class ChatVoiceOverOverlayView: UIView {
                         guard let self else {
                             return
                         }
-                        let focusTarget: Any? = {
+                        let focusTargetView: UIView? = {
                             if let cell = self.tableView.cellForRow(at: focusTargetIndexPath) {
                                 return cell
                             }
                             if let loadEarlierRestoredIndexPath, let cell = self.tableView.cellForRow(at: loadEarlierRestoredIndexPath) {
                                 return cell
                             }
-                            return self.tableView
+                            if let visibleIndexPaths = self.tableView.indexPathsForVisibleRows, !visibleIndexPaths.isEmpty {
+                                let closestIndexPath = visibleIndexPaths.min(by: { lhs, rhs in
+                                    abs(lhs.row - focusTargetIndexPath.row) < abs(rhs.row - focusTargetIndexPath.row)
+                                })
+                                if let closestIndexPath, let cell = self.tableView.cellForRow(at: closestIndexPath) {
+                                    return cell
+                                }
+                            }
+                            return nil
                         }()
-                        UIAccessibility.post(notification: .layoutChanged, argument: focusTarget)
+                        if let focusTargetView {
+                            UIAccessibility.post(notification: .layoutChanged, argument: focusTargetView)
+                        }
                     }
                 } else if let focusedNonTableElementBeforeUpdate {
                     DispatchQueue.main.async { [weak focusedNonTableElementBeforeUpdate] in
@@ -1202,6 +1220,9 @@ public final class ChatVoiceOverOverlayView: UIView {
             return
         }
         guard let focusedIndexPath = self.focusedTableViewIndexPath() else {
+            // When VoiceOver cannot resolve a focused table cell (e.g. during transitions),
+            // default to not following latest to avoid unexpected jumps to the bottom.
+            self.shouldFollowLatest = false
             return
         }
         let rowOffset = self.loadEarlierRowOffset
@@ -1270,8 +1291,11 @@ public final class ChatVoiceOverOverlayView: UIView {
             return
         }
         UIView.performWithoutAnimation {
-            self.tableView.reloadRows(at: indexPaths, with: .none)
-            self.tableView.layoutIfNeeded()
+            for indexPath in indexPaths {
+                if let cell = self.tableView.cellForRow(at: indexPath) as? ChatVoiceOverOverlayCell {
+                    self.configureCell(cell, at: indexPath)
+                }
+            }
         }
     }
 
@@ -1370,6 +1394,9 @@ public final class ChatVoiceOverOverlayView: UIView {
             }
         }
 
+        if UIAccessibility.isVoiceOverRunning {
+            self.shouldFollowLatest = false
+        }
         self.forceScrollToBottomOnNextApply = false
         if case let .message(anchor)? = self.loadEarlierInitiationFocus {
             self.loadEarlierScrollAnchor = anchor
