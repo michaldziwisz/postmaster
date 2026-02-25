@@ -888,7 +888,7 @@ public final class ChatVoiceOverOverlayView: UIView {
         let newStableIds = newRows.map { $0.stableId }
         if previousStableIds == newStableIds {
             self.rows = newRows
-            self.reloadVisibleRows()
+            self.reloadVisibleRows(excluding: focusedCellIndexPathBeforeUpdate)
             if self.refreshControl.isRefreshing, !previousWasWaitingForLoadEarlier {
                 self.refreshControl.endRefreshing()
             }
@@ -984,7 +984,7 @@ public final class ChatVoiceOverOverlayView: UIView {
             let shouldRestoreFocusToMessages = focusedMessageAnchorBeforeUpdate != nil
             let shouldRestoreFocusToLoadEarlierRow = (focusedMessageAnchorBeforeUpdate == nil) && (focusedCellIndexPathBeforeUpdate?.row == 0) && self.shouldShowLoadEarlierRow
             
-            if (didLoadEarlierProgress && shouldRestoreFocusToLoadEarlierRow) || shouldRestoreFocusToMessages {
+            if shouldRestoreFocusToLoadEarlierRow || shouldRestoreFocusToMessages {
                 let focusTargetIndexPath: IndexPath? = {
                     if shouldRestoreFocusToMessages, let focusedMessageAnchorBeforeUpdate, let index = self.indexOfRow(for: focusedMessageAnchorBeforeUpdate) {
                         return IndexPath(row: index + self.loadEarlierRowOffset, section: 0)
@@ -1064,12 +1064,21 @@ public final class ChatVoiceOverOverlayView: UIView {
         return ScrollAnchor(stableId: row.stableId, messageId: message.id, offset: offset)
     }
 
-    private func reloadVisibleRows() {
+    private func reloadVisibleRows(excluding excludedIndexPath: IndexPath? = nil) {
         guard let visibleIndexPaths = self.tableView.indexPathsForVisibleRows, !visibleIndexPaths.isEmpty else {
             return
         }
+        let indexPaths: [IndexPath]
+        if let excludedIndexPath {
+            indexPaths = visibleIndexPaths.filter { $0 != excludedIndexPath }
+        } else {
+            indexPaths = visibleIndexPaths
+        }
+        guard !indexPaths.isEmpty else {
+            return
+        }
         UIView.performWithoutAnimation {
-            self.tableView.reloadRows(at: visibleIndexPaths, with: .none)
+            self.tableView.reloadRows(at: indexPaths, with: .none)
             self.tableView.layoutIfNeeded()
         }
     }
