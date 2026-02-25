@@ -1042,7 +1042,6 @@ public final class ChatVoiceOverOverlayView: UIView {
             } else if self.forceScrollToBottomOnNextApply {
                 self.forceScrollToBottomOnNextApply = false
                 self.scrollToBottom(animated: false)
-                self.focusLastMessageIfPossible()
             } else if previousWasLoadEarlierInProgress {
                 if let preservedScrollAnchor {
                     let anchoredIndex: Int? = self.indexOfRow(for: preservedScrollAnchor)
