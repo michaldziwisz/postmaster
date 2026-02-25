@@ -12,6 +12,17 @@ import TelegramUIPreferences
 private final class ChatVoiceOverOverlayTableView: UITableView {
     var onAccessibilityScrollBoundary: ((UIAccessibilityScrollDirection) -> Bool)?
     
+    private func normalizeAccessibilityScrollDirection(_ direction: UIAccessibilityScrollDirection) -> UIAccessibilityScrollDirection {
+        switch direction {
+        case .up, .previous, .left:
+            return .up
+        case .down, .next, .right:
+            return .down
+        default:
+            return direction
+        }
+    }
+    
     private func performSystemAccessibilityScrollIfMoved(_ direction: UIAccessibilityScrollDirection) -> Bool {
         let previousOffset = self.contentOffset
         guard super.accessibilityScroll(direction) else {
@@ -22,22 +33,26 @@ private final class ChatVoiceOverOverlayTableView: UITableView {
     }
     
     override func accessibilityScroll(_ direction: UIAccessibilityScrollDirection) -> Bool {
-        let normalizedDirection: UIAccessibilityScrollDirection
+        let normalizedDirection = self.normalizeAccessibilityScrollDirection(direction)
+
+        let systemDirectionsToTry: [UIAccessibilityScrollDirection]
         switch direction {
-        case .next:
-            normalizedDirection = .down
-        case .previous:
-            normalizedDirection = .up
+        case .next, .previous:
+            if normalizedDirection == direction {
+                systemDirectionsToTry = [direction]
+            } else {
+                systemDirectionsToTry = [direction, normalizedDirection]
+            }
         default:
-            normalizedDirection = direction
+            systemDirectionsToTry = [normalizedDirection]
         }
 
-        if self.performSystemAccessibilityScrollIfMoved(direction) {
-            return true
+        for systemDirection in systemDirectionsToTry {
+            if self.performSystemAccessibilityScrollIfMoved(systemDirection) {
+                return true
+            }
         }
-        if normalizedDirection != direction, self.performSystemAccessibilityScrollIfMoved(normalizedDirection) {
-            return true
-        }
+        
         if self.performManualAccessibilityScrollIfPossible(direction: normalizedDirection) {
             return true
         }
