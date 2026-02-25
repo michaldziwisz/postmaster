@@ -12,6 +12,15 @@ import TelegramUIPreferences
 private final class ChatVoiceOverOverlayTableView: UITableView {
     var onAccessibilityScrollBoundary: ((UIAccessibilityScrollDirection) -> Bool)?
     
+    private func performSystemAccessibilityScrollIfMoved(_ direction: UIAccessibilityScrollDirection) -> Bool {
+        let previousOffset = self.contentOffset
+        guard super.accessibilityScroll(direction) else {
+            return false
+        }
+        let didMove = abs(self.contentOffset.y - previousOffset.y) >= 0.5 || abs(self.contentOffset.x - previousOffset.x) >= 0.5
+        return didMove
+    }
+    
     override func accessibilityScroll(_ direction: UIAccessibilityScrollDirection) -> Bool {
         let normalizedDirection: UIAccessibilityScrollDirection
         switch direction {
@@ -23,12 +32,11 @@ private final class ChatVoiceOverOverlayTableView: UITableView {
             normalizedDirection = direction
         }
 
-        let previousOffset = self.contentOffset
-        if super.accessibilityScroll(normalizedDirection) {
-            let didMove = abs(self.contentOffset.y - previousOffset.y) >= 0.5 || abs(self.contentOffset.x - previousOffset.x) >= 0.5
-            if didMove {
-                return true
-            }
+        if self.performSystemAccessibilityScrollIfMoved(direction) {
+            return true
+        }
+        if normalizedDirection != direction, self.performSystemAccessibilityScrollIfMoved(normalizedDirection) {
+            return true
         }
         if self.performManualAccessibilityScrollIfPossible(direction: normalizedDirection) {
             return true
