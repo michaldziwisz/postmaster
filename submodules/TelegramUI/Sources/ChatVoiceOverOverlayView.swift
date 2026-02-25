@@ -582,7 +582,9 @@ public final class ChatVoiceOverOverlayView: UIView {
         cell.accessibilityCustomActions = nil
 
         if self.shouldShowLoadEarlierRow, indexPath.row == 0 {
-            (cell as? ChatVoiceOverOverlayCell)?.onDidBecomeFocused = nil
+            (cell as? ChatVoiceOverOverlayCell)?.onDidBecomeFocused = { [weak self] in
+                self?.captureLastUserScrollAnchor()
+            }
             let bundle = getAppBundle()
             
             let title: String
@@ -900,12 +902,13 @@ public final class ChatVoiceOverOverlayView: UIView {
         
         let previousWasNearBottom = self.isNearBottom()
         let previousWasWaitingForLoadEarlier = self.isWaitingForLoadEarlier
+        let previousWasLoadEarlierInProgress = previousWasWaitingForLoadEarlier || self.isLoadingEarlierHistory
         let focusedNonTableElementBeforeUpdate = self.focusedNonTableOverlayView()
         let focusedCellIndexPathBeforeUpdate = self.focusedTableViewIndexPath()
         let focusedMessageAnchorBeforeUpdate = self.focusedMessageScrollAnchor()
         let previousRows = self.rows
         let previousOldestIndex = previousRows.first?.index
-        let loadEarlierAnchor = previousWasWaitingForLoadEarlier ? self.loadEarlierScrollAnchor : nil
+        let loadEarlierAnchor = previousWasLoadEarlierInProgress ? self.loadEarlierScrollAnchor : nil
         var loadEarlierRestoredIndexPath: IndexPath?
 
         let previousStableIds = previousRows.map { $0.stableId }
@@ -913,6 +916,12 @@ public final class ChatVoiceOverOverlayView: UIView {
         if previousStableIds == newStableIds {
             self.rows = newRows
             self.reloadVisibleRows(excluding: focusedCellIndexPathBeforeUpdate)
+            if self.forceScrollToBottomOnNextApply {
+                self.forceScrollToBottomOnNextApply = false
+                if previousWasNearBottom {
+                    self.scrollToBottom(animated: false)
+                }
+            }
             if self.refreshControl.isRefreshing, !previousWasWaitingForLoadEarlier {
                 self.refreshControl.endRefreshing()
             }
@@ -931,7 +940,7 @@ public final class ChatVoiceOverOverlayView: UIView {
         let previousContentOffsetY = self.tableView.contentOffset.y
         let previousContentSizeHeight = self.tableView.contentSize.height
         let preservedScrollAnchor: ScrollAnchor? = {
-            if previousWasWaitingForLoadEarlier {
+            if previousWasLoadEarlierInProgress {
                 return loadEarlierAnchor
             }
             guard !previousWasNearBottom else {
@@ -944,7 +953,7 @@ public final class ChatVoiceOverOverlayView: UIView {
         }
 
         let didLoadEarlierProgressPreview: Bool
-        if previousWasWaitingForLoadEarlier, let before = self.loadEarlierOldestIndexBeforeRequest ?? previousOldestIndex, let after = newRows.first?.index, after < before {
+        if previousWasLoadEarlierInProgress, let before = self.loadEarlierOldestIndexBeforeRequest ?? previousOldestIndex, let after = newRows.first?.index, after < before {
             didLoadEarlierProgressPreview = true
         } else {
             didLoadEarlierProgressPreview = false
@@ -967,7 +976,7 @@ public final class ChatVoiceOverOverlayView: UIView {
             self.forceScrollToBottomOnNextApply = false
             self.scrollToBottom(animated: false)
             self.focusLastMessageIfPossible()
-        } else if previousWasWaitingForLoadEarlier {
+        } else if previousWasLoadEarlierInProgress {
             if let preservedScrollAnchor {
                 let anchoredIndex: Int? = self.indexOfRow(for: preservedScrollAnchor)
                 if let anchoredIndex {
@@ -1004,7 +1013,7 @@ public final class ChatVoiceOverOverlayView: UIView {
         }
 
         let didLoadEarlierProgress: Bool
-        if previousWasWaitingForLoadEarlier, let before = self.loadEarlierOldestIndexBeforeRequest ?? previousOldestIndex, let after = self.rows.first?.index, after < before {
+        if previousWasLoadEarlierInProgress, let before = self.loadEarlierOldestIndexBeforeRequest ?? previousOldestIndex, let after = self.rows.first?.index, after < before {
             didLoadEarlierProgress = true
             self.endWaitingForLoadEarlierIfNeeded()
             self.reloadLoadEarlierRow()
@@ -1035,12 +1044,15 @@ public final class ChatVoiceOverOverlayView: UIView {
                         guard let self else {
                             return
                         }
-                        let focusTarget: Any?
-                        if let cell = self.tableView.cellForRow(at: focusTargetIndexPath) {
-                            focusTarget = cell
-                        } else {
-                            focusTarget = self.tableView
-                        }
+                        let focusTarget: Any? = {
+                            if let cell = self.tableView.cellForRow(at: focusTargetIndexPath) {
+                                return cell
+                            }
+                            if shouldRestoreFocusToLoadEarlierRow, let loadEarlierRestoredIndexPath, let cell = self.tableView.cellForRow(at: loadEarlierRestoredIndexPath) {
+                                return cell
+                            }
+                            return self.tableView
+                        }()
                         UIAccessibility.post(notification: .layoutChanged, argument: focusTarget)
                     }
                 }
@@ -1208,6 +1220,7 @@ public final class ChatVoiceOverOverlayView: UIView {
             }
             return
         }
+        self.forceScrollToBottomOnNextApply = false
         self.loadEarlierScrollAnchor = self.currentScrollAnchor()
         self.loadEarlierOldestIndexBeforeRequest = self.rows.first?.index
         self.loadEarlierRequestId += 1
