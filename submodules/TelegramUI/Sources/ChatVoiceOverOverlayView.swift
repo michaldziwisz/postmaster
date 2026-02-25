@@ -205,6 +205,8 @@ public final class ChatVoiceOverOverlayView: UIView {
     private var lastUserScrollAnchor: ScrollAnchor?
     private var loadEarlierInitiationFocus: LoadEarlierInitiationFocus?
 
+    private var shouldFollowLatest: Bool = true
+
     private var isComposerEnabled: Bool = true
     
     public var actions = Actions()
@@ -921,6 +923,8 @@ public final class ChatVoiceOverOverlayView: UIView {
         let newRows = self.mergeRows(existing: self.rows, incoming: incomingRows)
         
         let previousWasAtBottom = self.isAtBottom()
+        self.updateShouldFollowLatestFromFocus()
+        let shouldPinToLatest = previousWasAtBottom && self.shouldFollowLatest
         let previousWasWaitingForLoadEarlier = self.isWaitingForLoadEarlier
         let previousWasLoadEarlierInProgress = previousWasWaitingForLoadEarlier || self.isLoadingEarlierHistory
         let loadEarlierInitiationFocus = previousWasLoadEarlierInProgress ? self.loadEarlierInitiationFocus : nil
@@ -939,7 +943,7 @@ public final class ChatVoiceOverOverlayView: UIView {
             self.reloadVisibleRows(excluding: focusedCellIndexPathBeforeUpdate)
             if self.forceScrollToBottomOnNextApply {
                 self.forceScrollToBottomOnNextApply = false
-                if previousWasAtBottom {
+                if shouldPinToLatest {
                     self.scrollToBottom(animated: false)
                 }
             }
@@ -980,12 +984,12 @@ public final class ChatVoiceOverOverlayView: UIView {
             if previousWasLoadEarlierInProgress {
                 return loadEarlierAnchor
             }
-            guard !previousWasAtBottom else {
+            guard !shouldPinToLatest else {
                 return nil
             }
             return focusedMessageAnchorBeforeUpdate ?? self.lastUserScrollAnchor ?? self.currentScrollAnchor()
         }()
-        if !previousWasAtBottom, let preservedScrollAnchor {
+        if !shouldPinToLatest, let preservedScrollAnchor {
             self.lastUserScrollAnchor = preservedScrollAnchor
         }
 
@@ -1041,7 +1045,7 @@ public final class ChatVoiceOverOverlayView: UIView {
                 }
             } else if self.forceScrollToBottomOnNextApply {
                 self.forceScrollToBottomOnNextApply = false
-                if previousWasAtBottom {
+                if shouldPinToLatest {
                     self.scrollToBottom(animated: false)
                 }
             } else if previousWasLoadEarlierInProgress {
@@ -1064,7 +1068,18 @@ public final class ChatVoiceOverOverlayView: UIView {
                     self.tableView.setContentOffset(CGPoint(x: 0.0, y: self.clampContentOffsetY(previousContentOffsetY)), animated: false)
                 }
             } else if previousWasAtBottom {
-                self.scrollToBottom(animated: false)
+                if shouldPinToLatest {
+                    self.scrollToBottom(animated: false)
+                } else if let preservedScrollAnchor {
+                    if let anchoredIndex = self.indexOfRow(for: preservedScrollAnchor) {
+                        let indexPath = IndexPath(row: anchoredIndex + self.loadEarlierRowOffset, section: 0)
+                        self.restoreScrollPosition(to: preservedScrollAnchor, at: indexPath)
+                    } else {
+                        self.tableView.setContentOffset(CGPoint(x: 0.0, y: self.clampContentOffsetY(previousContentOffsetY)), animated: false)
+                    }
+                } else {
+                    self.tableView.setContentOffset(CGPoint(x: 0.0, y: self.clampContentOffsetY(previousContentOffsetY)), animated: false)
+                }
             } else if let preservedScrollAnchor {
                 if let anchoredIndex = self.indexOfRow(for: preservedScrollAnchor) {
                     let indexPath = IndexPath(row: anchoredIndex + self.loadEarlierRowOffset, section: 0)
@@ -1072,7 +1087,7 @@ public final class ChatVoiceOverOverlayView: UIView {
                 } else {
                     self.tableView.setContentOffset(CGPoint(x: 0.0, y: self.clampContentOffsetY(previousContentOffsetY)), animated: false)
                 }
-            } else if !previousWasAtBottom {
+            } else if !shouldPinToLatest {
                 self.tableView.setContentOffset(CGPoint(x: 0.0, y: self.clampContentOffsetY(previousContentOffsetY)), animated: false)
             }
         }
@@ -1179,6 +1194,27 @@ public final class ChatVoiceOverOverlayView: UIView {
         if let anchor = self.currentScrollAnchor() {
             self.lastUserScrollAnchor = anchor
         }
+        self.updateShouldFollowLatestFromFocus()
+    }
+
+    private func updateShouldFollowLatestFromFocus() {
+        guard UIAccessibility.isVoiceOverRunning else {
+            return
+        }
+        guard let focusedIndexPath = self.focusedTableViewIndexPath() else {
+            return
+        }
+        let rowOffset = self.loadEarlierRowOffset
+        guard focusedIndexPath.row >= rowOffset else {
+            self.shouldFollowLatest = false
+            return
+        }
+        guard !self.rows.isEmpty else {
+            self.shouldFollowLatest = true
+            return
+        }
+        let lastRow = self.rows.count - 1 + rowOffset
+        self.shouldFollowLatest = (focusedIndexPath.row == lastRow)
     }
 
     private func focusedTableViewIndexPath() -> IndexPath? {
@@ -1386,6 +1422,10 @@ public final class ChatVoiceOverOverlayView: UIView {
 
     private func maybeEnsureAtLatestIfNeeded() {
         guard !self.isLoadEarlierInProgress else {
+            return
+        }
+        self.updateShouldFollowLatestFromFocus()
+        guard !UIAccessibility.isVoiceOverRunning || self.shouldFollowLatest else {
             return
         }
         guard self.isAtBottom() else {
