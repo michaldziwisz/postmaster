@@ -23,81 +23,10 @@ private final class ChatVoiceOverOverlayTableView: UITableView {
         }
     }
     
-    private func focusedCellIndexPath() -> IndexPath? {
-        guard UIAccessibility.isVoiceOverRunning else {
-            return nil
-        }
-        guard let focusedView = UIAccessibility.focusedElement(using: .notificationVoiceOver) as? UIView else {
-            return nil
-        }
-        
-        var current: UIView? = focusedView
-        while let view = current {
-            if let cell = view as? UITableViewCell, cell.isDescendant(of: self) {
-                return self.indexPath(for: cell)
-            }
-            current = view.superview
-        }
-        return nil
-    }
-    
-    private func performAdjacentRowFocusScrollIfPossible(direction: UIAccessibilityScrollDirection) -> Bool {
-        guard UIAccessibility.isVoiceOverRunning else {
-            return false
-        }
-        guard direction == .up || direction == .down else {
-            return false
-        }
-        guard let currentIndexPath = self.focusedCellIndexPath() else {
-            return false
-        }
-        
-        let deltaRow = (direction == .up) ? -1 : 1
-        let targetRow = currentIndexPath.row + deltaRow
-        guard targetRow >= 0, targetRow < self.numberOfRows(inSection: currentIndexPath.section) else {
-            return false
-        }
-        
-        let targetIndexPath = IndexPath(row: targetRow, section: currentIndexPath.section)
-        UIView.performWithoutAnimation {
-            let position: UITableView.ScrollPosition = (direction == .up) ? .top : .bottom
-            self.scrollToRow(at: targetIndexPath, at: position, animated: false)
-            self.layoutIfNeeded()
-        }
-        
-        DispatchQueue.main.async { [weak self] in
-            guard let self else {
-                return
-            }
-            if let cell = self.cellForRow(at: targetIndexPath) {
-                UIAccessibility.post(notification: .layoutChanged, argument: cell)
-            } else {
-                UIAccessibility.post(notification: .pageScrolled, argument: nil)
-            }
-        }
-        
-        return true
-    }
-    
-    private func performSystemAccessibilityScrollIfMoved(_ direction: UIAccessibilityScrollDirection) -> Bool {
-        let previousOffset = self.contentOffset
-        guard super.accessibilityScroll(direction) else {
-            return false
-        }
-        let didMove = abs(self.contentOffset.y - previousOffset.y) >= 0.5 || abs(self.contentOffset.x - previousOffset.x) >= 0.5
-        return didMove
-    }
-    
     override func accessibilityScroll(_ direction: UIAccessibilityScrollDirection) -> Bool {
         let normalizedDirection = self.normalizeAccessibilityScrollDirection(direction)
         
-        if direction == .next || direction == .previous || direction == .left || direction == .right {
-            if self.performAdjacentRowFocusScrollIfPossible(direction: normalizedDirection) {
-                return true
-            }
-        }
-        
-        if self.performSystemAccessibilityScrollIfMoved(normalizedDirection) {
+        if super.accessibilityScroll(normalizedDirection) {
             return true
         }
         
