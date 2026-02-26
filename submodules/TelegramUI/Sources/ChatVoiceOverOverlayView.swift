@@ -421,6 +421,8 @@ public final class ChatVoiceOverOverlayView: UIView {
     private var shouldFollowLatest: Bool = true
 
     private var isComposerEnabled: Bool = true
+
+    private var lastVoiceOverNavigationTimestamp: CFTimeInterval = 0.0
     
     public var actions = Actions()
     
@@ -475,6 +477,10 @@ public final class ChatVoiceOverOverlayView: UIView {
         self.tableView.rowHeight = UITableView.automaticDimension
         self.tableView.keyboardDismissMode = .interactive
         self.tableView.alwaysBounceVertical = true
+        if #available(iOS 11.0, *) {
+            self.tableView.accessibilityContainerType = .list
+        }
+        self.tableView.shouldGroupAccessibilityChildren = true
         self.refreshControl.addTarget(self, action: #selector(self.refreshTriggered), for: .valueChanged)
         self.tableView.refreshControl = self.refreshControl
         self.addSubview(self.tableView)
@@ -679,7 +685,14 @@ public final class ChatVoiceOverOverlayView: UIView {
             return
         }
         
-        let delay: TimeInterval = (self.tableView.isDragging || self.tableView.isDecelerating) ? 0.2 : 0.05
+        let delay: TimeInterval
+        if self.tableView.isDragging || self.tableView.isDecelerating {
+            delay = 0.2
+        } else if UIAccessibility.isVoiceOverRunning, !self.isLoadEarlierInProgress, self.isVoiceOverNavigationInProgress() {
+            delay = 0.25
+        } else {
+            delay = 0.05
+        }
         let workItem = DispatchWorkItem { [weak self] in
             guard let self else {
                 return
@@ -687,6 +700,10 @@ public final class ChatVoiceOverOverlayView: UIView {
             self.pendingEntriesWorkItem = nil
             
             if self.tableView.isDragging || self.tableView.isDecelerating {
+                self.schedulePendingEntriesApplyIfNeeded()
+                return
+            }
+            if UIAccessibility.isVoiceOverRunning, !self.isLoadEarlierInProgress, self.isVoiceOverNavigationInProgress() {
                 self.schedulePendingEntriesApplyIfNeeded()
                 return
             }
@@ -878,6 +895,7 @@ public final class ChatVoiceOverOverlayView: UIView {
 
         if case let .message(message) = row.kind {
             cell.onDidBecomeFocused = { [weak self] in
+                self?.noteVoiceOverNavigationActivity()
                 self?.captureLastUserScrollAnchor()
             }
 
@@ -916,6 +934,7 @@ public final class ChatVoiceOverOverlayView: UIView {
 
     private func configureLoadEarlierCell(_ cell: ChatVoiceOverOverlayCell) {
         cell.onDidBecomeFocused = { [weak self] in
+            self?.noteVoiceOverNavigationActivity()
             self?.captureLastUserScrollAnchor()
         }
 
@@ -1127,13 +1146,36 @@ public final class ChatVoiceOverOverlayView: UIView {
     }
     
     // MARK: - Helpers
+
+    private func noteVoiceOverNavigationActivity() {
+        guard UIAccessibility.isVoiceOverRunning else {
+            return
+        }
+        self.lastVoiceOverNavigationTimestamp = CACurrentMediaTime()
+    }
+
+    private func isVoiceOverNavigationInProgress(graceInterval: CFTimeInterval = 0.35) -> Bool {
+        guard UIAccessibility.isVoiceOverRunning else {
+            return false
+        }
+        let now = CACurrentMediaTime()
+        guard now - self.lastVoiceOverNavigationTimestamp < graceInterval else {
+            return false
+        }
+        return self.focusedTableViewIndexPath() != nil
+    }
     
     private func applyPendingEntriesIfPossible(force: Bool = false) {
         guard let entries = self.pendingEntries else {
             return
         }
-        if !force && (self.tableView.isDragging || self.tableView.isDecelerating) {
-            return
+        if !force {
+            if self.tableView.isDragging || self.tableView.isDecelerating {
+                return
+            }
+            if UIAccessibility.isVoiceOverRunning, !self.isLoadEarlierInProgress, self.isVoiceOverNavigationInProgress() {
+                return
+            }
         }
         self.pendingEntries = nil
         self.applyEntries(entries)
