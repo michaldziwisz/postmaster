@@ -527,7 +527,8 @@ public final class ChatVoiceOverOverlayView: UIView {
         if #available(iOS 11.0, *) {
             self.tableView.accessibilityContainerType = .list
         }
-        self.tableView.shouldGroupAccessibilityChildren = true
+        self.tableView.accessibilityNavigationStyle = .separate
+        self.tableView.shouldGroupAccessibilityChildren = false
         self.tableView.onDidPerformAccessibilityScroll = { [weak self] _ in
             self?.lastVoiceOverScrollTimestamp = CACurrentMediaTime()
         }
@@ -1111,7 +1112,13 @@ public final class ChatVoiceOverOverlayView: UIView {
         }
     }
     
-    public func scrollViewDidScroll(_ _: UIScrollView) {
+    public func scrollViewDidScroll(_ scrollView: UIScrollView) {
+        if scrollView === self.tableView, UIAccessibility.isVoiceOverRunning {
+            let now = CACurrentMediaTime()
+            if now - self.lastVoiceOverNavigationTimestamp < 1.2 {
+                self.lastVoiceOverScrollTimestamp = now
+            }
+        }
         if !self.isNearTop() {
             self.loadEarlierNoProgressCount = 0
         }
@@ -1245,13 +1252,13 @@ public final class ChatVoiceOverOverlayView: UIView {
         guard UIAccessibility.isVoiceOverRunning else {
             return false
         }
-        if now - self.lastVoiceOverScrollTimestamp < 0.35 {
+        if now - self.lastVoiceOverScrollTimestamp < 0.8 {
             return true
         }
         guard let lastFocusTime = self.recentVoiceOverTableFocusTimestamps.last else {
             return false
         }
-        guard now - lastFocusTime < 0.35 else {
+        guard now - lastFocusTime < 0.8 else {
             return false
         }
         guard self.recentVoiceOverTableFocusTimestamps.count >= 2 else {
@@ -1394,7 +1401,7 @@ public final class ChatVoiceOverOverlayView: UIView {
 
         if focusedView.isDescendant(of: self.tableView) {
             if self.shouldShowLoadEarlierRow, let indexPath = self.indexPathForViewInTableView(focusedView), indexPath.row == 0 {
-                if !self.isNearTop(), self.canScrollTableView(direction: .up), let lastFocused = self.resolvedLastFocusedIndexPathForFocusRestore(), lastFocused.row > self.loadEarlierRowOffset, self.shouldTrapVoiceOverFocusEscape(now: now) {
+                if self.canScrollTableView(direction: .up), let lastFocused = self.resolvedLastFocusedIndexPathForFocusRestore(), lastFocused.row > self.loadEarlierRowOffset, self.shouldTrapVoiceOverFocusEscape(now: now) {
                     self.restoreVoiceOverFocusToPreviousRowFromLastFocus()
                 }
             }
@@ -1402,11 +1409,13 @@ public final class ChatVoiceOverOverlayView: UIView {
         }
 
         if focusedView.isDescendant(of: self.topBarView) {
-            guard !self.isNearTop() else {
+            // Allow leaving the message list to the top bar only when the list is actually at the top.
+            guard self.canScrollTableView(direction: .up) else {
                 return
             }
         } else if focusedView.isDescendant(of: self.composerView) {
-            guard !self.isNearBottom() else {
+            // Allow leaving the message list to the composer only when the list is actually at the bottom.
+            guard self.canScrollTableView(direction: .down) else {
                 return
             }
         }
