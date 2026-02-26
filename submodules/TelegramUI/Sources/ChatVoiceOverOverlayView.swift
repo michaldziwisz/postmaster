@@ -94,12 +94,26 @@ private final class ChatVoiceOverOverlayTableView: UITableView {
             self.scrollToRow(at: targetIndexPath, at: position, animated: false)
             self.layoutIfNeeded()
         }
-        UIAccessibility.post(notification: .pageScrolled, argument: nil)
+        DispatchQueue.main.async { [weak self] in
+            guard let self else {
+                return
+            }
+            if let cell = self.cellForRow(at: targetIndexPath) {
+                UIAccessibility.post(notification: .layoutChanged, argument: cell)
+            } else {
+                UIAccessibility.post(notification: .pageScrolled, argument: nil)
+            }
+        }
         return true
     }
     
     override func accessibilityScroll(_ direction: UIAccessibilityScrollDirection) -> Bool {
         let normalizedDirection = self.normalizeAccessibilityScrollDirection(direction)
+
+        if (direction == .previous || direction == .next || direction == .left || direction == .right),
+           self.performIncrementalRowScrollIfPossible(direction: normalizedDirection) {
+            return true
+        }
         
         if self.performSystemAccessibilityScrollIfMoved(direction) {
             return true
