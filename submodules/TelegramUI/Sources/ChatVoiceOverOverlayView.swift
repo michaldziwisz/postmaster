@@ -1004,7 +1004,7 @@ public final class ChatVoiceOverOverlayView: UIView {
                 return
             }
             self.noteVoiceOverNavigationActivity()
-            self.recordVoiceOverTableFocus(indexPath: IndexPath(row: 0, section: 0), anchor: nil)
+            self.recordVoiceOverTableFocus(indexPath: IndexPath(row: 0, section: 0), anchor: nil, updateRestoreTarget: false)
             self.captureLastUserScrollAnchor()
         }
 
@@ -1224,13 +1224,15 @@ public final class ChatVoiceOverOverlayView: UIView {
         self.lastVoiceOverNavigationTimestamp = CACurrentMediaTime()
     }
 
-    private func recordVoiceOverTableFocus(indexPath: IndexPath, anchor: ScrollAnchor?) {
+    private func recordVoiceOverTableFocus(indexPath: IndexPath, anchor: ScrollAnchor?, updateRestoreTarget: Bool = true) {
         guard UIAccessibility.isVoiceOverRunning else {
             return
         }
         let now = CACurrentMediaTime()
-        self.lastFocusedTableIndexPathForFocusRestore = indexPath
-        self.lastFocusedRowAnchorForFocusRestore = anchor
+        if updateRestoreTarget {
+            self.lastFocusedTableIndexPathForFocusRestore = indexPath
+            self.lastFocusedRowAnchorForFocusRestore = anchor
+        }
 
         self.recentVoiceOverTableFocusTimestamps.append(now)
         let cutoff = now - 0.8
@@ -1293,7 +1295,8 @@ public final class ChatVoiceOverOverlayView: UIView {
         guard targetRow >= 0, targetRow < self.tableView.numberOfRows(inSection: 0) else {
             return
         }
-        self.restoreVoiceOverFocus(to: IndexPath(row: targetRow, section: 0))
+        let scrollPosition: UITableView.ScrollPosition = (deltaRow < 0) ? .top : .bottom
+        self.restoreVoiceOverFocus(to: IndexPath(row: targetRow, section: 0), scrollPosition: scrollPosition)
     }
 
     private func setupVoiceOverFocusObserver() {
@@ -1337,7 +1340,7 @@ public final class ChatVoiceOverOverlayView: UIView {
         self.restoreVoiceOverFocusToAdjacentRowFromLastFocus(deltaRow: -1)
     }
 
-    private func restoreVoiceOverFocus(to indexPath: IndexPath) {
+    private func restoreVoiceOverFocus(to indexPath: IndexPath, scrollPosition: UITableView.ScrollPosition) {
         guard UIAccessibility.isVoiceOverRunning else {
             return
         }
@@ -1352,7 +1355,7 @@ public final class ChatVoiceOverOverlayView: UIView {
         self.noteVoiceOverNavigationActivity()
 
         UIView.performWithoutAnimation {
-            self.tableView.scrollToRow(at: indexPath, at: .middle, animated: false)
+            self.tableView.scrollToRow(at: indexPath, at: scrollPosition, animated: false)
             self.tableView.layoutIfNeeded()
         }
 
@@ -1391,15 +1394,21 @@ public final class ChatVoiceOverOverlayView: UIView {
 
         if focusedView.isDescendant(of: self.tableView) {
             if self.shouldShowLoadEarlierRow, let indexPath = self.indexPathForViewInTableView(focusedView), indexPath.row == 0 {
-                if self.canScrollTableView(direction: .up), let lastFocused = self.resolvedLastFocusedIndexPathForFocusRestore(), lastFocused.row > self.loadEarlierRowOffset, self.shouldTrapVoiceOverFocusEscape(now: now) {
+                if !self.isNearTop(), self.canScrollTableView(direction: .up), let lastFocused = self.resolvedLastFocusedIndexPathForFocusRestore(), lastFocused.row > self.loadEarlierRowOffset, self.shouldTrapVoiceOverFocusEscape(now: now) {
                     self.restoreVoiceOverFocusToPreviousRowFromLastFocus()
                 }
             }
             return
         }
 
-        guard focusedView.isDescendant(of: self.topBarView) else {
-            return
+        if focusedView.isDescendant(of: self.topBarView) {
+            guard !self.isNearTop() else {
+                return
+            }
+        } else if focusedView.isDescendant(of: self.composerView) {
+            guard !self.isNearBottom() else {
+                return
+            }
         }
 
         guard self.canScrollTableView(direction: .up) else {
