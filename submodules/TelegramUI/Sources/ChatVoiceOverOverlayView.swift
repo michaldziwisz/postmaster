@@ -23,13 +23,94 @@ private final class ChatVoiceOverOverlayTableView: UITableView {
         }
     }
     
+    private func canManuallyScroll(direction: UIAccessibilityScrollDirection) -> Bool {
+        let minOffset = -self.adjustedContentInset.top
+        let maxOffset = max(minOffset, self.contentSize.height - self.bounds.height + self.adjustedContentInset.bottom)
+        let y = self.contentOffset.y
+        switch direction {
+        case .up:
+            return y > minOffset + 1.0
+        case .down:
+            return y < maxOffset - 1.0
+        default:
+            return false
+        }
+    }
+    
+    private func performSystemAccessibilityScrollIfMoved(_ direction: UIAccessibilityScrollDirection) -> Bool {
+        let previousOffset = self.contentOffset
+        guard super.accessibilityScroll(direction) else {
+            return false
+        }
+        let didMove = abs(self.contentOffset.y - previousOffset.y) >= 0.5 || abs(self.contentOffset.x - previousOffset.x) >= 0.5
+        return didMove
+    }
+    
+    private func focusedCellIndexPath() -> IndexPath? {
+        guard UIAccessibility.isVoiceOverRunning else {
+            return nil
+        }
+        guard let focusedView = UIAccessibility.focusedElement(using: .notificationVoiceOver) as? UIView else {
+            return nil
+        }
+        
+        var current: UIView? = focusedView
+        while let view = current {
+            if let cell = view as? UITableViewCell, cell.isDescendant(of: self) {
+                return self.indexPath(for: cell)
+            }
+            current = view.superview
+        }
+        return nil
+    }
+    
+    private func performIncrementalRowScrollIfPossible(direction: UIAccessibilityScrollDirection) -> Bool {
+        guard UIAccessibility.isVoiceOverRunning else {
+            return false
+        }
+        guard direction == .up || direction == .down else {
+            return false
+        }
+        guard self.canManuallyScroll(direction: direction) else {
+            return false
+        }
+        guard let currentIndexPath = self.focusedCellIndexPath() else {
+            return false
+        }
+        
+        let deltaRow = (direction == .up) ? -1 : 1
+        let targetRow = currentIndexPath.row + deltaRow
+        guard targetRow >= 0, targetRow < self.numberOfRows(inSection: currentIndexPath.section) else {
+            return false
+        }
+        
+        let targetIndexPath = IndexPath(row: targetRow, section: currentIndexPath.section)
+        if let visible = self.indexPathsForVisibleRows, visible.contains(targetIndexPath) {
+            return false
+        }
+        
+        UIView.performWithoutAnimation {
+            let position: UITableView.ScrollPosition = (direction == .up) ? .top : .bottom
+            self.scrollToRow(at: targetIndexPath, at: position, animated: false)
+            self.layoutIfNeeded()
+        }
+        UIAccessibility.post(notification: .pageScrolled, argument: nil)
+        return true
+    }
+    
     override func accessibilityScroll(_ direction: UIAccessibilityScrollDirection) -> Bool {
         let normalizedDirection = self.normalizeAccessibilityScrollDirection(direction)
         
-        if super.accessibilityScroll(normalizedDirection) {
+        if self.performSystemAccessibilityScrollIfMoved(direction) {
+            return true
+        }
+        if normalizedDirection != direction, self.performSystemAccessibilityScrollIfMoved(normalizedDirection) {
             return true
         }
         
+        if self.performIncrementalRowScrollIfPossible(direction: normalizedDirection) {
+            return true
+        }
         if self.performManualAccessibilityScrollIfPossible(direction: normalizedDirection) {
             return true
         }
