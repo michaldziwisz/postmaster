@@ -63,6 +63,107 @@ private final class ChatVoiceOverOverlayTableView: UITableView {
         }
         return nil
     }
+
+    private func isIndexPathAtVisibleEdge(_ indexPath: IndexPath, direction: UIAccessibilityScrollDirection) -> Bool {
+        guard let visible = self.indexPathsForVisibleRows?.sorted(), !visible.isEmpty else {
+            return false
+        }
+        switch direction {
+        case .up:
+            return indexPath == visible.first
+        case .down:
+            return indexPath == visible.last
+        default:
+            return false
+        }
+    }
+
+    private func desiredAdjacentIndexPath(from indexPath: IndexPath, direction: UIAccessibilityScrollDirection) -> IndexPath? {
+        guard direction == .up || direction == .down else {
+            return nil
+        }
+        let deltaRow = (direction == .up) ? -1 : 1
+        let targetRow = indexPath.row + deltaRow
+        guard targetRow >= 0, targetRow < self.numberOfRows(inSection: indexPath.section) else {
+            return nil
+        }
+        return IndexPath(row: targetRow, section: indexPath.section)
+    }
+
+    private func focusVoiceOverCell(at indexPath: IndexPath, direction: UIAccessibilityScrollDirection) {
+        guard UIAccessibility.isVoiceOverRunning else {
+            return
+        }
+        guard indexPath.section >= 0, indexPath.section < self.numberOfSections else {
+            return
+        }
+        guard indexPath.row >= 0, indexPath.row < self.numberOfRows(inSection: indexPath.section) else {
+            return
+        }
+
+        UIView.performWithoutAnimation {
+            let position: UITableView.ScrollPosition = (direction == .up) ? .top : .bottom
+            self.scrollToRow(at: indexPath, at: position, animated: false)
+            self.layoutIfNeeded()
+        }
+
+        if let cell = self.cellForRow(at: indexPath) {
+            UIAccessibility.post(notification: .layoutChanged, argument: cell)
+        }
+    }
+
+    private func scheduleFocusCorrectionAfterScrollIfNeeded(
+        initialFocusedIndexPath: IndexPath?,
+        direction: UIAccessibilityScrollDirection,
+        treatAsEdgeNavigation: Bool
+    ) {
+        guard UIAccessibility.isVoiceOverRunning else {
+            return
+        }
+        guard direction == .up || direction == .down else {
+            return
+        }
+        guard let initialFocusedIndexPath else {
+            return
+        }
+        guard let desiredIndexPath = self.desiredAdjacentIndexPath(from: initialFocusedIndexPath, direction: direction) else {
+            return
+        }
+
+        DispatchQueue.main.async { [weak self] in
+            guard let self else {
+                return
+            }
+            guard UIAccessibility.isVoiceOverRunning else {
+                return
+            }
+
+            let focusedAfter = self.focusedCellIndexPath()
+            let shouldCorrect: Bool
+            if let focusedAfter {
+                if treatAsEdgeNavigation {
+                    shouldCorrect = focusedAfter != desiredIndexPath
+                } else {
+                    switch direction {
+                    case .up:
+                        shouldCorrect = focusedAfter.row > initialFocusedIndexPath.row
+                    case .down:
+                        shouldCorrect = focusedAfter.row < initialFocusedIndexPath.row
+                    default:
+                        shouldCorrect = false
+                    }
+                }
+            } else {
+                shouldCorrect = true
+            }
+
+            guard shouldCorrect else {
+                return
+            }
+
+            self.focusVoiceOverCell(at: desiredIndexPath, direction: direction)
+        }
+    }
     
     private func performIncrementalRowScrollIfPossible(direction: UIAccessibilityScrollDirection) -> Bool {
         guard UIAccessibility.isVoiceOverRunning else {
@@ -109,6 +210,8 @@ private final class ChatVoiceOverOverlayTableView: UITableView {
     
     override func accessibilityScroll(_ direction: UIAccessibilityScrollDirection) -> Bool {
         let normalizedDirection = self.normalizeAccessibilityScrollDirection(direction)
+        let initialFocusedIndexPath = self.focusedCellIndexPath()
+        let treatAsEdgeNavigation = initialFocusedIndexPath.flatMap { self.isIndexPathAtVisibleEdge($0, direction: normalizedDirection) } ?? false
 
         if (direction == .previous || direction == .next || direction == .left || direction == .right),
            self.performIncrementalRowScrollIfPossible(direction: normalizedDirection) {
@@ -116,9 +219,19 @@ private final class ChatVoiceOverOverlayTableView: UITableView {
         }
         
         if self.performSystemAccessibilityScrollIfMoved(direction) {
+            self.scheduleFocusCorrectionAfterScrollIfNeeded(
+                initialFocusedIndexPath: initialFocusedIndexPath,
+                direction: normalizedDirection,
+                treatAsEdgeNavigation: treatAsEdgeNavigation
+            )
             return true
         }
         if normalizedDirection != direction, self.performSystemAccessibilityScrollIfMoved(normalizedDirection) {
+            self.scheduleFocusCorrectionAfterScrollIfNeeded(
+                initialFocusedIndexPath: initialFocusedIndexPath,
+                direction: normalizedDirection,
+                treatAsEdgeNavigation: treatAsEdgeNavigation
+            )
             return true
         }
         
@@ -126,6 +239,11 @@ private final class ChatVoiceOverOverlayTableView: UITableView {
             return true
         }
         if self.performManualAccessibilityScrollIfPossible(direction: normalizedDirection) {
+            self.scheduleFocusCorrectionAfterScrollIfNeeded(
+                initialFocusedIndexPath: initialFocusedIndexPath,
+                direction: normalizedDirection,
+                treatAsEdgeNavigation: treatAsEdgeNavigation
+            )
             return true
         }
         if let onAccessibilityScrollBoundary, onAccessibilityScrollBoundary(normalizedDirection) {
