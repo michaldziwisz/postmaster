@@ -787,8 +787,6 @@ public final class ChatVoiceOverOverlayView: UIView {
             traits.remove(.button)
         }
         cell.accessibilityTraits = traits
-
-        let rowStableId = row.stableId
         if case let .message(message) = row.kind {
             cell.onDidBecomeFocused = { [weak self] in
                 guard let self else {
