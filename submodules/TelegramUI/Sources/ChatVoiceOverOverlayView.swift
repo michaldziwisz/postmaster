@@ -2060,10 +2060,6 @@ public final class ChatVoiceOverOverlayView: UIView {
         }
     }
     
-    public override func accessibilityScroll(_ direction: UIAccessibilityScrollDirection) -> Bool {
-        return self.tableView.accessibilityScroll(direction)
-    }
-
     private func maybeEnsureAtLatestIfNeeded() {
         guard !self.isLoadEarlierInProgress else {
             return
