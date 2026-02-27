@@ -211,84 +211,33 @@ private final class ChatVoiceOverOverlayTableView: UITableView {
     
     override func accessibilityScroll(_ direction: UIAccessibilityScrollDirection) -> Bool {
         let normalizedDirection = self.normalizeAccessibilityScrollDirection(direction)
-        guard normalizedDirection == .up || normalizedDirection == .down else {
-            return super.accessibilityScroll(direction)
-        }
-
-        let initialFocusedIndexPath = self.focusedCellIndexPath()
-        let treatAsEdgeNavigation: Bool
-        if let initialFocusedIndexPath {
-            treatAsEdgeNavigation = self.isIndexPathAtVisibleEdge(initialFocusedIndexPath, direction: normalizedDirection)
-        } else {
-            treatAsEdgeNavigation = false
-        }
-
-        if treatAsEdgeNavigation, self.performIncrementalRowScrollIfPossible(direction: normalizedDirection) {
+        // Prefer UIKit's built-in behavior. VoiceOver relies on it to keep navigation within a table view.
+        if self.performSystemAccessibilityScrollIfMoved(direction) {
             self.onDidPerformAccessibilityScroll?(normalizedDirection)
             return true
         }
 
-        let minOffset = -self.adjustedContentInset.top
-        let maxOffset = max(minOffset, self.contentSize.height - self.bounds.height + self.adjustedContentInset.bottom)
-
-        let currentOffset = self.contentOffset.y
-        let pageHeight = max(1.0, self.bounds.height - self.adjustedContentInset.top - self.adjustedContentInset.bottom)
-        let delta = pageHeight * 0.9
-
-        let targetOffset: CGFloat
-        switch normalizedDirection {
-        case .up:
-            targetOffset = max(minOffset, currentOffset - delta)
-        case .down:
-            targetOffset = min(maxOffset, currentOffset + delta)
-        default:
-            targetOffset = currentOffset
-        }
-
-        if abs(targetOffset - currentOffset) < 1.0 {
-            if let onAccessibilityScrollBoundary, onAccessibilityScrollBoundary(normalizedDirection) {
-                return true
-            }
+        guard normalizedDirection == .up || normalizedDirection == .down else {
             return false
         }
 
-        UIView.performWithoutAnimation {
-            self.setContentOffset(CGPoint(x: self.contentOffset.x, y: targetOffset), animated: false)
-            self.layoutIfNeeded()
-        }
-        self.onDidPerformAccessibilityScroll?(normalizedDirection)
-        UIAccessibility.post(notification: .pageScrolled, argument: nil)
-
-        self.scheduleFocusCorrectionAfterScrollIfNeeded(
-            initialFocusedIndexPath: initialFocusedIndexPath,
-            direction: normalizedDirection,
-            treatAsEdgeNavigation: treatAsEdgeNavigation
-        )
-
-        if UIAccessibility.isVoiceOverRunning {
-            DispatchQueue.main.async { [weak self] in
-                guard let self else {
-                    return
-                }
-                guard UIAccessibility.isVoiceOverRunning else {
-                    return
-                }
-
-                let focusedElement = UIAccessibility.focusedElement(using: .notificationVoiceOver)
-                if let focusedView = focusedElement as? UIView, focusedView.isDescendant(of: self) {
-                    return
-                }
-                guard let visible = self.indexPathsForVisibleRows?.sorted(), !visible.isEmpty else {
-                    return
-                }
-                let focusIndexPath = (normalizedDirection == .up) ? visible.first! : visible.last!
-                if let cell = self.cellForRow(at: focusIndexPath) {
-                    UIAccessibility.post(notification: .layoutChanged, argument: cell)
-                }
+        let initialFocusedIndexPath = self.focusedCellIndexPath()
+        if let initialFocusedIndexPath, self.isIndexPathAtVisibleEdge(initialFocusedIndexPath, direction: normalizedDirection) {
+            if self.performIncrementalRowScrollIfPossible(direction: normalizedDirection) {
+                self.onDidPerformAccessibilityScroll?(normalizedDirection)
+                return true
             }
         }
 
-        return true
+        if self.performManualAccessibilityScrollIfPossible(direction: normalizedDirection) {
+            self.onDidPerformAccessibilityScroll?(normalizedDirection)
+            return true
+        }
+
+        if let onAccessibilityScrollBoundary, onAccessibilityScrollBoundary(normalizedDirection) {
+            return true
+        }
+        return false
     }
     
     private func performManualAccessibilityScrollIfPossible(direction: UIAccessibilityScrollDirection) -> Bool {
