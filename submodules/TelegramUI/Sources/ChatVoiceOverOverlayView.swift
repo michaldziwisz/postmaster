@@ -229,7 +229,7 @@ private final class ChatVoiceOverOverlayScrollbarAccessibilityElement: UIAccessi
             return
         }
         overlay.noteVoiceOverNavigationActivity()
-        overlay.voiceOverAccessibilityScroll(.up)
+        _ = overlay.voiceOverAccessibilityScroll(.up)
     }
     
     override func accessibilityDecrement() {
@@ -237,7 +237,7 @@ private final class ChatVoiceOverOverlayScrollbarAccessibilityElement: UIAccessi
             return
         }
         overlay.noteVoiceOverNavigationActivity()
-        overlay.voiceOverAccessibilityScroll(.down)
+        _ = overlay.voiceOverAccessibilityScroll(.down)
     }
 }
 
