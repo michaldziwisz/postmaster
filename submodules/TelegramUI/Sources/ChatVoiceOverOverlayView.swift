@@ -64,6 +64,35 @@ private final class ChatVoiceOverOverlayTableView: UITableView {
         set {
         }
     }
+
+    override func accessibilityElementCount() -> Int {
+        return self.overlayView?.tableAccessibilityElements().count ?? 0
+    }
+
+    override func accessibilityElement(at index: Int) -> Any? {
+        guard let elements = self.overlayView?.tableAccessibilityElements() else {
+            return nil
+        }
+        guard index >= 0, index < elements.count else {
+            return nil
+        }
+        return elements[index]
+    }
+
+    override func index(ofAccessibilityElement element: Any) -> Int {
+        guard let elements = self.overlayView?.tableAccessibilityElements() else {
+            return NSNotFound
+        }
+        guard let elementObject = element as AnyObject? else {
+            return NSNotFound
+        }
+        for (index, item) in elements.enumerated() {
+            if let itemObject = item as AnyObject?, itemObject === elementObject {
+                return index
+            }
+        }
+        return NSNotFound
+    }
     
     override func accessibilityScroll(_ direction: UIAccessibilityScrollDirection) -> Bool {
         // UIKit first (best for native VO behavior).
@@ -129,6 +158,7 @@ private final class ChatVoiceOverOverlayRowAccessibilityElement: UIAccessibility
         self.overlay = overlay
         self.kind = kind
         super.init(accessibilityContainer: overlay.voiceOverRowAccessibilityContainer())
+        self.isAccessibilityElement = true
     }
     
     override var accessibilityFrameInContainerSpace: CGRect {
@@ -1088,9 +1118,6 @@ public final class ChatVoiceOverOverlayView: UIView {
     }
 
     private func rebuildTableAccessibilityElementsIfNeeded() {
-        guard UIAccessibility.isVoiceOverRunning else {
-            return
-        }
         guard self.needsTableAccessibilityElementsRebuild else {
             return
         }
