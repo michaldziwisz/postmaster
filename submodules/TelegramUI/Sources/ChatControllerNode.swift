@@ -1053,6 +1053,8 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                 let contextMenuAnchorNode = ASDisplayNode()
                 contextMenuAnchorNode.isUserInteractionEnabled = false
                 contextMenuAnchorNode.view.isUserInteractionEnabled = false
+                contextMenuAnchorNode.view.isAccessibilityElement = false
+                contextMenuAnchorNode.view.accessibilityElementsHidden = true
                 contextMenuAnchorNode.view.backgroundColor = .clear
                 contextMenuAnchorNode.view.alpha = 0.01
                 contextMenuAnchorNode.frame = .zero

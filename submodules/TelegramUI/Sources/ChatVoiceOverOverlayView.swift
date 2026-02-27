@@ -11,6 +11,7 @@ import TelegramUIPreferences
 
 private final class ChatVoiceOverOverlayTableView: UITableView {
     var onDidPerformAccessibilityScroll: (() -> Void)?
+    weak var overlayView: ChatVoiceOverOverlayView?
     
     private func canScrollVertically(_ direction: UIAccessibilityScrollDirection) -> Bool {
         let minOffset = -self.adjustedContentInset.top
@@ -24,87 +25,6 @@ private final class ChatVoiceOverOverlayTableView: UITableView {
         default:
             return false
         }
-    }
-    
-    private func focusedCellIndexPath() -> IndexPath? {
-        guard UIAccessibility.isVoiceOverRunning else {
-            return nil
-        }
-        
-        let focused = UIAccessibility.focusedElement(using: .notificationVoiceOver)
-        let focusedView: UIView? = {
-            if let view = focused as? UIView {
-                return view
-            }
-            if let element = focused as? UIAccessibilityElement, let container = element.accessibilityContainer as? UIView {
-                return container
-            }
-            return nil
-        }()
-        guard let focusedView else {
-            return nil
-        }
-        
-        var current: UIView? = focusedView
-        while let view = current {
-            if let cell = view as? UITableViewCell, cell.isDescendant(of: self) {
-                return self.indexPath(for: cell)
-            }
-            current = view.superview
-        }
-        return nil
-    }
-    
-    private func rowDelta(for direction: UIAccessibilityScrollDirection) -> Int? {
-        switch direction {
-        case .previous, .up, .left:
-            return -1
-        case .next, .down, .right:
-            return 1
-        default:
-            return nil
-        }
-    }
-    
-    private func performRowStep(direction: UIAccessibilityScrollDirection) -> Bool {
-        guard UIAccessibility.isVoiceOverRunning else {
-            return false
-        }
-        guard let deltaRow = self.rowDelta(for: direction) else {
-            return false
-        }
-        guard let currentIndexPath = self.focusedCellIndexPath() else {
-            return false
-        }
-        
-        let targetRow = currentIndexPath.row + deltaRow
-        guard targetRow >= 0, targetRow < self.numberOfRows(inSection: currentIndexPath.section) else {
-            return false
-        }
-        let targetIndexPath = IndexPath(row: targetRow, section: currentIndexPath.section)
-        
-        if let cell = self.cellForRow(at: targetIndexPath) {
-            UIAccessibility.post(notification: .layoutChanged, argument: cell)
-            return true
-        }
-        
-        UIView.performWithoutAnimation {
-            let position: UITableView.ScrollPosition = (deltaRow < 0) ? .top : .bottom
-            self.scrollToRow(at: targetIndexPath, at: position, animated: false)
-            self.layoutIfNeeded()
-        }
-        
-        DispatchQueue.main.async { [weak self] in
-            guard let self else {
-                return
-            }
-            if let cell = self.cellForRow(at: targetIndexPath) {
-                UIAccessibility.post(notification: .layoutChanged, argument: cell)
-            } else {
-                UIAccessibility.post(notification: .pageScrolled, argument: nil)
-            }
-        }
-        return true
     }
     
     private func performManualPageScroll(direction: UIAccessibilityScrollDirection) -> Bool {
@@ -137,17 +57,17 @@ private final class ChatVoiceOverOverlayTableView: UITableView {
         return true
     }
     
+    override var accessibilityElements: [Any]? {
+        get {
+            return self.overlayView?.tableAccessibilityElements()
+        }
+        set {
+        }
+    }
+    
     override func accessibilityScroll(_ direction: UIAccessibilityScrollDirection) -> Bool {
         // UIKit first (best for native VO behavior).
         if super.accessibilityScroll(direction) {
-            self.onDidPerformAccessibilityScroll?()
-            return true
-        }
-
-        // VoiceOver often asks tables to scroll using `.previous/.next` rather than `.up/.down`
-        // during one-finger swipe navigation. Handle that deterministically by moving to the
-        // adjacent row and focusing it (scrolling if needed).
-        if self.performRowStep(direction: direction) {
             self.onDidPerformAccessibilityScroll?()
             return true
         }
@@ -193,6 +113,67 @@ private final class ChatVoiceOverOverlayCell: UITableViewCell {
     override func prepareForReuse() {
         super.prepareForReuse()
         self.onDidBecomeFocused = nil
+    }
+}
+
+private final class ChatVoiceOverOverlayRowAccessibilityElement: UIAccessibilityElement {
+    enum Kind: Equatable {
+        case loadEarlier
+        case row(stableId: UInt64)
+    }
+    
+    weak var overlay: ChatVoiceOverOverlayView?
+    let kind: Kind
+    
+    init(overlay: ChatVoiceOverOverlayView, kind: Kind) {
+        self.overlay = overlay
+        self.kind = kind
+        super.init(accessibilityContainer: overlay.voiceOverRowAccessibilityContainer())
+    }
+    
+    override var accessibilityFrameInContainerSpace: CGRect {
+        return self.overlay?.accessibilityFrameInContainerSpace(for: self) ?? .zero
+    }
+    
+    override func accessibilityElementDidBecomeFocused() {
+        super.accessibilityElementDidBecomeFocused()
+        self.overlay?.voiceOverElementDidBecomeFocused(self)
+    }
+    
+    override func accessibilityActivate() -> Bool {
+        return self.overlay?.activateVoiceOverElement(self) ?? false
+    }
+    
+    override var accessibilityLabel: String? {
+        get {
+            return self.overlay?.voiceOverAccessibilityLabel(for: self)
+        }
+        set {
+        }
+    }
+    
+    override var accessibilityHint: String? {
+        get {
+            return self.overlay?.voiceOverAccessibilityHint(for: self)
+        }
+        set {
+        }
+    }
+    
+    override var accessibilityTraits: UIAccessibilityTraits {
+        get {
+            return self.overlay?.voiceOverAccessibilityTraits(for: self) ?? super.accessibilityTraits
+        }
+        set {
+        }
+    }
+    
+    override var accessibilityCustomActions: [UIAccessibilityCustomAction]? {
+        get {
+            return self.overlay?.voiceOverAccessibilityCustomActions(for: self)
+        }
+        set {
+        }
     }
 }
 
@@ -268,6 +249,15 @@ public final class ChatVoiceOverOverlayView: UIView {
     
     private var interfaceState: ChatPresentationInterfaceState?
     private var rows: [Row] = []
+    private var rowIndexByStableId: [UInt64: Int] = [:]
+
+    private var cachedTableAccessibilityElements: [Any] = []
+    private var needsTableAccessibilityElementsRebuild = true
+    private var isRebuildingTableAccessibilityElements = false
+
+    private var loadEarlierAccessibilityElement: ChatVoiceOverOverlayRowAccessibilityElement?
+    private var rowAccessibilityElementsByStableId: [UInt64: ChatVoiceOverOverlayRowAccessibilityElement] = [:]
+    private var lastFocusedTableIndexPathForScroll: IndexPath?
 
     private var canLoadEarlierHistory = false
     private var isLoadingEarlierHistory = false
@@ -368,6 +358,8 @@ public final class ChatVoiceOverOverlayView: UIView {
         self.tableView.rowHeight = UITableView.automaticDimension
         self.tableView.keyboardDismissMode = .interactive
         self.tableView.alwaysBounceVertical = true
+        self.tableView.isAccessibilityElement = false
+        self.tableView.overlayView = self
         if #available(iOS 11.0, *) {
             self.tableView.accessibilityContainerType = .list
         }
@@ -376,6 +368,7 @@ public final class ChatVoiceOverOverlayView: UIView {
         // from auto-scrolling to offscreen rows during swipe navigation.
         self.tableView.accessibilityNavigationStyle = .automatic
         self.tableView.shouldGroupAccessibilityChildren = false
+        self.tableView.accessibilityElementsHidden = false
         self.refreshControl.addTarget(self, action: #selector(self.refreshTriggered), for: .valueChanged)
         self.tableView.refreshControl = self.refreshControl
         self.addSubview(self.tableView)
@@ -537,6 +530,7 @@ public final class ChatVoiceOverOverlayView: UIView {
         
         self.updateRecordButton(state: state)
         self.updateTitle(state: state)
+        self.invalidateAccessibilityElements()
     }
     
     func updateEntries(_ entries: [ChatHistoryEntry]) {
@@ -570,6 +564,8 @@ public final class ChatVoiceOverOverlayView: UIView {
             }
             self.tableView.layoutIfNeeded()
         }
+        
+        self.invalidateAccessibilityElements()
     }
 
     private func schedulePendingEntriesApplyIfNeeded() {
@@ -723,7 +719,12 @@ public final class ChatVoiceOverOverlayView: UIView {
         cell.detailTextLabel?.isAccessibilityElement = false
         
         cell.selectionStyle = .none
-        cell.isAccessibilityElement = true
+        // All VoiceOver interaction is provided via custom `UIAccessibilityElement`s returned
+        // from `ChatVoiceOverOverlayTableView.accessibilityElements`.
+        // Keep real table cells out of the accessibility tree to avoid swipe navigation escaping
+        // the message list when UIKit only exposes visible cells.
+        cell.isAccessibilityElement = false
+        cell.accessibilityElementsHidden = true
         cell.accessibilityCustomActions = nil
 
         if self.shouldShowLoadEarlierRow, indexPath.row == 0 {
@@ -1059,6 +1060,296 @@ public final class ChatVoiceOverOverlayView: UIView {
         }
         self.lastVoiceOverNavigationTimestamp = CACurrentMediaTime()
     }
+
+    private func updateRowIndexByStableId() {
+        self.rowIndexByStableId.removeAll(keepingCapacity: true)
+        self.rowIndexByStableId.reserveCapacity(self.rows.count)
+        for (index, row) in self.rows.enumerated() {
+            self.rowIndexByStableId[row.stableId] = index
+        }
+    }
+
+    private func invalidateAccessibilityElements() {
+        self.needsTableAccessibilityElementsRebuild = true
+        self.cachedTableAccessibilityElements = []
+    }
+
+    fileprivate func voiceOverRowAccessibilityContainer() -> UIView {
+        return self.tableView
+    }
+
+    fileprivate func tableAccessibilityElements() -> [Any] {
+        self.rebuildTableAccessibilityElementsIfNeeded()
+        return self.cachedTableAccessibilityElements
+    }
+
+    private func rebuildTableAccessibilityElementsIfNeeded() {
+        guard UIAccessibility.isVoiceOverRunning else {
+            return
+        }
+        guard self.needsTableAccessibilityElementsRebuild else {
+            return
+        }
+        guard !self.isRebuildingTableAccessibilityElements else {
+            return
+        }
+        self.isRebuildingTableAccessibilityElements = true
+        defer {
+            self.isRebuildingTableAccessibilityElements = false
+        }
+
+        self.needsTableAccessibilityElementsRebuild = false
+
+        var elements: [Any] = []
+        elements.reserveCapacity(self.rows.count + (self.shouldShowLoadEarlierRow ? 1 : 0))
+
+        if self.shouldShowLoadEarlierRow {
+            let element: ChatVoiceOverOverlayRowAccessibilityElement
+            if let current = self.loadEarlierAccessibilityElement {
+                element = current
+            } else {
+                element = ChatVoiceOverOverlayRowAccessibilityElement(overlay: self, kind: .loadEarlier)
+                self.loadEarlierAccessibilityElement = element
+            }
+            element.overlay = self
+            elements.append(element)
+        } else {
+            self.loadEarlierAccessibilityElement = nil
+        }
+
+        var newElementsByStableId: [UInt64: ChatVoiceOverOverlayRowAccessibilityElement] = [:]
+        newElementsByStableId.reserveCapacity(self.rows.count)
+        for row in self.rows {
+            let element = self.rowAccessibilityElementsByStableId[row.stableId] ?? ChatVoiceOverOverlayRowAccessibilityElement(overlay: self, kind: .row(stableId: row.stableId))
+            element.overlay = self
+            newElementsByStableId[row.stableId] = element
+            elements.append(element)
+        }
+        self.rowAccessibilityElementsByStableId = newElementsByStableId
+
+        self.cachedTableAccessibilityElements = elements
+    }
+
+    private func indexPath(for element: ChatVoiceOverOverlayRowAccessibilityElement) -> IndexPath? {
+        switch element.kind {
+        case .loadEarlier:
+            guard self.shouldShowLoadEarlierRow else {
+                return nil
+            }
+            return IndexPath(row: 0, section: 0)
+        case let .row(stableId):
+            guard let rowIndex = self.rowIndexByStableId[stableId] else {
+                return nil
+            }
+            let tableRow = rowIndex + self.loadEarlierRowOffset
+            return IndexPath(row: tableRow, section: 0)
+        }
+    }
+
+    private func row(for element: ChatVoiceOverOverlayRowAccessibilityElement) -> Row? {
+        switch element.kind {
+        case .loadEarlier:
+            return nil
+        case let .row(stableId):
+            guard let rowIndex = self.rowIndexByStableId[stableId], rowIndex >= 0, rowIndex < self.rows.count else {
+                return nil
+            }
+            return self.rows[rowIndex]
+        }
+    }
+
+    fileprivate func accessibilityFrameInContainerSpace(for element: ChatVoiceOverOverlayRowAccessibilityElement) -> CGRect {
+        guard let indexPath = self.indexPath(for: element) else {
+            return .zero
+        }
+        guard indexPath.section == 0, indexPath.row >= 0, indexPath.row < self.tableView.numberOfRows(inSection: 0) else {
+            return .zero
+        }
+        return self.tableView.rectForRow(at: indexPath)
+    }
+
+    fileprivate func voiceOverElementDidBecomeFocused(_ element: ChatVoiceOverOverlayRowAccessibilityElement) {
+        guard UIAccessibility.isVoiceOverRunning else {
+            return
+        }
+        self.noteVoiceOverNavigationActivity()
+
+        guard let indexPath = self.indexPath(for: element) else {
+            return
+        }
+
+        let wasVisible: Bool = self.tableView.indexPathsForVisibleRows?.contains(indexPath) ?? false
+        if !wasVisible {
+            let scrollPosition: UITableView.ScrollPosition
+            if let previous = self.lastFocusedTableIndexPathForScroll {
+                if indexPath.row < previous.row {
+                    scrollPosition = .top
+                } else if indexPath.row > previous.row {
+                    scrollPosition = .bottom
+                } else {
+                    scrollPosition = .middle
+                }
+            } else {
+                scrollPosition = .middle
+            }
+
+            UIView.performWithoutAnimation {
+                self.tableView.scrollToRow(at: indexPath, at: scrollPosition, animated: false)
+                self.tableView.layoutIfNeeded()
+            }
+        }
+
+        self.lastFocusedTableIndexPathForScroll = indexPath
+        self.captureLastUserScrollAnchor()
+
+        if !wasVisible {
+            DispatchQueue.main.async { [weak element] in
+                guard let element, UIAccessibility.isVoiceOverRunning else {
+                    return
+                }
+                UIAccessibility.post(notification: .layoutChanged, argument: element)
+            }
+        }
+    }
+
+    fileprivate func activateVoiceOverElement(_ element: ChatVoiceOverOverlayRowAccessibilityElement) -> Bool {
+        switch element.kind {
+        case .loadEarlier:
+            guard self.canLoadEarlierHistory, !self.isLoadEarlierInProgress else {
+                return false
+            }
+            self.loadEarlierInitiationFocus = .loadEarlierRow
+            self.triggerLoadEarlierRequest()
+            return true
+        case .row:
+            guard let row = self.row(for: element) else {
+                return false
+            }
+            guard case let .message(message) = row.kind else {
+                return false
+            }
+            guard self.isMessageActivatable(message) else {
+                return false
+            }
+            self.actions.activateMessage?(message)
+            return true
+        }
+    }
+
+    fileprivate func voiceOverAccessibilityLabel(for element: ChatVoiceOverOverlayRowAccessibilityElement) -> String {
+        switch element.kind {
+        case .loadEarlier:
+            let bundle = getAppBundle()
+            if self.isLoadEarlierInProgress {
+                return bundle.localizedString(forKey: "VoiceOver.Chat.LoadEarlier.Loading", value: "Loading older messages", table: nil)
+            } else if self.canLoadEarlierHistory {
+                return bundle.localizedString(forKey: "VoiceOver.Chat.LoadEarlier", value: "Load older messages", table: nil)
+            } else {
+                return bundle.localizedString(forKey: "VoiceOver.Chat.LoadEarlier.None", value: "No older messages", table: nil)
+            }
+        case .row:
+            guard let row = self.row(for: element), let state = self.interfaceState else {
+                return ""
+            }
+            let resolved = self.resolveRow(row, state: state)
+            return resolved.accessibilityLabel
+        }
+    }
+
+    fileprivate func voiceOverAccessibilityHint(for element: ChatVoiceOverOverlayRowAccessibilityElement) -> String? {
+        switch element.kind {
+        case .loadEarlier:
+            return nil
+        case .row:
+            guard let row = self.row(for: element), let state = self.interfaceState else {
+                return nil
+            }
+            let resolved = self.resolveRow(row, state: state)
+            return resolved.hint
+        }
+    }
+
+    fileprivate func voiceOverAccessibilityTraits(for element: ChatVoiceOverOverlayRowAccessibilityElement) -> UIAccessibilityTraits {
+        switch element.kind {
+        case .loadEarlier:
+            if self.isLoadEarlierInProgress {
+                return [.button, .notEnabled]
+            } else if self.canLoadEarlierHistory {
+                return [.button]
+            } else {
+                return [.staticText]
+            }
+        case .row:
+            guard let row = self.row(for: element), let state = self.interfaceState else {
+                return [.staticText]
+            }
+            let resolved = self.resolveRow(row, state: state)
+            return resolved.traits
+        }
+    }
+
+    fileprivate func voiceOverAccessibilityCustomActions(for element: ChatVoiceOverOverlayRowAccessibilityElement) -> [UIAccessibilityCustomAction]? {
+        guard let state = self.interfaceState else {
+            return nil
+        }
+        switch element.kind {
+        case .loadEarlier:
+            #if DEBUG
+            let debugTitle = "Speak debug state"
+            return [
+                UIAccessibilityCustomAction(name: debugTitle, actionHandler: { [weak self] _ in
+                    guard let self else {
+                        return false
+                    }
+                    let now = CACurrentMediaTime()
+                    let lastRequestAgeMs = Int((now - self.lastLoadEarlierRequestTimestamp) * 1000.0)
+                    let beforeOldestId = self.loadEarlierOldestIndexBeforeRequest?.id.id
+                    let currentOldestId = self.rows.first?.index.id.id
+                    let message = "Load earlier debug. waiting \(self.isWaitingForLoadEarlier ? "true" : "false"). canLoadEarlier \(self.canLoadEarlierHistory ? "true" : "false"). isLoadingEarlier \(self.isLoadingEarlierHistory ? "true" : "false"). rows \(self.rows.count). beforeOldestId \(String(describing: beforeOldestId)). currentOldestId \(String(describing: currentOldestId)). requestId \(self.loadEarlierRequestId). noProgressCount \(self.loadEarlierNoProgressCount). lastRequestAge \(lastRequestAgeMs) ms."
+                    UIAccessibility.post(notification: .announcement, argument: message)
+                    return true
+                })
+            ]
+            #else
+            return nil
+            #endif
+        case .row:
+            guard let row = self.row(for: element) else {
+                return nil
+            }
+            guard case let .message(message) = row.kind else {
+                return nil
+            }
+
+            var customActions: [UIAccessibilityCustomAction] = []
+            let moreTitle = state.strings.Conversation_ContextMenuMore
+            customActions.append(UIAccessibilityCustomAction(name: moreTitle, actionHandler: { [weak self] _ in
+                guard let self else {
+                    return false
+                }
+                guard let indexPath = self.indexPath(for: element) else {
+                    return false
+                }
+                let rect = self.tableView.convert(self.tableView.rectForRow(at: indexPath), to: self)
+                self.actions.openMessageContextMenu?(message, rect)
+                return true
+            }))
+
+            let messageText = message.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !messageText.isEmpty {
+                let copyTitle = state.strings.Conversation_ContextMenuCopy
+                customActions.append(UIAccessibilityCustomAction(name: copyTitle, actionHandler: { _ in
+                    UIPasteboard.general.string = messageText
+                    if UIAccessibility.isVoiceOverRunning {
+                        UIAccessibility.post(notification: .announcement, argument: state.strings.Conversation_TextCopied)
+                    }
+                    return true
+                }))
+            }
+
+            return customActions.isEmpty ? nil : customActions
+        }
+    }
     
     private func isVoiceOverNavigationInProgress(graceInterval: CFTimeInterval = 0.8) -> Bool {
         guard UIAccessibility.isVoiceOverRunning else {
@@ -1109,6 +1400,8 @@ public final class ChatVoiceOverOverlayView: UIView {
         let newStableIds = newRows.map { $0.stableId }
         if previousStableIds == newStableIds {
             self.rows = newRows
+            self.updateRowIndexByStableId()
+            self.invalidateAccessibilityElements()
             self.reloadVisibleRows(excluding: focusedCellIndexPathBeforeUpdate)
             if self.forceScrollToBottomOnNextApply {
                 self.forceScrollToBottomOnNextApply = false
@@ -1171,6 +1464,8 @@ public final class ChatVoiceOverOverlayView: UIView {
         }
 
         self.rows = newRows
+        self.updateRowIndexByStableId()
+        self.invalidateAccessibilityElements()
         
         var didReloadTable = true
         if canApplyPrependInsertion {
@@ -1341,25 +1636,20 @@ public final class ChatVoiceOverOverlayView: UIView {
                         guard let self else {
                             return
                         }
-                        let focusTargetView: UIView? = {
-                            if let cell = self.tableView.cellForRow(at: focusTargetIndexPath) {
-                                return cell
+                        self.rebuildTableAccessibilityElementsIfNeeded()
+                        let focusTargetElement: Any? = {
+                            if self.shouldShowLoadEarlierRow, focusTargetIndexPath.row == 0 {
+                                return self.loadEarlierAccessibilityElement
                             }
-                            if let loadEarlierRestoredIndexPath, let cell = self.tableView.cellForRow(at: loadEarlierRestoredIndexPath) {
-                                return cell
+                            let rowIndex = focusTargetIndexPath.row - self.loadEarlierRowOffset
+                            guard rowIndex >= 0, rowIndex < self.rows.count else {
+                                return nil
                             }
-                            if let visibleIndexPaths = self.tableView.indexPathsForVisibleRows, !visibleIndexPaths.isEmpty {
-                                let closestIndexPath = visibleIndexPaths.min(by: { lhs, rhs in
-                                    abs(lhs.row - focusTargetIndexPath.row) < abs(rhs.row - focusTargetIndexPath.row)
-                                })
-                                if let closestIndexPath, let cell = self.tableView.cellForRow(at: closestIndexPath) {
-                                    return cell
-                                }
-                            }
-                            return nil
+                            let stableId = self.rows[rowIndex].stableId
+                            return self.rowAccessibilityElementsByStableId[stableId]
                         }()
-                        if let focusTargetView {
-                            UIAccessibility.post(notification: .layoutChanged, argument: focusTargetView)
+                        if let focusTargetElement {
+                            UIAccessibility.post(notification: .layoutChanged, argument: focusTargetElement)
                         }
                     }
                 } else if let focusedNonTableElementBeforeUpdate {
@@ -1421,6 +1711,9 @@ public final class ChatVoiceOverOverlayView: UIView {
     private func focusedTableViewIndexPath() -> IndexPath? {
         guard UIAccessibility.isVoiceOverRunning else {
             return nil
+        }
+        if let focusedElement = UIAccessibility.focusedElement(using: .notificationVoiceOver) as? ChatVoiceOverOverlayRowAccessibilityElement {
+            return self.indexPath(for: focusedElement)
         }
         guard let focusedView = UIAccessibility.focusedElement(using: .notificationVoiceOver) as? UIView else {
             return nil
@@ -1687,21 +1980,12 @@ public final class ChatVoiceOverOverlayView: UIView {
             return ScrollAnchor(stableId: stableId, messageId: messageId, offset: offset)
         }
         
-        if UIAccessibility.isVoiceOverRunning, let focusedView = UIAccessibility.focusedElement(using: .notificationVoiceOver) as? UIView {
-            var current: UIView? = focusedView
-            while let view = current {
-                if let cell = view as? UITableViewCell, cell.isDescendant(of: self.tableView) {
-                    if let indexPath = self.tableView.indexPath(for: cell), indexPath.row >= rowOffset {
-                        let rowIndex = indexPath.row - rowOffset
-                        if rowIndex >= 0, rowIndex < self.rows.count, case .message = self.rows[rowIndex].kind {
-                            if let anchor = makeAnchor(for: indexPath) {
-                                return anchor
-                            }
-                        }
-                    }
-                    break
+        if UIAccessibility.isVoiceOverRunning, let focusedIndexPath = self.focusedTableViewIndexPath(), focusedIndexPath.row >= rowOffset {
+            let rowIndex = focusedIndexPath.row - rowOffset
+            if rowIndex >= 0, rowIndex < self.rows.count, case .message = self.rows[rowIndex].kind {
+                if let anchor = makeAnchor(for: focusedIndexPath) {
+                    return anchor
                 }
-                current = view.superview
             }
         }
         
@@ -1915,9 +2199,10 @@ public final class ChatVoiceOverOverlayView: UIView {
         guard !self.rows.isEmpty else {
             return
         }
-        let lastIndexPath = IndexPath(row: self.rows.count - 1 + self.loadEarlierRowOffset, section: 0)
-        if let cell = self.tableView.cellForRow(at: lastIndexPath) {
-            UIAccessibility.post(notification: .screenChanged, argument: cell)
+        self.rebuildTableAccessibilityElementsIfNeeded()
+        let stableId = self.rows[self.rows.count - 1].stableId
+        if let element = self.rowAccessibilityElementsByStableId[stableId] {
+            UIAccessibility.post(notification: .screenChanged, argument: element)
         }
     }
     
