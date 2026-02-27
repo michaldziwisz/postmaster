@@ -210,7 +210,7 @@ private final class ChatVoiceOverOverlayTableView: UITableView {
     override func accessibilityScroll(_ direction: UIAccessibilityScrollDirection) -> Bool {
         let normalizedDirection = self.normalizeAccessibilityScrollDirection(direction)
         // Prefer UIKit's built-in behavior. VoiceOver relies on it to keep navigation within a table view.
-        if self.canManuallyScroll(direction: normalizedDirection), self.performSystemAccessibilityScroll(normalizedDirection) {
+        if self.canManuallyScroll(direction: normalizedDirection), self.performSystemAccessibilityScroll(direction) {
             self.onDidPerformAccessibilityScroll?(normalizedDirection)
             return true
         }
