@@ -38,13 +38,11 @@ private final class ChatVoiceOverOverlayTableView: UITableView {
         }
     }
     
-    private func performSystemAccessibilityScrollIfMoved(_ direction: UIAccessibilityScrollDirection) -> Bool {
-        let previousOffset = self.contentOffset
-        guard super.accessibilityScroll(direction) else {
-            return false
-        }
-        let didMove = abs(self.contentOffset.y - previousOffset.y) >= 0.5 || abs(self.contentOffset.x - previousOffset.x) >= 0.5
-        return didMove
+    private func performSystemAccessibilityScroll(_ direction: UIAccessibilityScrollDirection) -> Bool {
+        // Trust UIKit's return value. It may scroll asynchronously, so checking `contentOffset`
+        // immediately after calling `super.accessibilityScroll` can cause false negatives and
+        // make VoiceOver "escape" a table view when it should continue scrolling within it.
+        return super.accessibilityScroll(direction)
     }
     
     private func focusedCellIndexPath() -> IndexPath? {
@@ -212,7 +210,7 @@ private final class ChatVoiceOverOverlayTableView: UITableView {
     override func accessibilityScroll(_ direction: UIAccessibilityScrollDirection) -> Bool {
         let normalizedDirection = self.normalizeAccessibilityScrollDirection(direction)
         // Prefer UIKit's built-in behavior. VoiceOver relies on it to keep navigation within a table view.
-        if self.performSystemAccessibilityScrollIfMoved(direction) {
+        if self.canManuallyScroll(direction: normalizedDirection), self.performSystemAccessibilityScroll(normalizedDirection) {
             self.onDidPerformAccessibilityScroll?(normalizedDirection)
             return true
         }
