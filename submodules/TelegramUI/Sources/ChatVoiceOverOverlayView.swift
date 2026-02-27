@@ -229,9 +229,7 @@ private final class ChatVoiceOverOverlayScrollbarAccessibilityElement: UIAccessi
             return
         }
         overlay.noteVoiceOverNavigationActivity()
-        if overlay.voiceOverAccessibilityScroll(.down) {
-            UIAccessibility.post(notification: .announcement, argument: self.accessibilityValue)
-        }
+        overlay.voiceOverAccessibilityScroll(.up)
     }
     
     override func accessibilityDecrement() {
@@ -239,9 +237,7 @@ private final class ChatVoiceOverOverlayScrollbarAccessibilityElement: UIAccessi
             return
         }
         overlay.noteVoiceOverNavigationActivity()
-        if overlay.voiceOverAccessibilityScroll(.up) {
-            UIAccessibility.post(notification: .announcement, argument: self.accessibilityValue)
-        }
+        overlay.voiceOverAccessibilityScroll(.down)
     }
 }
 
@@ -326,6 +322,7 @@ public final class ChatVoiceOverOverlayView: UIView {
     private var loadEarlierAccessibilityElement: ChatVoiceOverOverlayRowAccessibilityElement?
     private var rowAccessibilityElementsByStableId: [UInt64: ChatVoiceOverOverlayRowAccessibilityElement] = [:]
     private var scrollbarAccessibilityElement: ChatVoiceOverOverlayScrollbarAccessibilityElement?
+    private var lastScrollbarAnchorIndexPath: IndexPath?
     private var lastFocusedTableIndexPathForScroll: IndexPath?
 
     private var canLoadEarlierHistory = false
@@ -1247,7 +1244,8 @@ public final class ChatVoiceOverOverlayView: UIView {
     
     fileprivate func voiceOverScrollbarLabel() -> String {
         let bundle = getAppBundle()
-        return bundle.localizedString(forKey: "VoiceOver.Chat.ScrollBar", value: "Scroll bar", table: nil)
+        let isPolish = Locale.preferredLanguages.first?.hasPrefix("pl") == true
+        return bundle.localizedString(forKey: "VoiceOver.Chat.ScrollBar", value: isPolish ? "Pasek przewijania" : "Scroll bar", table: nil)
     }
     
     fileprivate func voiceOverScrollbarValue() -> String? {
@@ -1259,8 +1257,57 @@ public final class ChatVoiceOverOverlayView: UIView {
         }
         let progress = (self.tableView.contentOffset.y - minOffset) / range
         let clamped = max(0.0, min(1.0, progress))
-        let percent = Int((clamped * 100.0).rounded())
-        return "\(percent)%"
+        let rawPercent = Int((clamped * 100.0).rounded())
+        let step = 5
+        let rounded = max(0, min(100, ((rawPercent + step / 2) / step) * step))
+        return "\(rounded)%"
+    }
+
+    private func nearestVisibleIndexPath(to tablePoint: CGPoint) -> IndexPath? {
+        guard let visibleIndexPaths = self.tableView.indexPathsForVisibleRows, !visibleIndexPaths.isEmpty else {
+            return nil
+        }
+        var nearestIndexPath: IndexPath?
+        var nearestDistance: CGFloat = .greatestFiniteMagnitude
+        for indexPath in visibleIndexPaths {
+            let rect = self.tableView.rectForRow(at: indexPath)
+            let dy: CGFloat
+            if tablePoint.y < rect.minY {
+                dy = rect.minY - tablePoint.y
+            } else if tablePoint.y > rect.maxY {
+                dy = tablePoint.y - rect.maxY
+            } else {
+                dy = 0.0
+            }
+            if dy < nearestDistance {
+                nearestDistance = dy
+                nearestIndexPath = indexPath
+            }
+        }
+        return nearestIndexPath
+    }
+
+    public override func index(ofAccessibilityElement element: Any) -> Int {
+        self.rebuildAccessibilityElementsIfNeeded()
+        
+        if let scrollbar = self.scrollbarAccessibilityElement, (element as AnyObject) === scrollbar {
+            let preferredIndexPath = self.lastScrollbarAnchorIndexPath ?? self.lastFocusedTableIndexPathForScroll
+            if let preferredIndexPath, let anchorElement = self.accessibilityElement(at: preferredIndexPath) {
+                if let index = self.cachedAccessibilityElements.firstIndex(where: { ($0 as AnyObject) === anchorElement }) {
+                    return index
+                }
+            }
+            if let firstRowIndex = self.cachedAccessibilityElements.firstIndex(where: { $0 is ChatVoiceOverOverlayRowAccessibilityElement }) {
+                return firstRowIndex
+            }
+            return 0
+        }
+        
+        if let index = self.cachedAccessibilityElements.firstIndex(where: { ($0 as AnyObject) === (element as AnyObject) }) {
+            return index
+        }
+        
+        return NSNotFound
     }
 
     private func voiceOverHitTest(_ point: CGPoint) -> Any? {
@@ -1304,6 +1351,9 @@ public final class ChatVoiceOverOverlayView: UIView {
         if self.tableView.frame.contains(point) {
             let scrollBarFrame = self.voiceOverScrollbarFrameInContainerSpace()
             if !scrollBarFrame.isEmpty, scrollBarFrame.contains(point), self.tableView.contentSize.height > self.tableView.bounds.height + 1.0 {
+                let tablePoint = self.tableView.convert(point, from: self)
+                self.lastScrollbarAnchorIndexPath = self.tableView.indexPathForRow(at: tablePoint) ?? self.nearestVisibleIndexPath(to: tablePoint)
+                
                 if let existing = self.scrollbarAccessibilityElement {
                     existing.overlay = self
                     return existing
@@ -1319,25 +1369,17 @@ public final class ChatVoiceOverOverlayView: UIView {
                 return self.accessibilityElement(at: indexPath)
             }
             
-            if let visibleIndexPaths = self.tableView.indexPathsForVisibleRows, !visibleIndexPaths.isEmpty {
-                var nearestIndexPath: IndexPath?
-                var nearestDistance: CGFloat = .greatestFiniteMagnitude
-                for indexPath in visibleIndexPaths {
-                    let rect = self.tableView.rectForRow(at: indexPath)
-                    let dy: CGFloat
-                    if tablePoint.y < rect.minY {
-                        dy = rect.minY - tablePoint.y
-                    } else if tablePoint.y > rect.maxY {
-                        dy = tablePoint.y - rect.maxY
-                    } else {
-                        dy = 0.0
-                    }
-                    if dy < nearestDistance {
-                        nearestDistance = dy
-                        nearestIndexPath = indexPath
-                    }
+            if let nearestIndexPath = self.nearestVisibleIndexPath(to: tablePoint) {
+                let rect = self.tableView.rectForRow(at: nearestIndexPath)
+                let dy: CGFloat
+                if tablePoint.y < rect.minY {
+                    dy = rect.minY - tablePoint.y
+                } else if tablePoint.y > rect.maxY {
+                    dy = tablePoint.y - rect.maxY
+                } else {
+                    dy = 0.0
                 }
-                if let nearestIndexPath, nearestDistance <= 24.0 {
+                if dy <= 24.0 {
                     return self.accessibilityElement(at: nearestIndexPath)
                 }
             }
