@@ -185,6 +185,66 @@ private final class ChatVoiceOverOverlayRowAccessibilityElement: UIAccessibility
     }
 }
 
+private final class ChatVoiceOverOverlayScrollbarAccessibilityElement: UIAccessibilityElement {
+    weak var overlay: ChatVoiceOverOverlayView?
+    
+    init(overlay: ChatVoiceOverOverlayView) {
+        self.overlay = overlay
+        super.init(accessibilityContainer: overlay)
+        self.isAccessibilityElement = true
+        self.accessibilityTraits = [.adjustable]
+    }
+    
+    override var accessibilityFrameInContainerSpace: CGRect {
+        get {
+            return self.overlay?.voiceOverScrollbarFrameInContainerSpace() ?? .zero
+        }
+        set {
+        }
+    }
+    
+    override var accessibilityLabel: String? {
+        get {
+            return self.overlay?.voiceOverScrollbarLabel()
+        }
+        set {
+        }
+    }
+    
+    override var accessibilityValue: String? {
+        get {
+            return self.overlay?.voiceOverScrollbarValue()
+        }
+        set {
+        }
+    }
+    
+    override func accessibilityElementDidBecomeFocused() {
+        super.accessibilityElementDidBecomeFocused()
+        self.overlay?.noteVoiceOverNavigationActivity()
+    }
+    
+    override func accessibilityIncrement() {
+        guard let overlay = self.overlay else {
+            return
+        }
+        overlay.noteVoiceOverNavigationActivity()
+        if overlay.voiceOverAccessibilityScroll(.down) {
+            UIAccessibility.post(notification: .announcement, argument: self.accessibilityValue)
+        }
+    }
+    
+    override func accessibilityDecrement() {
+        guard let overlay = self.overlay else {
+            return
+        }
+        overlay.noteVoiceOverNavigationActivity()
+        if overlay.voiceOverAccessibilityScroll(.up) {
+            UIAccessibility.post(notification: .announcement, argument: self.accessibilityValue)
+        }
+    }
+}
+
 public final class ChatVoiceOverOverlayView: UIView {
     public struct Actions {
         public var back: (() -> Void)?
@@ -265,6 +325,7 @@ public final class ChatVoiceOverOverlayView: UIView {
 
     private var loadEarlierAccessibilityElement: ChatVoiceOverOverlayRowAccessibilityElement?
     private var rowAccessibilityElementsByStableId: [UInt64: ChatVoiceOverOverlayRowAccessibilityElement] = [:]
+    private var scrollbarAccessibilityElement: ChatVoiceOverOverlayScrollbarAccessibilityElement?
     private var lastFocusedTableIndexPathForScroll: IndexPath?
 
     private var canLoadEarlierHistory = false
@@ -1077,7 +1138,7 @@ public final class ChatVoiceOverOverlayView: UIView {
     
     // MARK: - Helpers
 
-    private func noteVoiceOverNavigationActivity() {
+    fileprivate func noteVoiceOverNavigationActivity() {
         guard UIAccessibility.isVoiceOverRunning else {
             return
         }
@@ -1175,6 +1236,33 @@ public final class ChatVoiceOverOverlayView: UIView {
         return self.tableView.accessibilityScroll(direction)
     }
 
+    fileprivate func voiceOverScrollbarFrameInContainerSpace() -> CGRect {
+        let tableFrame = self.tableView.frame
+        if tableFrame.isEmpty {
+            return .zero
+        }
+        let hotWidth: CGFloat = 18.0
+        return CGRect(x: max(tableFrame.minX, tableFrame.maxX - hotWidth), y: tableFrame.minY, width: min(hotWidth, tableFrame.width), height: tableFrame.height)
+    }
+    
+    fileprivate func voiceOverScrollbarLabel() -> String {
+        let bundle = getAppBundle()
+        return bundle.localizedString(forKey: "VoiceOver.Chat.ScrollBar", value: "Scroll bar", table: nil)
+    }
+    
+    fileprivate func voiceOverScrollbarValue() -> String? {
+        let minOffset = -self.tableView.adjustedContentInset.top
+        let maxOffset = max(minOffset, self.tableView.contentSize.height - self.tableView.bounds.height + self.tableView.adjustedContentInset.bottom)
+        let range = maxOffset - minOffset
+        guard range > 1.0 else {
+            return nil
+        }
+        let progress = (self.tableView.contentOffset.y - minOffset) / range
+        let clamped = max(0.0, min(1.0, progress))
+        let percent = Int((clamped * 100.0).rounded())
+        return "\(percent)%"
+    }
+
     private func voiceOverHitTest(_ point: CGPoint) -> Any? {
         guard UIAccessibility.isVoiceOverRunning else {
             return nil
@@ -1214,6 +1302,18 @@ public final class ChatVoiceOverOverlayView: UIView {
         }
         
         if self.tableView.frame.contains(point) {
+            let scrollBarFrame = self.voiceOverScrollbarFrameInContainerSpace()
+            if !scrollBarFrame.isEmpty, scrollBarFrame.contains(point), self.tableView.contentSize.height > self.tableView.bounds.height + 1.0 {
+                if let existing = self.scrollbarAccessibilityElement {
+                    existing.overlay = self
+                    return existing
+                } else {
+                    let element = ChatVoiceOverOverlayScrollbarAccessibilityElement(overlay: self)
+                    self.scrollbarAccessibilityElement = element
+                    return element
+                }
+            }
+            
             let tablePoint = self.tableView.convert(point, from: self)
             if let indexPath = self.tableView.indexPathForRow(at: tablePoint) {
                 return self.accessibilityElement(at: indexPath)
