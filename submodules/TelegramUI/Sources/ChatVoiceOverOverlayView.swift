@@ -9,6 +9,157 @@ import TelegramStringFormatting
 import ChatHistoryEntry
 import TelegramUIPreferences
 
+private final class ChatVoiceOverOverlayTableView: UITableView {
+    var onDidPerformAccessibilityScroll: (() -> Void)?
+
+    private func normalizeScrollDirection(_ direction: UIAccessibilityScrollDirection) -> UIAccessibilityScrollDirection {
+        switch direction {
+        case .up, .previous, .left:
+            return .up
+        case .down, .next, .right:
+            return .down
+        default:
+            return direction
+        }
+    }
+
+    private func canScrollVertically(_ direction: UIAccessibilityScrollDirection) -> Bool {
+        let minOffset = -self.adjustedContentInset.top
+        let maxOffset = max(minOffset, self.contentSize.height - self.bounds.height + self.adjustedContentInset.bottom)
+        let y = self.contentOffset.y
+        switch direction {
+        case .up:
+            return y > minOffset + 1.0
+        case .down:
+            return y < maxOffset - 1.0
+        default:
+            return false
+        }
+    }
+
+    private func focusedCellIndexPath() -> IndexPath? {
+        guard UIAccessibility.isVoiceOverRunning else {
+            return nil
+        }
+        guard let focusedView = UIAccessibility.focusedElement(using: .notificationVoiceOver) as? UIView else {
+            return nil
+        }
+
+        var current: UIView? = focusedView
+        while let view = current {
+            if let cell = view as? UITableViewCell, cell.isDescendant(of: self) {
+                return self.indexPath(for: cell)
+            }
+            current = view.superview
+        }
+        return nil
+    }
+
+    private func performIncrementalRowScroll(direction: UIAccessibilityScrollDirection) -> Bool {
+        guard UIAccessibility.isVoiceOverRunning else {
+            return false
+        }
+        guard direction == .up || direction == .down else {
+            return false
+        }
+        guard self.canScrollVertically(direction) else {
+            return false
+        }
+        guard let currentIndexPath = self.focusedCellIndexPath() else {
+            return false
+        }
+
+        let deltaRow = (direction == .up) ? -1 : 1
+        let targetRow = currentIndexPath.row + deltaRow
+        guard targetRow >= 0, targetRow < self.numberOfRows(inSection: currentIndexPath.section) else {
+            return false
+        }
+
+        let targetIndexPath = IndexPath(row: targetRow, section: currentIndexPath.section)
+        if let visible = self.indexPathsForVisibleRows, visible.contains(targetIndexPath) {
+            return false
+        }
+
+        UIView.performWithoutAnimation {
+            let position: UITableView.ScrollPosition = (direction == .up) ? .top : .bottom
+            self.scrollToRow(at: targetIndexPath, at: position, animated: false)
+            self.layoutIfNeeded()
+        }
+
+        DispatchQueue.main.async { [weak self] in
+            guard let self else {
+                return
+            }
+            if let cell = self.cellForRow(at: targetIndexPath) {
+                UIAccessibility.post(notification: .layoutChanged, argument: cell)
+            } else {
+                UIAccessibility.post(notification: .pageScrolled, argument: nil)
+            }
+        }
+        return true
+    }
+
+    private func performManualPageScroll(direction: UIAccessibilityScrollDirection) -> Bool {
+        guard direction == .up || direction == .down else {
+            return false
+        }
+        let minOffset = -self.adjustedContentInset.top
+        let maxOffset = max(minOffset, self.contentSize.height - self.bounds.height + self.adjustedContentInset.bottom)
+
+        let currentOffset = self.contentOffset.y
+        let pageHeight = max(1.0, self.bounds.height - self.adjustedContentInset.top - self.adjustedContentInset.bottom)
+        let delta = pageHeight * 0.85
+
+        let targetOffset: CGFloat
+        switch direction {
+        case .up:
+            targetOffset = max(minOffset, currentOffset - delta)
+        case .down:
+            targetOffset = min(maxOffset, currentOffset + delta)
+        default:
+            return false
+        }
+
+        if abs(targetOffset - currentOffset) < 1.0 {
+            return false
+        }
+
+        self.setContentOffset(CGPoint(x: self.contentOffset.x, y: targetOffset), animated: false)
+        UIAccessibility.post(notification: .pageScrolled, argument: nil)
+        return true
+    }
+
+    override func accessibilityScroll(_ direction: UIAccessibilityScrollDirection) -> Bool {
+        let normalized = self.normalizeScrollDirection(direction)
+
+        // First try UIKit's behavior (it keeps VoiceOver navigation inside tables when possible).
+        if normalized == .up || normalized == .down {
+            if super.accessibilityScroll(normalized) {
+                self.onDidPerformAccessibilityScroll?()
+                return true
+            }
+        } else {
+            if super.accessibilityScroll(direction) {
+                self.onDidPerformAccessibilityScroll?()
+                return true
+            }
+        }
+
+        // Fallbacks: if UIKit doesn't scroll (often happens when VoiceOver uses `.previous/.next`),
+        // we scroll ourselves to keep the navigation within the message list.
+        if self.performIncrementalRowScroll(direction: normalized) {
+            self.onDidPerformAccessibilityScroll?()
+            return true
+        }
+        if self.performManualPageScroll(direction: normalized) {
+            self.onDidPerformAccessibilityScroll?()
+            return true
+        }
+
+        return false
+    }
+}
+
 private final class ChatVoiceOverOverlayCell: UITableViewCell {
     var onDidBecomeFocused: (() -> Void)?
     
@@ -91,7 +242,7 @@ public final class ChatVoiceOverOverlayView: UIView {
     private let titleLabel = UILabel()
     private let profileButton = UIButton(type: .system)
     
-    private let tableView = UITableView(frame: .zero, style: .plain)
+    private let tableView = ChatVoiceOverOverlayTableView(frame: .zero, style: .plain)
     private let refreshControl = UIRefreshControl()
     
     private let composerView = UIView()
@@ -222,6 +373,9 @@ public final class ChatVoiceOverOverlayView: UIView {
         // from auto-scrolling to offscreen rows during swipe navigation.
         self.tableView.accessibilityNavigationStyle = .automatic
         self.tableView.shouldGroupAccessibilityChildren = false
+        self.tableView.onDidPerformAccessibilityScroll = { [weak self] in
+            self?.lastVoiceOverScrollTimestamp = CACurrentMediaTime()
+        }
         self.refreshControl.addTarget(self, action: #selector(self.refreshTriggered), for: .valueChanged)
         self.tableView.refreshControl = self.refreshControl
         self.addSubview(self.tableView)
