@@ -132,7 +132,11 @@ private final class ChatVoiceOverOverlayRowAccessibilityElement: UIAccessibility
     }
     
     override var accessibilityFrameInContainerSpace: CGRect {
-        return self.overlay?.accessibilityFrameInContainerSpace(for: self) ?? .zero
+        get {
+            return self.overlay?.accessibilityFrameInContainerSpace(for: self) ?? .zero
+        }
+        set {
+        }
     }
     
     override func accessibilityElementDidBecomeFocused() {
