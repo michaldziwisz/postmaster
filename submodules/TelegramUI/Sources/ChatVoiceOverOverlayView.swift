@@ -119,9 +119,10 @@ private final class ChatVoiceOverOverlayTableView: UITableView {
         return false
     }
 
-    override func accessibilityHitTest(_ point: CGPoint) -> Any? {
+    // iOS 17 and earlier.
+    func accessibilityHitTest(_ point: CGPoint) -> Any? {
         guard UIAccessibility.isVoiceOverRunning, let overlayView else {
-            return super.accessibilityHitTest(point)
+            return nil
         }
         // Improve touch exploration: map the finger location to the corresponding row element.
         if let indexPath = self.indexPathForRow(at: point) {
@@ -129,7 +130,18 @@ private final class ChatVoiceOverOverlayTableView: UITableView {
                 return element
             }
         }
-        return super.accessibilityHitTest(point)
+        return nil
+    }
+
+    // iOS 18+ (new SDK signature).
+    @available(iOS 18.0, *)
+    override func accessibilityHitTest(_ point: CGPoint, event: UIEvent?) -> Any? {
+        if UIAccessibility.isVoiceOverRunning, let overlayView, let indexPath = self.indexPathForRow(at: point) {
+            if let element = overlayView.tableAccessibilityElement(at: indexPath) {
+                return element
+            }
+        }
+        return super.accessibilityHitTest(point, event: event)
     }
 }
 
