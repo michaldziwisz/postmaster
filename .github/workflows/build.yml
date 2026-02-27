@@ -197,8 +197,27 @@ jobs:
             gh release create "$TAG" --title "$TITLE" --notes "$NOTES"
           fi
 
-          gh release upload "$TAG" "build/artifacts/Postmaster.ipa#Postmaster.ipa" --clobber
-          gh release upload "$TAG" "build/artifacts/Telegram.DSYMs.zip#Telegram.DSYMs.zip" --clobber
+          upload_with_retry() {
+            local tag="$1"
+            local asset="$2"
+            local tries=6
+            local delay=5
+            local attempt=1
+            while [ $attempt -le $tries ]; do
+              if gh release upload "$tag" "$asset" --clobber; then
+                return 0
+              fi
+              echo "Release asset upload failed (attempt ${attempt}/${tries}). Retrying in ${delay}s..."
+              sleep "$delay"
+              attempt=$((attempt + 1))
+            done
+            return 1
+          }
+
+          # Release uploads are best-effort. The workflow artifacts already contain the IPA/DSYMs,
+          # so don't fail the entire build if GitHub Release asset upload is flaky.
+          upload_with_retry "$TAG" "build/artifacts/Postmaster.ipa#Postmaster.ipa" || echo "Failed to upload Postmaster.ipa to the GitHub Release."
+          upload_with_retry "$TAG" "build/artifacts/Telegram.DSYMs.zip#Telegram.DSYMs.zip" || echo "Failed to upload Telegram.DSYMs.zip to the GitHub Release."
 
       - name: Fail if tests failed
         if: ${{ env.RUN_TESTS == 'true' && env.TESTS_EXIT_CODE != '0' }}
