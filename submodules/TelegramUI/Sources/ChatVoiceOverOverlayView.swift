@@ -118,6 +118,19 @@ private final class ChatVoiceOverOverlayTableView: UITableView {
 
         return false
     }
+
+    override func accessibilityHitTest(_ point: CGPoint) -> Any? {
+        guard UIAccessibility.isVoiceOverRunning, let overlayView else {
+            return super.accessibilityHitTest(point)
+        }
+        // Improve touch exploration: map the finger location to the corresponding row element.
+        if let indexPath = self.indexPathForRow(at: point) {
+            if let element = overlayView.tableAccessibilityElement(at: indexPath) {
+                return element
+            }
+        }
+        return super.accessibilityHitTest(point)
+    }
 }
 
 private final class ChatVoiceOverOverlayCell: UITableViewCell {
@@ -164,6 +177,14 @@ private final class ChatVoiceOverOverlayRowAccessibilityElement: UIAccessibility
     override var accessibilityFrameInContainerSpace: CGRect {
         get {
             return self.overlay?.accessibilityFrameInContainerSpace(for: self) ?? .zero
+        }
+        set {
+        }
+    }
+
+    override var accessibilityFrame: CGRect {
+        get {
+            return self.overlay?.accessibilityFrameInScreenSpace(for: self) ?? .zero
         }
         set {
         }
@@ -1117,6 +1138,22 @@ public final class ChatVoiceOverOverlayView: UIView {
         return self.cachedTableAccessibilityElements
     }
 
+    fileprivate func tableAccessibilityElement(at indexPath: IndexPath) -> ChatVoiceOverOverlayRowAccessibilityElement? {
+        self.rebuildTableAccessibilityElementsIfNeeded()
+        guard indexPath.section == 0 else {
+            return nil
+        }
+        if self.shouldShowLoadEarlierRow, indexPath.row == 0 {
+            return self.loadEarlierAccessibilityElement
+        }
+        let rowIndex = indexPath.row - self.loadEarlierRowOffset
+        guard rowIndex >= 0, rowIndex < self.rows.count else {
+            return nil
+        }
+        let stableId = self.rows[rowIndex].stableId
+        return self.rowAccessibilityElementsByStableId[stableId]
+    }
+
     private func rebuildTableAccessibilityElementsIfNeeded() {
         guard self.needsTableAccessibilityElementsRebuild else {
             return
@@ -1197,6 +1234,17 @@ public final class ChatVoiceOverOverlayView: UIView {
             return .zero
         }
         return self.tableView.rectForRow(at: indexPath)
+    }
+
+    fileprivate func accessibilityFrameInScreenSpace(for element: ChatVoiceOverOverlayRowAccessibilityElement) -> CGRect {
+        guard let indexPath = self.indexPath(for: element) else {
+            return .zero
+        }
+        guard indexPath.section == 0, indexPath.row >= 0, indexPath.row < self.tableView.numberOfRows(inSection: 0) else {
+            return .zero
+        }
+        let rect = self.tableView.rectForRow(at: indexPath)
+        return self.tableView.convert(rect, to: nil)
     }
 
     fileprivate func voiceOverElementDidBecomeFocused(_ element: ChatVoiceOverOverlayRowAccessibilityElement) {
