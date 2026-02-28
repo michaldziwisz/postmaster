@@ -13,6 +13,42 @@ import TelegramUIPreferences
 private final class ChatVoiceOverOverlayTableView: UITableView {
     var onDidPerformAccessibilityScroll: (() -> Void)?
     weak var overlayForAccessibilityElements: ChatVoiceOverOverlayView?
+    private weak var nativeVoiceOverScrollbarElement: AnyObject?
+    private var nativeVoiceOverScrollbarLastHitTestPoint: CGPoint?
+    
+    private func isLikelyNativeVoiceOverScrollbar(_ element: Any) -> Bool {
+        guard UIAccessibility.isVoiceOverRunning else {
+            return false
+        }
+        // Our chat rows are not adjustable; the system VO scrollbar is.
+        guard let object = element as? NSObject else {
+            return false
+        }
+        if element is ChatVoiceOverOverlayRowAccessibilityElement {
+            return false
+        }
+        guard object.accessibilityTraits.contains(.adjustable) else {
+            return false
+        }
+        
+        // Be conservative: ensure the element looks like a narrow control at the right edge of the table view.
+        let frame = object.accessibilityFrame
+        guard !frame.isEmpty else {
+            return true
+        }
+        let tableFrame = self.convert(self.bounds, to: nil)
+        let rightDelta = abs(frame.maxX - tableFrame.maxX)
+        if rightDelta > 60.0 {
+            return false
+        }
+        if frame.width > 140.0 {
+            return false
+        }
+        if frame.maxY < tableFrame.minY - 20.0 || frame.minY > tableFrame.maxY + 20.0 {
+            return false
+        }
+        return true
+    }
     
     private func canScrollVertically(_ direction: UIAccessibilityScrollDirection) -> Bool {
         let minOffset = -self.adjustedContentInset.top
@@ -122,6 +158,68 @@ private final class ChatVoiceOverOverlayTableView: UITableView {
             if index != NSNotFound {
                 return index
             }
+
+            let shouldMapToChatList: Bool = {
+                if let nativeVoiceOverScrollbarElement {
+                    let object = element as AnyObject
+                    if nativeVoiceOverScrollbarElement === object {
+                        return true
+                    }
+                }
+                return self.isLikelyNativeVoiceOverScrollbar(element)
+            }()
+            if shouldMapToChatList {
+                let count = overlay.tableAccessibilityElementCount
+                guard count > 0 else {
+                    return NSNotFound
+                }
+                
+                // Map the native VO scrollbar to a nearby row index so that swipe navigation
+                // can move from the scrollbar into the message list. We return an index that is
+                // guaranteed to have a valid "previous" element (so flicking left goes into rows).
+                let anchorPoint: CGPoint = {
+                    if let point = self.nativeVoiceOverScrollbarLastHitTestPoint {
+                        return CGPoint(x: self.bounds.midX, y: point.y)
+                    }
+                    return CGPoint(x: self.bounds.midX, y: self.bounds.midY)
+                }()
+                let anchorIndexPath: IndexPath? = {
+                    if let indexPath = self.indexPathForRow(at: anchorPoint) {
+                        return indexPath
+                    }
+                    guard let visible = self.indexPathsForVisibleRows, !visible.isEmpty else {
+                        return nil
+                    }
+                    let sorted = visible.sorted()
+                    var best: IndexPath?
+                    var bestDistance: CGFloat = .greatestFiniteMagnitude
+                    for indexPath in sorted {
+                        let rect = self.rectForRow(at: indexPath)
+                        let dy: CGFloat
+                        if anchorPoint.y < rect.minY {
+                            dy = rect.minY - anchorPoint.y
+                        } else if anchorPoint.y > rect.maxY {
+                            dy = anchorPoint.y - rect.maxY
+                        } else {
+                            dy = 0.0
+                        }
+                        if dy < bestDistance {
+                            bestDistance = dy
+                            best = indexPath
+                        }
+                    }
+                    return best ?? sorted[sorted.count / 2]
+                }()
+                let anchorRow = max(0, min(count - 1, anchorIndexPath?.row ?? 0))
+                let mapped = anchorRow + 1
+                if mapped < count {
+                    return mapped
+                } else if anchorRow > 0 {
+                    return anchorRow
+                } else {
+                    return 0
+                }
+            }
         }
         return super.index(ofAccessibilityElement: element)
     }
@@ -183,7 +281,12 @@ private final class ChatVoiceOverOverlayTableView: UITableView {
             return element
         }
         if #available(iOS 18.0, *) {
-            return super.accessibilityHitTest(point, event: nil)
+            let result = super.accessibilityHitTest(point, event: nil)
+            if UIAccessibility.isVoiceOverRunning, let result, self.isLikelyNativeVoiceOverScrollbar(result) {
+                self.nativeVoiceOverScrollbarElement = result as AnyObject
+                self.nativeVoiceOverScrollbarLastHitTestPoint = point
+            }
+            return result
         }
 
         let selector = NSSelectorFromString("accessibilityHitTest:")
@@ -197,7 +300,12 @@ private final class ChatVoiceOverOverlayTableView: UITableView {
         typealias HitTestIMP = @convention(c) (AnyObject, Selector, CGPoint) -> AnyObject?
         let imp = method_getImplementation(baseMethod)
         let fn = unsafeBitCast(imp, to: HitTestIMP.self)
-        return fn(self, selector, point)
+        let result = fn(self, selector, point)
+        if UIAccessibility.isVoiceOverRunning, let result, self.isLikelyNativeVoiceOverScrollbar(result) {
+            self.nativeVoiceOverScrollbarElement = result
+            self.nativeVoiceOverScrollbarLastHitTestPoint = point
+        }
+        return result
     }
 
     // iOS 18+ (new SDK signature).
@@ -206,7 +314,12 @@ private final class ChatVoiceOverOverlayTableView: UITableView {
         if let element = self.voiceOverCustomHitTest(point) {
             return element
         }
-        return super.accessibilityHitTest(point, event: event)
+        let result = super.accessibilityHitTest(point, event: event)
+        if UIAccessibility.isVoiceOverRunning, let result, self.isLikelyNativeVoiceOverScrollbar(result) {
+            self.nativeVoiceOverScrollbarElement = result as AnyObject
+            self.nativeVoiceOverScrollbarLastHitTestPoint = point
+        }
+        return result
     }
 }
 
