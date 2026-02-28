@@ -173,6 +173,17 @@ private final class ChatVoiceOverOverlayTableView: UITableView {
                 guard count > 0 else {
                     return NSNotFound
                 }
+
+                let hasLoadEarlierRow: Bool = {
+                    guard let first = overlay.tableAccessibilityElement(at: 0) as? ChatVoiceOverOverlayRowAccessibilityElement else {
+                        return false
+                    }
+                    if case .loadEarlier = first.kind {
+                        return true
+                    }
+                    return false
+                }()
+                let minContentIndex = hasLoadEarlierRow ? 1 : 0
                 
                 // Map the native VO scrollbar to a nearby row index so that swipe navigation
                 // can move from the scrollbar into the message list. We return an index that is
@@ -210,15 +221,24 @@ private final class ChatVoiceOverOverlayTableView: UITableView {
                     }
                     return best ?? sorted[sorted.count / 2]
                 }()
-                let anchorRow = max(0, min(count - 1, anchorIndexPath?.row ?? 0))
-                let mapped = anchorRow + 1
-                if mapped < count {
-                    return mapped
-                } else if anchorRow > 0 {
-                    return anchorRow
-                } else {
-                    return 0
+                let rawAnchorRow = max(0, min(count - 1, anchorIndexPath?.row ?? 0))
+                let anchorRow = max(minContentIndex, rawAnchorRow)
+
+                // Prefer placing the scrollbar between two content rows so that BOTH swipe directions
+                // move into the message list (instead of jumping to Load Older / leaving the list).
+                let candidate = anchorRow + 1
+                let lowerBound = minContentIndex + 1
+                let upperBound = count - 2
+                if lowerBound <= upperBound {
+                    return min(max(candidate, lowerBound), upperBound)
                 }
+                
+                // Fallback for very small lists: keep it inside the container and avoid mapping it
+                // directly before the Load Older row when possible.
+                if hasLoadEarlierRow, count >= 3 {
+                    return min(count - 1, max(candidate, 2))
+                }
+                return min(count - 1, max(candidate, minContentIndex))
             }
         }
         return super.index(ofAccessibilityElement: element)
