@@ -117,10 +117,96 @@ private final class ChatVoiceOverOverlayTableView: UITableView {
     }
 
     override func index(ofAccessibilityElement element: Any) -> Int {
-        guard UIAccessibility.isVoiceOverRunning else {
-            return super.index(ofAccessibilityElement: element)
+        if UIAccessibility.isVoiceOverRunning, let overlay = self.overlayForAccessibilityElements {
+            let index = overlay.tableAccessibilityIndex(of: element)
+            if index != NSNotFound {
+                return index
+            }
         }
-        return self.overlayForAccessibilityElements?.tableAccessibilityIndex(of: element) ?? NSNotFound
+        return super.index(ofAccessibilityElement: element)
+    }
+
+    private func voiceOverCustomHitTest(_ point: CGPoint) -> Any? {
+        guard UIAccessibility.isVoiceOverRunning, let overlay = self.overlayForAccessibilityElements else {
+            return nil
+        }
+
+        // Keep the native iOS VoiceOver scrollbar reachable by touch exploration.
+        let scrollBarGutterWidth: CGFloat = 22.0
+        let bounds = self.bounds
+        let gutterFrame = CGRect(
+            x: bounds.maxX - scrollBarGutterWidth,
+            y: bounds.minY,
+            width: scrollBarGutterWidth,
+            height: bounds.height
+        )
+        if gutterFrame.contains(point) {
+            return nil
+        }
+
+        if let indexPath = self.indexPathForRow(at: point), let element = overlay.accessibilityElement(at: indexPath) {
+            return element
+        }
+
+        // If the user explores between rows, fall back to the nearest visible row.
+        guard let visibleIndexPaths = self.indexPathsForVisibleRows, !visibleIndexPaths.isEmpty else {
+            return nil
+        }
+        var nearestIndexPath: IndexPath?
+        var nearestDistance: CGFloat = .greatestFiniteMagnitude
+        for indexPath in visibleIndexPaths {
+            let rect = self.rectForRow(at: indexPath)
+            let dy: CGFloat
+            if point.y < rect.minY {
+                dy = rect.minY - point.y
+            } else if point.y > rect.maxY {
+                dy = point.y - rect.maxY
+            } else {
+                dy = 0.0
+            }
+            if dy < nearestDistance {
+                nearestDistance = dy
+                nearestIndexPath = indexPath
+            }
+        }
+        if let nearestIndexPath, nearestDistance <= 24.0, let element = overlay.accessibilityElement(at: nearestIndexPath) {
+            return element
+        }
+
+        return nil
+    }
+
+    // iOS 17 and earlier.
+    @objc(accessibilityHitTest:)
+    func accessibilityHitTest(_ point: CGPoint) -> Any? {
+        if let element = self.voiceOverCustomHitTest(point) {
+            return element
+        }
+        if #available(iOS 18.0, *) {
+            return super.accessibilityHitTest(point, event: nil)
+        }
+
+        let selector = NSSelectorFromString("accessibilityHitTest:")
+        let baseMethod =
+            class_getInstanceMethod(UITableView.self, selector) ??
+            class_getInstanceMethod(UIScrollView.self, selector) ??
+            class_getInstanceMethod(UIView.self, selector)
+        guard let baseMethod else {
+            return nil
+        }
+        typealias HitTestIMP = @convention(c) (AnyObject, Selector, CGPoint) -> AnyObject?
+        let imp = method_getImplementation(baseMethod)
+        let fn = unsafeBitCast(imp, to: HitTestIMP.self)
+        return fn(self, selector, point)
+    }
+
+    // iOS 18+ (new SDK signature).
+    @available(iOS 18.0, *)
+    public override func accessibilityHitTest(_ point: CGPoint, event: UIEvent?) -> Any? {
+        if let element = self.voiceOverCustomHitTest(point) {
+            return element
+        }
+        return super.accessibilityHitTest(point, event: event)
     }
 }
 
