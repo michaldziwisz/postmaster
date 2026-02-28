@@ -101,6 +101,27 @@ private final class ChatVoiceOverOverlayTableView: UITableView {
         set {
         }
     }
+
+    override func accessibilityElementCount() -> Int {
+        guard UIAccessibility.isVoiceOverRunning else {
+            return super.accessibilityElementCount()
+        }
+        return self.overlayForAccessibilityElements?.tableAccessibilityElementCount ?? 0
+    }
+
+    override func accessibilityElement(at index: Int) -> Any? {
+        guard UIAccessibility.isVoiceOverRunning else {
+            return super.accessibilityElement(at: index)
+        }
+        return self.overlayForAccessibilityElements?.tableAccessibilityElement(at: index)
+    }
+
+    override func index(ofAccessibilityElement element: Any) -> Int {
+        guard UIAccessibility.isVoiceOverRunning else {
+            return super.index(ofAccessibilityElement: element)
+        }
+        return self.overlayForAccessibilityElements?.tableAccessibilityIndex(of: element) ?? NSNotFound
+    }
 }
 
 private final class ChatVoiceOverOverlayCell: UITableViewCell {
@@ -1128,6 +1149,37 @@ public final class ChatVoiceOverOverlayView: UIView {
     fileprivate var tableAccessibilityElements: [Any] {
         self.rebuildAccessibilityElementsIfNeeded()
         return self.cachedAccessibilityElements
+    }
+
+    fileprivate var tableAccessibilityElementCount: Int {
+        self.rebuildAccessibilityElementsIfNeeded()
+        return self.cachedAccessibilityElements.count
+    }
+
+    fileprivate func tableAccessibilityElement(at index: Int) -> Any? {
+        self.rebuildAccessibilityElementsIfNeeded()
+        guard index >= 0, index < self.cachedAccessibilityElements.count else {
+            return nil
+        }
+        return self.cachedAccessibilityElements[index]
+    }
+
+    fileprivate func tableAccessibilityIndex(of element: Any) -> Int {
+        guard let element = element as? ChatVoiceOverOverlayRowAccessibilityElement else {
+            return NSNotFound
+        }
+        guard element.overlay === self else {
+            return NSNotFound
+        }
+        switch element.kind {
+        case .loadEarlier:
+            return self.shouldShowLoadEarlierRow ? 0 : NSNotFound
+        case let .row(stableId):
+            guard let rowIndex = self.rowIndexByStableId[stableId] else {
+                return NSNotFound
+            }
+            return rowIndex + self.loadEarlierRowOffset
+        }
     }
 
     private func rebuildAccessibilityElementsIfNeeded() {
