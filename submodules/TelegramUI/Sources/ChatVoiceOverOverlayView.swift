@@ -231,7 +231,7 @@ private final class ChatVoiceOverOverlayTableView: UITableView {
             return 0
         }
         let baseCount = overlay.tableAccessibilityElementCount
-        guard let scrollbar = self.nativeVoiceOverScrollbarElement, self.currentNativeVoiceOverScrollbarInsertionIndex(overlay: overlay, baseCount: baseCount) != nil else {
+        guard self.nativeVoiceOverScrollbarElement != nil, self.currentNativeVoiceOverScrollbarInsertionIndex(overlay: overlay, baseCount: baseCount) != nil else {
             return baseCount
         }
         return baseCount + 1
