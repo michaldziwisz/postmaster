@@ -282,9 +282,11 @@ private final class ChatVoiceOverOverlayTableView: UITableView {
         }
         if #available(iOS 18.0, *) {
             let result = super.accessibilityHitTest(point, event: nil)
-            if UIAccessibility.isVoiceOverRunning, let result, self.isLikelyNativeVoiceOverScrollbar(result) {
-                self.nativeVoiceOverScrollbarElement = result as AnyObject
+            if UIAccessibility.isVoiceOverRunning {
                 self.nativeVoiceOverScrollbarLastHitTestPoint = point
+                if let result {
+                    self.nativeVoiceOverScrollbarElement = result as AnyObject
+                }
             }
             return result
         }
@@ -301,9 +303,11 @@ private final class ChatVoiceOverOverlayTableView: UITableView {
         let imp = method_getImplementation(baseMethod)
         let fn = unsafeBitCast(imp, to: HitTestIMP.self)
         let result = fn(self, selector, point)
-        if UIAccessibility.isVoiceOverRunning, let result, self.isLikelyNativeVoiceOverScrollbar(result) {
-            self.nativeVoiceOverScrollbarElement = result
+        if UIAccessibility.isVoiceOverRunning {
             self.nativeVoiceOverScrollbarLastHitTestPoint = point
+            if let result {
+                self.nativeVoiceOverScrollbarElement = result
+            }
         }
         return result
     }
@@ -315,9 +319,11 @@ private final class ChatVoiceOverOverlayTableView: UITableView {
             return element
         }
         let result = super.accessibilityHitTest(point, event: event)
-        if UIAccessibility.isVoiceOverRunning, let result, self.isLikelyNativeVoiceOverScrollbar(result) {
-            self.nativeVoiceOverScrollbarElement = result as AnyObject
+        if UIAccessibility.isVoiceOverRunning {
             self.nativeVoiceOverScrollbarLastHitTestPoint = point
+            if let result {
+                self.nativeVoiceOverScrollbarElement = result as AnyObject
+            }
         }
         return result
     }
