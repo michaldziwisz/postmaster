@@ -1,5 +1,6 @@
 import Foundation
 import UIKit
+import ObjectiveC
 import AppBundle
 import Postbox
 import TelegramCore
@@ -52,7 +53,15 @@ private final class ChatVoiceOverOverlayTableView: UITableView {
         }
 
         self.setContentOffset(CGPoint(x: self.contentOffset.x, y: targetOffset), animated: false)
-        UIAccessibility.post(notification: .pageScrolled, argument: nil)
+        let range = maxOffset - minOffset
+        if range > 1.0 {
+            let progress = (self.contentOffset.y - minOffset) / range
+            let clamped = max(0.0, min(1.0, progress))
+            let percent = Int((clamped * 100.0).rounded())
+            UIAccessibility.post(notification: .pageScrolled, argument: "\(percent)%")
+        } else {
+            UIAccessibility.post(notification: .pageScrolled, argument: nil)
+        }
         return true
     }
     
@@ -331,10 +340,11 @@ public final class ChatVoiceOverOverlayView: UIView {
         return formatter
     }()
 
+    // Prefer UIKit's native accessibility tree for the chat screen (top bar + table view cells + composer).
+    // This enables the system VoiceOver scrollbar and 3-finger scroll gestures without custom hit-testing.
     public override var accessibilityElements: [Any]? {
         get {
-            self.rebuildAccessibilityElementsIfNeeded()
-            return self.cachedAccessibilityElements
+            return nil
         }
         set {
         }
@@ -384,12 +394,10 @@ public final class ChatVoiceOverOverlayView: UIView {
         // from auto-scrolling to offscreen rows during swipe navigation.
         self.tableView.accessibilityNavigationStyle = .automatic
         self.tableView.shouldGroupAccessibilityChildren = false
-        // The chat messages are exposed as custom `UIAccessibilityElement`s on the overlay view
-        // to keep the VoiceOver navigation order deterministic and avoid being trapped inside
-        // a scroll container.
-        // Keep the table view itself visible to the accessibility system so native scroll
-        // gestures (3-finger) and the system scrollbar remain available, while individual
-        // cells stay out of the accessibility tree.
+        // Use native UITableView cell accessibility for messages to get:
+        // - the system VoiceOver scrollbar (localized, correct behavior),
+        // - working 3-finger scroll gestures,
+        // - predictable hit-testing during touch exploration.
         self.tableView.accessibilityElementsHidden = false
         self.refreshControl.addTarget(self, action: #selector(self.refreshTriggered), for: .valueChanged)
         self.tableView.refreshControl = self.refreshControl
@@ -741,11 +749,10 @@ public final class ChatVoiceOverOverlayView: UIView {
         cell.detailTextLabel?.isAccessibilityElement = false
         
         cell.selectionStyle = .none
-        // All VoiceOver interaction is provided via custom `UIAccessibilityElement`s owned by the overlay view.
-        // Keep real table cells out of the accessibility tree to avoid swipe navigation issues and to keep
-        // message focus deterministic across insertions/updates.
-        cell.isAccessibilityElement = false
-        cell.accessibilityElementsHidden = true
+        // Expose the real cells to VoiceOver so UIKit can provide native scrolling behavior,
+        // including the system scrollbar and 3-finger gestures.
+        cell.isAccessibilityElement = true
+        cell.accessibilityElementsHidden = false
         cell.accessibilityCustomActions = nil
 
         if self.shouldShowLoadEarlierRow, indexPath.row == 0 {
@@ -1201,102 +1208,28 @@ public final class ChatVoiceOverOverlayView: UIView {
         return nearestIndexPath
     }
 
-    private func voiceOverHitTest(_ point: CGPoint) -> Any? {
-        guard UIAccessibility.isVoiceOverRunning else {
-            return nil
-        }
-        
-        func contains(_ view: UIView, point: CGPoint) -> Bool {
-            guard !view.isHidden, view.alpha > 0.01 else {
-                return false
-            }
-            let rect = view.convert(view.bounds, to: self)
-            return rect.contains(point)
-        }
-        
-        if contains(self.backButton, point: point) {
-            return self.backButton
-        }
-        if contains(self.titleLabel, point: point) {
-            return self.titleLabel
-        }
-        if contains(self.profileButton, point: point) {
-            return self.profileButton
-        }
-        
-        if self.isComposerEnabled {
-            if contains(self.attachButton, point: point) {
-                return self.attachButton
-            }
-            if contains(self.inputTextView, point: point) {
-                return self.inputTextView
-            }
-            if contains(self.recordButton, point: point) {
-                return self.recordButton
-            }
-            if contains(self.sendButton, point: point) {
-                return self.sendButton
-            }
-        }
-        
-        if self.tableView.frame.contains(point) {
-            // Reserve a right-side gutter for the native iOS scroll bar.
-            // If we return custom message elements here, touch exploration on the edge
-            // cannot reach the system scrollbar.
-            let tableFrame = self.tableView.frame
-            let scrollBarGutterWidth: CGFloat = 22.0
-            let scrollBarGutterFrame = CGRect(
-                x: max(tableFrame.minX, tableFrame.maxX - scrollBarGutterWidth),
-                y: tableFrame.minY,
-                width: min(scrollBarGutterWidth, tableFrame.width),
-                height: tableFrame.height
-            )
-            if scrollBarGutterFrame.contains(point) {
-                return nil
-            }
-            
-            let tablePoint = self.tableView.convert(point, from: self)
-            if let indexPath = self.tableView.indexPathForRow(at: tablePoint) {
-                return self.accessibilityElement(at: indexPath)
-            }
-            
-            if let nearestIndexPath = self.nearestVisibleIndexPath(to: tablePoint) {
-                let rect = self.tableView.rectForRow(at: nearestIndexPath)
-                let dy: CGFloat
-                if tablePoint.y < rect.minY {
-                    dy = rect.minY - tablePoint.y
-                } else if tablePoint.y > rect.maxY {
-                    dy = tablePoint.y - rect.maxY
-                } else {
-                    dy = 0.0
-                }
-                if dy <= 24.0 {
-                    return self.accessibilityElement(at: nearestIndexPath)
-                }
-            }
-        }
-        
-        return nil
-    }
-    
     // iOS 17 and earlier.
     @objc(accessibilityHitTest:)
     func accessibilityHitTest(_ point: CGPoint) -> Any? {
-        if let element = self.voiceOverHitTest(point) {
-            return element
-        }
         if #available(iOS 18.0, *) {
             return super.accessibilityHitTest(point, event: nil)
         }
-        return nil
+        
+        // iOS 17: call UIView's `accessibilityHitTest:` implementation to allow UIKit to
+        // expose system-provided elements like the native VO scrollbar.
+        let selector = NSSelectorFromString("accessibilityHitTest:")
+        guard let method = class_getInstanceMethod(UIView.self, selector) else {
+            return nil
+        }
+        typealias HitTestIMP = @convention(c) (AnyObject, Selector, CGPoint) -> AnyObject?
+        let imp = method_getImplementation(method)
+        let fn = unsafeBitCast(imp, to: HitTestIMP.self)
+        return fn(self, selector, point)
     }
 
     // iOS 18+ (new SDK signature).
     @available(iOS 18.0, *)
     public override func accessibilityHitTest(_ point: CGPoint, event: UIEvent?) -> Any? {
-        if let element = self.voiceOverHitTest(point) {
-            return element
-        }
         return super.accessibilityHitTest(point, event: event)
     }
 
@@ -1819,20 +1752,21 @@ public final class ChatVoiceOverOverlayView: UIView {
                         guard let self else {
                             return
                         }
-                        self.rebuildAccessibilityElementsIfNeeded()
-                        let focusTargetElement: Any? = {
-                            if self.shouldShowLoadEarlierRow, focusTargetIndexPath.row == 0 {
-                                return self.loadEarlierAccessibilityElement
+                        guard focusTargetIndexPath.row < self.tableView.numberOfRows(inSection: 0) else {
+                            return
+                        }
+
+                        let isVisible = self.tableView.indexPathsForVisibleRows?.contains(focusTargetIndexPath) ?? false
+                        if !isVisible {
+                            UIView.performWithoutAnimation {
+                                let position: UITableView.ScrollPosition = (focusTargetIndexPath.row == 0 ? .top : .middle)
+                                self.tableView.scrollToRow(at: focusTargetIndexPath, at: position, animated: false)
+                                self.tableView.layoutIfNeeded()
                             }
-                            let rowIndex = focusTargetIndexPath.row - self.loadEarlierRowOffset
-                            guard rowIndex >= 0, rowIndex < self.rows.count else {
-                                return nil
-                            }
-                            let stableId = self.rows[rowIndex].stableId
-                            return self.rowAccessibilityElementsByStableId[stableId]
-                        }()
-                        if let focusTargetElement {
-                            UIAccessibility.post(notification: .layoutChanged, argument: focusTargetElement)
+                        }
+
+                        if let cell = self.tableView.cellForRow(at: focusTargetIndexPath) {
+                            UIAccessibility.post(notification: .layoutChanged, argument: cell)
                         }
                     }
                 } else if let focusedNonTableElementBeforeUpdate {
@@ -2378,10 +2312,20 @@ public final class ChatVoiceOverOverlayView: UIView {
         guard !self.rows.isEmpty else {
             return
         }
-        self.rebuildAccessibilityElementsIfNeeded()
-        let stableId = self.rows[self.rows.count - 1].stableId
-        if let element = self.rowAccessibilityElementsByStableId[stableId] {
-            UIAccessibility.post(notification: .screenChanged, argument: element)
+        let indexPath = IndexPath(row: self.rows.count - 1 + self.loadEarlierRowOffset, section: 0)
+        DispatchQueue.main.async { [weak self] in
+            guard let self else {
+                return
+            }
+            if self.tableView.indexPathsForVisibleRows?.contains(indexPath) != true {
+                UIView.performWithoutAnimation {
+                    self.tableView.scrollToRow(at: indexPath, at: .bottom, animated: false)
+                    self.tableView.layoutIfNeeded()
+                }
+            }
+            if let cell = self.tableView.cellForRow(at: indexPath) {
+                UIAccessibility.post(notification: .screenChanged, argument: cell)
+            }
         }
     }
     
