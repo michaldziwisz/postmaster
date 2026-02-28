@@ -12,6 +12,7 @@ import TelegramUIPreferences
 
 private final class ChatVoiceOverOverlayTableView: UITableView {
     var onDidPerformAccessibilityScroll: (() -> Void)?
+    weak var overlayForAccessibilityElements: ChatVoiceOverOverlayView?
     
     private func canScrollVertically(_ direction: UIAccessibilityScrollDirection) -> Bool {
         let minOffset = -self.adjustedContentInset.top
@@ -89,6 +90,17 @@ private final class ChatVoiceOverOverlayTableView: UITableView {
 
         return false
     }
+
+    override var accessibilityElements: [Any]? {
+        get {
+            guard UIAccessibility.isVoiceOverRunning else {
+                return nil
+            }
+            return self.overlayForAccessibilityElements?.tableAccessibilityElements
+        }
+        set {
+        }
+    }
 }
 
 private final class ChatVoiceOverOverlayCell: UITableViewCell {
@@ -125,10 +137,10 @@ private final class ChatVoiceOverOverlayRowAccessibilityElement: UIAccessibility
     weak var overlay: ChatVoiceOverOverlayView?
     let kind: Kind
     
-    init(overlay: ChatVoiceOverOverlayView, kind: Kind) {
+    init(container: AnyObject, overlay: ChatVoiceOverOverlayView, kind: Kind) {
         self.overlay = overlay
         self.kind = kind
-        super.init(accessibilityContainer: overlay)
+        super.init(accessibilityContainer: container)
         self.isAccessibilityElement = true
     }
     
@@ -377,6 +389,7 @@ public final class ChatVoiceOverOverlayView: UIView {
         self.topBarView.addSubview(self.titleLabel)
         
         self.tableView.translatesAutoresizingMaskIntoConstraints = false
+        self.tableView.overlayForAccessibilityElements = self
         self.tableView.dataSource = self
         self.tableView.delegate = self
         self.tableView.estimatedRowHeight = 96.0
@@ -749,10 +762,16 @@ public final class ChatVoiceOverOverlayView: UIView {
         cell.detailTextLabel?.isAccessibilityElement = false
         
         cell.selectionStyle = .none
-        // Expose the real cells to VoiceOver so UIKit can provide native scrolling behavior,
-        // including the system scrollbar and 3-finger gestures.
-        cell.isAccessibilityElement = true
-        cell.accessibilityElementsHidden = false
+        // The chat rows are exposed as custom `UIAccessibilityElement`s owned by the table view.
+        // Keep real table cells out of the accessibility tree to avoid duplicate elements and
+        // to keep swipe navigation stable while still enabling the system VO scrollbar.
+        if UIAccessibility.isVoiceOverRunning {
+            cell.isAccessibilityElement = false
+            cell.accessibilityElementsHidden = true
+        } else {
+            cell.isAccessibilityElement = true
+            cell.accessibilityElementsHidden = false
+        }
         cell.accessibilityCustomActions = nil
 
         if self.shouldShowLoadEarlierRow, indexPath.row == 0 {
@@ -1106,6 +1125,11 @@ public final class ChatVoiceOverOverlayView: UIView {
         self.cachedAccessibilityElements = []
     }
 
+    fileprivate var tableAccessibilityElements: [Any] {
+        self.rebuildAccessibilityElementsIfNeeded()
+        return self.cachedAccessibilityElements
+    }
+
     private func rebuildAccessibilityElementsIfNeeded() {
         guard UIAccessibility.isVoiceOverRunning else {
             return
@@ -1124,18 +1148,14 @@ public final class ChatVoiceOverOverlayView: UIView {
         self.needsAccessibilityElementsRebuild = false
 
         var elements: [Any] = []
-        elements.reserveCapacity(12 + self.rows.count + (self.shouldShowLoadEarlierRow ? 1 : 0))
-
-        elements.append(self.backButton)
-        elements.append(self.titleLabel)
-        elements.append(self.profileButton)
+        elements.reserveCapacity(self.rows.count + (self.shouldShowLoadEarlierRow ? 1 : 0))
 
         if self.shouldShowLoadEarlierRow {
             let element: ChatVoiceOverOverlayRowAccessibilityElement
             if let current = self.loadEarlierAccessibilityElement {
                 element = current
             } else {
-                element = ChatVoiceOverOverlayRowAccessibilityElement(overlay: self, kind: .loadEarlier)
+                element = ChatVoiceOverOverlayRowAccessibilityElement(container: self.tableView, overlay: self, kind: .loadEarlier)
                 self.loadEarlierAccessibilityElement = element
             }
             element.overlay = self
@@ -1147,19 +1167,12 @@ public final class ChatVoiceOverOverlayView: UIView {
         var newElementsByStableId: [UInt64: ChatVoiceOverOverlayRowAccessibilityElement] = [:]
         newElementsByStableId.reserveCapacity(self.rows.count)
         for row in self.rows {
-            let element = self.rowAccessibilityElementsByStableId[row.stableId] ?? ChatVoiceOverOverlayRowAccessibilityElement(overlay: self, kind: .row(stableId: row.stableId))
+            let element = self.rowAccessibilityElementsByStableId[row.stableId] ?? ChatVoiceOverOverlayRowAccessibilityElement(container: self.tableView, overlay: self, kind: .row(stableId: row.stableId))
             element.overlay = self
             newElementsByStableId[row.stableId] = element
             elements.append(element)
         }
         self.rowAccessibilityElementsByStableId = newElementsByStableId
-
-        if self.isComposerEnabled {
-            elements.append(self.attachButton)
-            elements.append(self.inputTextView)
-            elements.append(self.recordButton)
-            elements.append(self.sendButton)
-        }
 
         self.cachedAccessibilityElements = elements
     }
@@ -1268,8 +1281,7 @@ public final class ChatVoiceOverOverlayView: UIView {
         guard indexPath.section == 0, indexPath.row >= 0, indexPath.row < self.tableView.numberOfRows(inSection: 0) else {
             return .zero
         }
-        let rect = self.tableView.rectForRow(at: indexPath)
-        return self.tableView.convert(rect, to: self)
+        return self.tableView.rectForRow(at: indexPath)
     }
 
     fileprivate func accessibilityFrameInScreenSpace(for element: ChatVoiceOverOverlayRowAccessibilityElement) -> CGRect {
@@ -1280,8 +1292,7 @@ public final class ChatVoiceOverOverlayView: UIView {
             return .zero
         }
         let rect = self.tableView.rectForRow(at: indexPath)
-        let rectInOverlay = self.tableView.convert(rect, to: self)
-        return self.convert(rectInOverlay, to: nil)
+        return self.tableView.convert(rect, to: nil)
     }
 
     fileprivate func voiceOverElementDidBecomeFocused(_ element: ChatVoiceOverOverlayRowAccessibilityElement) {
@@ -1765,8 +1776,8 @@ public final class ChatVoiceOverOverlayView: UIView {
                             }
                         }
 
-                        if let cell = self.tableView.cellForRow(at: focusTargetIndexPath) {
-                            UIAccessibility.post(notification: .layoutChanged, argument: cell)
+                        if let element = self.accessibilityElement(at: focusTargetIndexPath) {
+                            UIAccessibility.post(notification: .layoutChanged, argument: element)
                         }
                     }
                 } else if let focusedNonTableElementBeforeUpdate {
@@ -2323,8 +2334,8 @@ public final class ChatVoiceOverOverlayView: UIView {
                     self.tableView.layoutIfNeeded()
                 }
             }
-            if let cell = self.tableView.cellForRow(at: indexPath) {
-                UIAccessibility.post(notification: .screenChanged, argument: cell)
+            if let element = self.accessibilityElement(at: indexPath) {
+                UIAccessibility.post(notification: .screenChanged, argument: element)
             }
         }
     }
