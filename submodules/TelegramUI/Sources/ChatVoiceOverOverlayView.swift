@@ -1285,7 +1285,10 @@ public final class ChatVoiceOverOverlayView: UIView {
         if let element = self.voiceOverHitTest(point) {
             return element
         }
-        return super.accessibilityHitTest(point)
+        if #available(iOS 18.0, *) {
+            return super.accessibilityHitTest(point, event: nil)
+        }
+        return nil
     }
 
     // iOS 18+ (new SDK signature).
