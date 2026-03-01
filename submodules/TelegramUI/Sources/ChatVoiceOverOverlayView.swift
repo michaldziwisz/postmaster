@@ -170,19 +170,32 @@ private final class ChatVoiceOverOverlayTableView: UITableView {
             return false
         }
 
-        guard let frame = self.accessibilityFrame(forUnknownElement: element) else {
+        guard let rawFrame = self.accessibilityFrame(forUnknownElement: element) else {
             return false
         }
-        guard !frame.isEmpty,
-              frame.origin.x.isFinite,
-              frame.origin.y.isFinite,
-              frame.size.width.isFinite,
-              frame.size.height.isFinite
+        guard !rawFrame.isEmpty,
+              rawFrame.origin.x.isFinite,
+              rawFrame.origin.y.isFinite,
+              rawFrame.size.width.isFinite,
+              rawFrame.size.height.isFinite
         else {
             return false
         }
 
         let tableFrame = self.convert(self.bounds, to: nil)
+        let frame: CGRect = {
+            // `accessibilityFrame` is expected to be in screen coordinates, but some internal
+            // accessibility objects occasionally return a frame in container coordinates.
+            // Prefer the variant that actually overlaps the table view on screen.
+            if tableFrame.intersects(rawFrame) {
+                return rawFrame
+            }
+            let converted = self.convert(rawFrame, to: nil)
+            if tableFrame.intersects(converted) {
+                return converted
+            }
+            return rawFrame
+        }()
         guard tableFrame.intersects(frame) else {
             return false
         }
@@ -195,11 +208,6 @@ private final class ChatVoiceOverOverlayTableView: UITableView {
             height: tableFrame.height + 48.0
         )
         guard gutter.intersects(frame) else {
-            return false
-        }
-
-        // Be conservative: if we can read traits, require `.adjustable` (the native VO scrollbar is adjustable).
-        if let traits = self.accessibilityTraits(forUnknownElement: element), !traits.contains(.adjustable) {
             return false
         }
 
