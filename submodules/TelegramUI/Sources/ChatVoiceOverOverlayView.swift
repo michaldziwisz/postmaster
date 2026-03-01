@@ -2301,8 +2301,10 @@ public final class ChatVoiceOverOverlayView: UIView {
                     self.tableView.layoutIfNeeded()
                 }
             }
-            if let element = self.accessibilityElement(at: indexPath) {
-                UIAccessibility.post(notification: .screenChanged, argument: element)
+            if let cell = self.tableView.cellForRow(at: indexPath) {
+                UIAccessibility.post(notification: .screenChanged, argument: cell)
+            } else {
+                UIAccessibility.post(notification: .screenChanged, argument: self.tableView)
             }
         }
     }
