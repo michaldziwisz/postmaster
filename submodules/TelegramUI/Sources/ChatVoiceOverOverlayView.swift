@@ -150,8 +150,112 @@ private final class ChatVoiceOverOverlayTableView: UITableView {
             if baseIndex != NSNotFound {
                 return baseIndex
             }
+
+            // When the native VoiceOver scrollbar is focused, iOS asks the scroll view container
+            // for its index to resolve swipe-left/right navigation. Since the scrollbar element is
+            // not part of our custom `accessibilityElements`, returning `NSNotFound` makes VoiceOver
+            // fall back to the parent container (e.g. the title), which feels like "falling out"
+            // of the message list. Map the scrollbar to a stable nearby row index instead.
+            if self.isProbablyNativeVoiceOverScrollbarElement(element) {
+                if let mappedIndex = self.voiceOverIndexForNativeScrollbar(using: overlay) {
+                    return mappedIndex
+                }
+            }
         }
         return super.index(ofAccessibilityElement: element)
+    }
+
+    private func isProbablyNativeVoiceOverScrollbarElement(_ element: Any) -> Bool {
+        if element is ChatVoiceOverOverlayRowAccessibilityElement {
+            return false
+        }
+
+        let traits: UIAccessibilityTraits
+        let frame: CGRect
+        if let view = element as? UIView {
+            traits = view.accessibilityTraits
+            frame = view.accessibilityFrame
+        } else if let accessibilityElement = element as? UIAccessibilityElement {
+            traits = accessibilityElement.accessibilityTraits
+            frame = accessibilityElement.accessibilityFrame
+        } else {
+            return false
+        }
+
+        guard traits.contains(.adjustable) else {
+            return false
+        }
+        guard !frame.isEmpty,
+              frame.origin.x.isFinite,
+              frame.origin.y.isFinite,
+              frame.size.width.isFinite,
+              frame.size.height.isFinite
+        else {
+            return false
+        }
+
+        let tableFrame = self.convert(self.bounds, to: nil)
+        guard tableFrame.intersects(frame) else {
+            return false
+        }
+
+        // The scrollbar sits in a thin strip on the right side of the scroll view.
+        let gutter = CGRect(
+            x: tableFrame.maxX - Self.voiceOverScrollbarGutterWidth - 12.0,
+            y: tableFrame.minY - 24.0,
+            width: Self.voiceOverScrollbarGutterWidth + 24.0,
+            height: tableFrame.height + 48.0
+        )
+        return gutter.intersects(frame)
+    }
+
+    private func voiceOverIndexForNativeScrollbar(using overlay: ChatVoiceOverOverlayView) -> Int? {
+        let elementCount = overlay.tableAccessibilityElementCount
+        guard elementCount > 0 else {
+            return nil
+        }
+
+        let hasLoadEarlierRow: Bool = {
+            guard let first = overlay.tableAccessibilityElement(at: 0) as? ChatVoiceOverOverlayRowAccessibilityElement else {
+                return false
+            }
+            if case .loadEarlier = first.kind {
+                return true
+            } else {
+                return false
+            }
+        }()
+        let firstMessageRow = hasLoadEarlierRow ? 1 : 0
+
+        // Prefer the last focused message row as an anchor. If it points to the "Load older"
+        // row, fall back to the currently visible rows.
+        let anchorRow: Int? = {
+            if let lastFocused = overlay.lastFocusedTableIndexPathForScroll, lastFocused.section == 0, lastFocused.row >= firstMessageRow {
+                return lastFocused.row
+            }
+            guard let visible = self.indexPathsForVisibleRows?.sorted() else {
+                return nil
+            }
+            let candidates = visible.filter { $0.section == 0 && $0.row >= firstMessageRow }
+            if candidates.isEmpty {
+                return visible.last?.row
+            } else {
+                return candidates[candidates.count / 2].row
+            }
+        }()
+
+        guard let anchorRow else {
+            return nil
+        }
+
+        let clampedAnchor = min(max(anchorRow, firstMessageRow), elementCount - 1)
+        if elementCount <= 1 {
+            return 0
+        }
+
+        // Return an index such that swipe-left always stays inside the message list.
+        // VoiceOver focuses `index - 1` when swiping left from the scrollbar.
+        return min(clampedAnchor + 1, elementCount - 1)
     }
 
     // MARK: - Touch exploration hit-testing
@@ -420,7 +524,7 @@ public final class ChatVoiceOverOverlayView: UIView {
 
     private var loadEarlierAccessibilityElement: ChatVoiceOverOverlayRowAccessibilityElement?
     private var rowAccessibilityElementsByStableId: [UInt64: ChatVoiceOverOverlayRowAccessibilityElement] = [:]
-    private var lastFocusedTableIndexPathForScroll: IndexPath?
+    fileprivate var lastFocusedTableIndexPathForScroll: IndexPath?
 
     private var canLoadEarlierHistory = false
     private var isLoadingEarlierHistory = false
