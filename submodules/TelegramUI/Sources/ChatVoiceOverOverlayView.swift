@@ -170,19 +170,7 @@ private final class ChatVoiceOverOverlayTableView: UITableView {
             return false
         }
 
-        let traits: UIAccessibilityTraits
-        let frame: CGRect
-        if let view = element as? UIView {
-            traits = view.accessibilityTraits
-            frame = view.accessibilityFrame
-        } else if let accessibilityElement = element as? UIAccessibilityElement {
-            traits = accessibilityElement.accessibilityTraits
-            frame = accessibilityElement.accessibilityFrame
-        } else {
-            return false
-        }
-
-        guard traits.contains(.adjustable) else {
+        guard let frame = self.accessibilityFrame(forUnknownElement: element) else {
             return false
         }
         guard !frame.isEmpty,
@@ -206,7 +194,66 @@ private final class ChatVoiceOverOverlayTableView: UITableView {
             width: Self.voiceOverScrollbarGutterWidth + 24.0,
             height: tableFrame.height + 48.0
         )
-        return gutter.intersects(frame)
+        guard gutter.intersects(frame) else {
+            return false
+        }
+
+        // Be conservative: if we can read traits, require `.adjustable` (the native VO scrollbar is adjustable).
+        if let traits = self.accessibilityTraits(forUnknownElement: element), !traits.contains(.adjustable) {
+            return false
+        }
+
+        return true
+    }
+
+    private func accessibilityFrame(forUnknownElement element: Any) -> CGRect? {
+        if let view = element as? UIView {
+            return view.accessibilityFrame
+        }
+        if let accessibilityElement = element as? UIAccessibilityElement {
+            return accessibilityElement.accessibilityFrame
+        }
+
+        let selector = NSSelectorFromString("accessibilityFrame")
+        let object = element as AnyObject
+        guard object.responds(to: selector) else {
+            return nil
+        }
+        guard let baseClass = object_getClass(object),
+              let method = class_getInstanceMethod(baseClass, selector)
+        else {
+            return nil
+        }
+
+        typealias FrameIMP = @convention(c) (AnyObject, Selector) -> CGRect
+        let imp = method_getImplementation(method)
+        let fn = unsafeBitCast(imp, to: FrameIMP.self)
+        return fn(object, selector)
+    }
+
+    private func accessibilityTraits(forUnknownElement element: Any) -> UIAccessibilityTraits? {
+        if let view = element as? UIView {
+            return view.accessibilityTraits
+        }
+        if let accessibilityElement = element as? UIAccessibilityElement {
+            return accessibilityElement.accessibilityTraits
+        }
+
+        let selector = NSSelectorFromString("accessibilityTraits")
+        let object = element as AnyObject
+        guard object.responds(to: selector) else {
+            return nil
+        }
+        guard let baseClass = object_getClass(object),
+              let method = class_getInstanceMethod(baseClass, selector)
+        else {
+            return nil
+        }
+
+        typealias TraitsIMP = @convention(c) (AnyObject, Selector) -> UInt64
+        let imp = method_getImplementation(method)
+        let fn = unsafeBitCast(imp, to: TraitsIMP.self)
+        return UIAccessibilityTraits(rawValue: fn(object, selector))
     }
 
     private func voiceOverIndexForNativeScrollbar(using overlay: ChatVoiceOverOverlayView) -> Int? {
