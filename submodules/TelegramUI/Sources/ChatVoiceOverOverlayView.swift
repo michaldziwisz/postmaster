@@ -110,8 +110,14 @@ private final class ChatVoiceOverOverlayScrollBarProxyAccessibilityElement: UIAc
         
         let minOffset = -tableView.adjustedContentInset.top
         let maxOffset = max(minOffset, tableView.contentSize.height - tableView.bounds.height + tableView.adjustedContentInset.bottom)
+        let range = maxOffset - minOffset
         let pageHeight = max(1.0, tableView.bounds.height - tableView.adjustedContentInset.top - tableView.adjustedContentInset.bottom)
-        let delta = pageHeight * 0.85
+        let pageDelta = pageHeight * 0.85
+        // Use a coarse step for long conversations; otherwise the scrollbar becomes too granular.
+        // Keep an upper bound to avoid disorienting jumps.
+        let percentDelta = range * 0.05
+        let maxDelta = pageHeight * 4.0
+        let delta = min(max(pageDelta, percentDelta), maxDelta)
         
         let targetY: CGFloat
         switch direction {
