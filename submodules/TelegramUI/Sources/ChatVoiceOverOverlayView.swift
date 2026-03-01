@@ -104,29 +104,33 @@ private final class ChatVoiceOverOverlayScrollBarProxyAccessibilityElement: UIAc
     }
     
     override var accessibilityCustomActions: [UIAccessibilityCustomAction]? {
-        guard let tableView, let overlay = tableView.overlayForAccessibilityElements else {
-            return nil
+        get {
+            guard let tableView, let overlay = tableView.overlayForAccessibilityElements else {
+                return nil
+            }
+            
+            let strings = overlay.voiceOverPresentationStrings()
+            var actions: [UIAccessibilityCustomAction] = []
+            
+            if overlay.actions.openProfile != nil {
+                actions.append(UIAccessibilityCustomAction(name: strings.KeyCommand_ChatInfo, actionHandler: { [weak overlay] _ in
+                    overlay?.actions.openProfile?()
+                    return true
+                }))
+            }
+            
+            if overlay.voiceOverCanTriggerLoadEarlierFromProxy() {
+                let title = overlay.voiceOverLoadEarlierActionTitle()
+                actions.append(UIAccessibilityCustomAction(name: title, actionHandler: { [weak overlay] _ in
+                    overlay?.voiceOverTriggerLoadEarlierFromProxy()
+                    return true
+                }))
+            }
+            
+            return actions.isEmpty ? nil : actions
         }
-        
-        let strings = overlay.voiceOverPresentationStrings()
-        var actions: [UIAccessibilityCustomAction] = []
-        
-        if overlay.actions.openProfile != nil {
-            actions.append(UIAccessibilityCustomAction(name: strings.KeyCommand_ChatInfo, actionHandler: { [weak overlay] _ in
-                overlay?.actions.openProfile?()
-                return true
-            }))
+        set {
         }
-        
-        if overlay.voiceOverCanTriggerLoadEarlierFromProxy() {
-            let title = overlay.voiceOverLoadEarlierActionTitle()
-            actions.append(UIAccessibilityCustomAction(name: title, actionHandler: { [weak overlay] _ in
-                overlay?.voiceOverTriggerLoadEarlierFromProxy()
-                return true
-            }))
-        }
-        
-        return actions.isEmpty ? nil : actions
     }
 }
 
@@ -1738,7 +1742,10 @@ public final class ChatVoiceOverOverlayView: UIView {
     }
 
     fileprivate func voiceOverLoadEarlierActionTitle() -> String {
-        return self.loadEarlierTitle()
+        let bundle = getAppBundle()
+        let titleKey = "VoiceOver.Chat.LoadEarlier"
+        let titleFallback = "Load older messages"
+        return bundle.localizedString(forKey: titleKey, value: titleFallback, table: nil)
     }
 
     fileprivate func voiceOverCanTriggerLoadEarlierFromProxy() -> Bool {
