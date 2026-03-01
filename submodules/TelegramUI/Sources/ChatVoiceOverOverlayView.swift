@@ -1,5 +1,6 @@
 import Foundation
 import UIKit
+import ObjectiveC
 import AppBundle
 import Postbox
 import TelegramCore
@@ -12,6 +13,23 @@ import TelegramUIPreferences
 private final class ChatVoiceOverOverlayTableView: UITableView {
     var onDidPerformAccessibilityScroll: (() -> Void)?
     weak var overlayForAccessibilityElements: ChatVoiceOverOverlayView?
+    fileprivate static let voiceOverScrollbarGutterWidth: CGFloat = 22.0
+
+    private func isInVoiceOverScrollbarGutter(_ point: CGPoint) -> Bool {
+        let bounds = self.bounds
+        return point.x >= bounds.maxX - Self.voiceOverScrollbarGutterWidth
+    }
+
+    private func normalizeAccessibilityHitTestPointToLocal(_ point: CGPoint) -> CGPoint {
+        if self.bounds.contains(point) {
+            return point
+        }
+        let converted = self.convert(point, from: nil)
+        if self.bounds.contains(converted) {
+            return converted
+        }
+        return point
+    }
     
     private func canScrollVertically(_ direction: UIAccessibilityScrollDirection) -> Bool {
         let minOffset = -self.adjustedContentInset.top
@@ -88,6 +106,134 @@ private final class ChatVoiceOverOverlayTableView: UITableView {
         }
 
         return false
+    }
+
+    // MARK: - Custom accessibility container (stable swipe navigation)
+
+    override var accessibilityElements: [Any]? {
+        get {
+            guard UIAccessibility.isVoiceOverRunning else {
+                return nil
+            }
+            guard let overlay = self.overlayForAccessibilityElements else {
+                return nil
+            }
+            return overlay.tableAccessibilityElements
+        }
+        set {
+        }
+    }
+
+    override func accessibilityElementCount() -> Int {
+        guard UIAccessibility.isVoiceOverRunning else {
+            return super.accessibilityElementCount()
+        }
+        guard let overlay = self.overlayForAccessibilityElements else {
+            return 0
+        }
+        return overlay.tableAccessibilityElementCount
+    }
+
+    override func accessibilityElement(at index: Int) -> Any? {
+        guard UIAccessibility.isVoiceOverRunning else {
+            return super.accessibilityElement(at: index)
+        }
+        guard let overlay = self.overlayForAccessibilityElements else {
+            return nil
+        }
+        return overlay.tableAccessibilityElement(at: index)
+    }
+
+    override func index(ofAccessibilityElement element: Any) -> Int {
+        if UIAccessibility.isVoiceOverRunning, let overlay = self.overlayForAccessibilityElements {
+            let baseIndex = overlay.tableAccessibilityIndex(of: element)
+            if baseIndex != NSNotFound {
+                return baseIndex
+            }
+        }
+        return super.index(ofAccessibilityElement: element)
+    }
+
+    // MARK: - Touch exploration hit-testing
+
+    private func voiceOverCustomHitTest(_ point: CGPoint) -> Any? {
+        let localPoint = self.normalizeAccessibilityHitTestPointToLocal(point)
+        return self.voiceOverCustomHitTestInContainerSpace(localPoint)
+    }
+
+    private func voiceOverCustomHitTestInContainerSpace(_ point: CGPoint) -> Any? {
+        guard UIAccessibility.isVoiceOverRunning, let overlay = self.overlayForAccessibilityElements else {
+            return nil
+        }
+
+        // Let UIKit expose the native VoiceOver scrollbar in the right gutter.
+        if self.isInVoiceOverScrollbarGutter(point) {
+            return nil
+        }
+
+        if let indexPath = self.indexPathForRow(at: point), let element = overlay.accessibilityElement(at: indexPath) {
+            return element
+        }
+
+        // If the user explores between rows, fall back to the nearest visible row.
+        guard let visibleIndexPaths = self.indexPathsForVisibleRows, !visibleIndexPaths.isEmpty else {
+            return nil
+        }
+        var nearestIndexPath: IndexPath?
+        var nearestDistance: CGFloat = .greatestFiniteMagnitude
+        for indexPath in visibleIndexPaths {
+            let rect = self.rectForRow(at: indexPath)
+            let dy: CGFloat
+            if point.y < rect.minY {
+                dy = rect.minY - point.y
+            } else if point.y > rect.maxY {
+                dy = point.y - rect.maxY
+            } else {
+                dy = 0.0
+            }
+            if dy < nearestDistance {
+                nearestDistance = dy
+                nearestIndexPath = indexPath
+            }
+        }
+        if let nearestIndexPath, let element = overlay.accessibilityElement(at: nearestIndexPath) {
+            return element
+        }
+
+        return nil
+    }
+
+    // iOS 17 and earlier.
+    @objc(accessibilityHitTest:)
+    func accessibilityHitTest(_ point: CGPoint) -> Any? {
+        if let element = self.voiceOverCustomHitTest(point) {
+            return element
+        }
+        if #available(iOS 18.0, *) {
+            return super.accessibilityHitTest(point, event: nil)
+        }
+
+        let selector = NSSelectorFromString("accessibilityHitTest:")
+        let baseMethod =
+            class_getInstanceMethod(UITableView.self, selector) ??
+            class_getInstanceMethod(UIScrollView.self, selector) ??
+            class_getInstanceMethod(UIView.self, selector)
+        guard let baseMethod else {
+            return nil
+        }
+        typealias HitTestIMP = @convention(c) (AnyObject, Selector, CGPoint) -> AnyObject?
+        let imp = method_getImplementation(baseMethod)
+        let fn = unsafeBitCast(imp, to: HitTestIMP.self)
+        return fn(self, selector, point)
+    }
+
+    // iOS 18+ (new SDK signature).
+    @available(iOS 18.0, *)
+    public override func accessibilityHitTest(_ point: CGPoint, event: UIEvent?) -> Any? {
+        if let element = self.voiceOverCustomHitTest(point) {
+            return element
+        }
+        return super.accessibilityHitTest(point, event: event)
     }
 }
 
@@ -442,13 +588,15 @@ public final class ChatVoiceOverOverlayView: UIView {
             self.backButton.leadingAnchor.constraint(equalTo: self.topBarView.leadingAnchor, constant: 12.0),
             self.backButton.centerYAnchor.constraint(equalTo: self.titleLabel.centerYAnchor),
             
-            self.profileButton.trailingAnchor.constraint(equalTo: self.topBarView.trailingAnchor, constant: -12.0),
+            // Keep the Chat Info button away from the right edge so it doesn't become the
+            // "previous element" when navigating from the native VoiceOver scrollbar.
+            self.profileButton.leadingAnchor.constraint(equalTo: self.backButton.trailingAnchor, constant: 12.0),
             self.profileButton.centerYAnchor.constraint(equalTo: self.titleLabel.centerYAnchor),
             
             self.titleLabel.topAnchor.constraint(equalTo: self.topBarView.topAnchor, constant: 10.0),
             self.titleLabel.bottomAnchor.constraint(equalTo: self.topBarView.bottomAnchor, constant: -10.0),
-            self.titleLabel.leadingAnchor.constraint(greaterThanOrEqualTo: self.backButton.trailingAnchor, constant: 12.0),
-            self.titleLabel.trailingAnchor.constraint(lessThanOrEqualTo: self.profileButton.leadingAnchor, constant: -12.0),
+            self.titleLabel.leadingAnchor.constraint(greaterThanOrEqualTo: self.profileButton.trailingAnchor, constant: 12.0),
+            self.titleLabel.trailingAnchor.constraint(lessThanOrEqualTo: self.topBarView.trailingAnchor, constant: -12.0),
             self.titleLabel.centerXAnchor.constraint(equalTo: self.topBarView.centerXAnchor),
             
             self.composerView.leadingAnchor.constraint(equalTo: self.leadingAnchor),
@@ -750,11 +898,16 @@ public final class ChatVoiceOverOverlayView: UIView {
         cell.detailTextLabel?.isAccessibilityElement = false
         
         cell.selectionStyle = .none
-        // Prefer native UIKit accessibility for table cells to keep the system VoiceOver
-        // scrollbar integrated with swipe navigation (left/right) and to preserve standard
-        // 3-finger scrolling gestures.
-        cell.isAccessibilityElement = true
-        cell.accessibilityElementsHidden = false
+        // The chat rows are exposed as custom `UIAccessibilityElement`s owned by the table view.
+        // Keep real table cells out of the accessibility tree to avoid duplicate elements and
+        // to keep swipe navigation stable.
+        if UIAccessibility.isVoiceOverRunning {
+            cell.isAccessibilityElement = false
+            cell.accessibilityElementsHidden = true
+        } else {
+            cell.isAccessibilityElement = true
+            cell.accessibilityElementsHidden = false
+        }
         cell.accessibilityCustomActions = nil
 
         if self.shouldShowLoadEarlierRow, indexPath.row == 0 {
@@ -1741,8 +1894,10 @@ public final class ChatVoiceOverOverlayView: UIView {
                             }
                         }
 
-                        if let cell = self.tableView.cellForRow(at: focusTargetIndexPath) {
-                            UIAccessibility.post(notification: .layoutChanged, argument: cell)
+                        // Table cells are hidden from the accessibility tree when using
+                        // custom row `UIAccessibilityElement`s.
+                        if let element = self.accessibilityElement(at: focusTargetIndexPath) {
+                            UIAccessibility.post(notification: .layoutChanged, argument: element)
                         } else {
                             UIAccessibility.post(notification: .layoutChanged, argument: self.tableView)
                         }
@@ -2301,8 +2456,10 @@ public final class ChatVoiceOverOverlayView: UIView {
                     self.tableView.layoutIfNeeded()
                 }
             }
-            if let cell = self.tableView.cellForRow(at: indexPath) {
-                UIAccessibility.post(notification: .screenChanged, argument: cell)
+            // Table cells are hidden from the accessibility tree when using
+            // custom row `UIAccessibilityElement`s.
+            if let element = self.accessibilityElement(at: indexPath) {
+                UIAccessibility.post(notification: .screenChanged, argument: element)
             } else {
                 UIAccessibility.post(notification: .screenChanged, argument: self.tableView)
             }
