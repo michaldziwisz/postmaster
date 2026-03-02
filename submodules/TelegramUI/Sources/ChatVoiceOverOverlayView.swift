@@ -165,41 +165,67 @@ private final class ChatVoiceOverOverlayTableView: UITableView {
         return super.index(ofAccessibilityElement: element)
     }
 
-    fileprivate func isProbablyNativeVoiceOverScrollbarElement(_ element: Any) -> Bool {
-        if element is ChatVoiceOverOverlayRowAccessibilityElement {
-            return false
-        }
+	    fileprivate func isProbablyNativeVoiceOverScrollbarElement(_ element: Any) -> Bool {
+	        if element is ChatVoiceOverOverlayRowAccessibilityElement {
+	            return false
+	        }
 
-        // Try to identify the internal scrollbar element by its class name first.
-        // This avoids relying on `accessibilityFrame` for private accessibility objects that
-        // sometimes report inconsistent coordinates.
-        let nameSuggestsScrollbar: Bool = {
-            let object = element as AnyObject
-            guard let cls = object_getClass(object) else {
-                return false
-            }
-            let className = NSStringFromClass(cls).lowercased()
-            if className.contains("scrollbar") {
-                return true
-            }
-            // Common internal naming patterns across iOS versions.
-            if className.contains("scroll") && (className.contains("indicator") || className.contains("ax") || className.contains("accessibility")) {
-                return true
-            }
-            return false
-        }()
+	        // Try to identify the internal scrollbar element by its class name first.
+	        // This avoids relying on `accessibilityFrame` for private accessibility objects that
+	        // sometimes report inconsistent coordinates.
+	        let nameSuggestsScrollbar: Bool = {
+	            let object = element as AnyObject
+	            guard let cls = object_getClass(object) else {
+	                return false
+	            }
+	            let className = NSStringFromClass(cls).lowercased()
+	            if className.contains("scrollbar") {
+	                return true
+	            }
+	            // Common internal naming patterns across iOS versions.
+	            if className.contains("scroll") && (className.contains("indicator") || className.contains("ax") || className.contains("accessibility")) {
+	                return true
+	            }
+	            return false
+	        }()
 
-        guard let rawFrame = self.accessibilityFrame(forUnknownElement: element) else {
-            return nameSuggestsScrollbar
-        }
-        guard !rawFrame.isEmpty,
-              rawFrame.origin.x.isFinite,
-              rawFrame.origin.y.isFinite,
-              rawFrame.size.width.isFinite,
-              rawFrame.size.height.isFinite
-        else {
-            return false
-        }
+	        let labelSuggestsScrollbar: Bool = {
+	            guard let label = self.accessibilityLabel(forUnknownElement: element)?.lowercased(), !label.isEmpty else {
+	                return false
+	            }
+	            if label.contains("scrollbar") {
+	                return true
+	            }
+	            if label.contains("scroll") && label.contains("bar") {
+	                return true
+	            }
+	            // A small set of common non-English patterns (best effort).
+	            if label.contains("pasek") && label.contains("przew") {
+	                return true
+	            }
+	            return false
+	        }()
+
+	        let traitsSuggestScrollbar: Bool = {
+	            guard let traits = self.accessibilityTraits(forUnknownElement: element) else {
+	                return false
+	            }
+	            return traits.contains(.adjustable)
+	        }()
+
+	        let strongSuggestsScrollbar = nameSuggestsScrollbar || labelSuggestsScrollbar
+
+	        guard let rawFrame = self.accessibilityFrame(forUnknownElement: element) else {
+	            return strongSuggestsScrollbar || traitsSuggestScrollbar
+	        }
+	        guard !rawFrame.isEmpty,
+	              rawFrame.origin.x.isFinite,
+	              rawFrame.origin.y.isFinite,
+	              rawFrame.size.width.isFinite,
+	              rawFrame.size.height.isFinite
+	        else {
+	            return strongSuggestsScrollbar || traitsSuggestScrollbar
+	        }
 
         let tableFrame = self.convert(self.bounds, to: nil)
         let frame: CGRect = {
@@ -214,10 +240,10 @@ private final class ChatVoiceOverOverlayTableView: UITableView {
                 return converted
             }
             return rawFrame
-        }()
-        guard tableFrame.intersects(frame) else {
-            return false
-        }
+	        }()
+	        guard tableFrame.intersects(frame) else {
+	            return strongSuggestsScrollbar || traitsSuggestScrollbar
+	        }
 
         // The scrollbar sits in a thin strip on the right side of the scroll view.
         let gutter = CGRect(
@@ -225,13 +251,13 @@ private final class ChatVoiceOverOverlayTableView: UITableView {
             y: tableFrame.minY - 24.0,
             width: Self.voiceOverScrollbarGutterWidth + 24.0,
             height: tableFrame.height + 48.0
-        )
-        guard gutter.intersects(frame) else {
-            return nameSuggestsScrollbar
-        }
+	        )
+	        guard gutter.intersects(frame) else {
+	            return strongSuggestsScrollbar
+	        }
 
-        return true
-    }
+	        return true
+	    }
 
     private func accessibilityFrame(forUnknownElement element: Any) -> CGRect? {
         if let view = element as? UIView {
@@ -258,13 +284,13 @@ private final class ChatVoiceOverOverlayTableView: UITableView {
         return fn(object, selector)
     }
 
-    private func accessibilityTraits(forUnknownElement element: Any) -> UIAccessibilityTraits? {
-        if let view = element as? UIView {
-            return view.accessibilityTraits
-        }
-        if let accessibilityElement = element as? UIAccessibilityElement {
-            return accessibilityElement.accessibilityTraits
-        }
+	    private func accessibilityTraits(forUnknownElement element: Any) -> UIAccessibilityTraits? {
+	        if let view = element as? UIView {
+	            return view.accessibilityTraits
+	        }
+	        if let accessibilityElement = element as? UIAccessibilityElement {
+	            return accessibilityElement.accessibilityTraits
+	        }
 
         let selector = NSSelectorFromString("accessibilityTraits")
         let object = element as AnyObject
@@ -279,9 +305,34 @@ private final class ChatVoiceOverOverlayTableView: UITableView {
 
         typealias TraitsIMP = @convention(c) (AnyObject, Selector) -> UInt64
         let imp = method_getImplementation(method)
-        let fn = unsafeBitCast(imp, to: TraitsIMP.self)
-        return UIAccessibilityTraits(rawValue: fn(object, selector))
-    }
+	        let fn = unsafeBitCast(imp, to: TraitsIMP.self)
+	        return UIAccessibilityTraits(rawValue: fn(object, selector))
+	    }
+
+	    private func accessibilityLabel(forUnknownElement element: Any) -> String? {
+	        if let view = element as? UIView {
+	            return view.accessibilityLabel
+	        }
+	        if let accessibilityElement = element as? UIAccessibilityElement {
+	            return accessibilityElement.accessibilityLabel
+	        }
+
+	        let selector = NSSelectorFromString("accessibilityLabel")
+	        let object = element as AnyObject
+	        guard object.responds(to: selector) else {
+	            return nil
+	        }
+	        guard let baseClass = object_getClass(object),
+	              let method = class_getInstanceMethod(baseClass, selector)
+	        else {
+	            return nil
+	        }
+
+	        typealias LabelIMP = @convention(c) (AnyObject, Selector) -> AnyObject?
+	        let imp = method_getImplementation(method)
+	        let fn = unsafeBitCast(imp, to: LabelIMP.self)
+	        return fn(object, selector) as? String
+	    }
 
     private func voiceOverIndexForNativeScrollbar(using overlay: ChatVoiceOverOverlayView) -> Int? {
         let elementCount = overlay.tableAccessibilityElementCount
@@ -2698,13 +2749,6 @@ public final class ChatVoiceOverOverlayView: UIView {
             return
         }
 
-        // If swipe navigation leaves the native VoiceOver scrollbar, iOS may focus the title bar.
-        // Redirect focus back into the message list instead of "falling out" of the chat.
-        let elapsed = CACurrentMediaTime() - self.lastVoiceOverScrollbarFocusTimestamp
-        guard elapsed < 0.2 else {
-            return
-        }
-
         guard let focusedElement, self.isTopBarAccessibilityElement(focusedElement) else {
             return
         }
@@ -2720,6 +2764,12 @@ public final class ChatVoiceOverOverlayView: UIView {
                 return true
             }
             return view.isDescendant(of: self.topBarView)
+        }
+        if let accessibilityElement = element as? UIAccessibilityElement, let containerView = accessibilityElement.accessibilityContainer as? UIView {
+            if containerView === self.topBarView {
+                return true
+            }
+            return containerView.isDescendant(of: self.topBarView)
         }
         return false
     }
