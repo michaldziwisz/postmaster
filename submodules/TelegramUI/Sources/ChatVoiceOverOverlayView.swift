@@ -688,6 +688,7 @@ public final class ChatVoiceOverOverlayView: UIView {
     private var lastVoiceOverScrollbarFocusTimestamp: CFTimeInterval = 0.0
     private var isPerformingAccessibilityFocusCorrection = false
     private var lastObservedAccessibilityFocusedElement: AnyObject?
+    private var isVoiceOverScrollbarFocusModeActive = false
     
     public var actions = Actions()
     
@@ -918,7 +919,7 @@ public final class ChatVoiceOverOverlayView: UIView {
 
         let isComposerEnabled = self.isComposerEnabled
         self.composerView.isUserInteractionEnabled = isComposerEnabled
-        self.composerView.accessibilityElementsHidden = !isComposerEnabled
+        self.updateComposerAccessibilityVisibility()
 
         self.attachButton.isEnabled = isComposerEnabled
         self.sendButton.isEnabled = isComposerEnabled
@@ -2735,19 +2736,23 @@ public final class ChatVoiceOverOverlayView: UIView {
             self.lastVoiceOverScrollbarFocusTimestamp = CACurrentMediaTime()
 
             // Swiping right from the last message should continue into the composer (not to the scrollbar).
-            if self.isComposerEnabled, self.composerView.accessibilityElementsHidden == false, let unfocusedRow = unfocusedCandidate as? ChatVoiceOverOverlayRowAccessibilityElement {
+            if self.isComposerEnabled, let unfocusedRow = unfocusedCandidate as? ChatVoiceOverOverlayRowAccessibilityElement {
                 let index = self.tableAccessibilityIndex(of: unfocusedRow)
                 if index != NSNotFound, index == self.tableAccessibilityElementCount - 1 {
+                    self.setVoiceOverScrollbarFocusModeActive(false)
                     self.performAccessibilityFocusCorrection(to: self.attachButton)
                     return
                 }
             }
+            
+            self.setVoiceOverScrollbarFocusModeActive(true)
             return
         }
 
         guard let unfocusedElement = unfocusedCandidate, self.tableView.isProbablyNativeVoiceOverScrollbarElement(unfocusedElement) else {
             return
         }
+        self.setVoiceOverScrollbarFocusModeActive(false)
 
         guard let focusedElement, self.isTopBarAccessibilityElement(focusedElement) else {
             return
@@ -2756,6 +2761,29 @@ public final class ChatVoiceOverOverlayView: UIView {
             return
         }
         self.performAccessibilityFocusCorrection(to: nearestMessage)
+    }
+
+    private func setVoiceOverScrollbarFocusModeActive(_ isActive: Bool) {
+        guard self.isVoiceOverScrollbarFocusModeActive != isActive else {
+            return
+        }
+        self.isVoiceOverScrollbarFocusModeActive = isActive
+
+        // Keep swipe navigation stable when the VoiceOver scrollbar is focused:
+        // - prevent flick-left from landing on the title bar,
+        // - prevent flick-right from jumping into composer controls.
+        self.topBarView.accessibilityElementsHidden = isActive
+        if isActive {
+            self.composerView.accessibilityElementsHidden = true
+        } else {
+            self.updateComposerAccessibilityVisibility()
+        }
+    }
+
+    private func updateComposerAccessibilityVisibility() {
+        // Respect both: (1) whether the composer is enabled for this chat, and (2) whether we are
+        // temporarily suppressing "chrome" elements while the VoiceOver scrollbar is focused.
+        self.composerView.accessibilityElementsHidden = !self.isComposerEnabled || self.isVoiceOverScrollbarFocusModeActive
     }
 
     private func isTopBarAccessibilityElement(_ element: Any) -> Bool {
