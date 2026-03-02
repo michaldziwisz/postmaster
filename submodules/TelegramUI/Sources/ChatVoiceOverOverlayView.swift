@@ -1558,7 +1558,11 @@ public final class ChatVoiceOverOverlayView: UIView {
         guard indexPath.section == 0, indexPath.row >= 0, indexPath.row < self.tableView.numberOfRows(inSection: 0) else {
             return .zero
         }
-        return self.tableView.rectForRow(at: indexPath)
+        var rect = self.tableView.rectForRow(at: indexPath)
+        // Keep row elements clearly "to the left" of the native VoiceOver scrollbar so that
+        // swipe-left from the scrollbar lands on the message list instead of the title bar.
+        rect.size.width = max(0.0, rect.size.width - ChatVoiceOverOverlayTableView.voiceOverScrollbarGutterWidth)
+        return rect
     }
 
     fileprivate func accessibilityFrameInScreenSpace(for element: ChatVoiceOverOverlayRowAccessibilityElement) -> CGRect {
@@ -1568,7 +1572,8 @@ public final class ChatVoiceOverOverlayView: UIView {
         guard indexPath.section == 0, indexPath.row >= 0, indexPath.row < self.tableView.numberOfRows(inSection: 0) else {
             return .zero
         }
-        let rect = self.tableView.rectForRow(at: indexPath)
+        var rect = self.tableView.rectForRow(at: indexPath)
+        rect.size.width = max(0.0, rect.size.width - ChatVoiceOverOverlayTableView.voiceOverScrollbarGutterWidth)
         return self.tableView.convert(rect, to: nil)
     }
 
