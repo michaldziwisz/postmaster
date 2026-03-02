@@ -843,7 +843,6 @@ public final class ChatVoiceOverOverlayView: UIView {
     private var lastVoiceOverNavigationTimestamp: CFTimeInterval = 0.0
     private var voiceOverScrollbarAccessibilityElementAnchorTableRow: Int?
     private var cachedVoiceOverScrollbarAccessibilityElementIndex: Int?
-    private var voiceOverScrollbarPercentIsInverted: Bool?
     
     public var actions = Actions()
     
@@ -1822,13 +1821,6 @@ public final class ChatVoiceOverOverlayView: UIView {
                     return firstMessageRow
                 }
                 if self.voiceOverScrollbarIsAtBottom(visibleIndexPaths: self.voiceOverScrollbarVisibleIndexPathsSorted()) {
-                    if let visibleIndexPaths = self.tableView.indexPathsForVisibleRows?.sorted(), !visibleIndexPaths.isEmpty {
-                        let candidates = visibleIndexPaths.filter { $0.section == 0 && $0.row >= firstMessageRow }
-                        let effectiveCandidates = candidates.isEmpty ? visibleIndexPaths : candidates
-                        if let last = effectiveCandidates.last {
-                            return max(firstMessageRow, min(baseRowCount - 1, last.row))
-                        }
-                    }
                     return max(firstMessageRow, baseRowCount - 1)
                 }
                 if self.voiceOverScrollbarIsAtTop(visibleIndexPaths: self.voiceOverScrollbarVisibleIndexPathsSorted()) {
@@ -1957,11 +1949,14 @@ public final class ChatVoiceOverOverlayView: UIView {
     }
 
     fileprivate func voiceOverScrollbarAccessibilityIncrement() {
-        self.voiceOverScrollbarAccessibilityAdjustPercent(by: Self.voiceOverScrollbarPercentStep)
+        // Match the native iOS VoiceOver scrollbar behavior:
+        // - swipe up (increment) scrolls up (towards older messages), which decreases the percentage.
+        self.voiceOverScrollbarAccessibilityAdjustPercent(by: -Self.voiceOverScrollbarPercentStep)
     }
 
     fileprivate func voiceOverScrollbarAccessibilityDecrement() {
-        self.voiceOverScrollbarAccessibilityAdjustPercent(by: -Self.voiceOverScrollbarPercentStep)
+        // - swipe down (decrement) scrolls down (towards newer messages), which increases the percentage.
+        self.voiceOverScrollbarAccessibilityAdjustPercent(by: Self.voiceOverScrollbarPercentStep)
     }
 
     private func voiceOverScrollbarAccessibilityAdjustPercent(by percentDelta: Int) {
@@ -1974,8 +1969,6 @@ public final class ChatVoiceOverOverlayView: UIView {
         let currentQuantized = Int((rawPercent / CGFloat(step)).rounded(.down)) * step
 
         let targetDisplayPercent = max(0, min(100, currentQuantized + percentDelta))
-        let inverted = self.voiceOverScrollbarPercentIsInverted ?? false
-        let targetOffsetPercent: CGFloat = inverted ? (100.0 - CGFloat(targetDisplayPercent)) : CGFloat(targetDisplayPercent)
 
         let minOffset = -self.tableView.adjustedContentInset.top
         let maxOffset = max(minOffset, self.tableView.contentSize.height - self.tableView.bounds.height + self.tableView.adjustedContentInset.bottom)
@@ -1984,34 +1977,26 @@ public final class ChatVoiceOverOverlayView: UIView {
             return
         }
 
-        let targetProgress = targetOffsetPercent / 100.0
-        let targetOffset = minOffset + targetProgress * range
-        let clampedOffset = self.clampContentOffsetY(targetOffset)
-
-        if abs(clampedOffset - self.tableView.contentOffset.y) < 0.5 {
-            return
-        }
-
         self.noteVoiceOverNavigationActivity()
         UIView.performWithoutAnimation {
-            self.tableView.setContentOffset(CGPoint(x: self.tableView.contentOffset.x, y: clampedOffset), animated: false)
+            if targetDisplayPercent <= 0 {
+                self.scrollToTop(animated: false)
+            } else if targetDisplayPercent >= 100 {
+                self.scrollToBottom(animated: false)
+            } else {
+                let targetProgress = CGFloat(targetDisplayPercent) / 100.0
+                let targetOffset = minOffset + targetProgress * range
+                let clampedOffset = self.clampContentOffsetY(targetOffset)
+                self.tableView.setContentOffset(CGPoint(x: self.tableView.contentOffset.x, y: clampedOffset), animated: false)
+            }
             self.tableView.layoutIfNeeded()
         }
 
-        if targetDisplayPercent == 0 || targetDisplayPercent == 100 {
-            // `contentSize` can shift as auto-dimension rows are measured. Re-apply the edge offset after layout.
-            let minOffset2 = -self.tableView.adjustedContentInset.top
-            let maxOffset2 = max(minOffset2, self.tableView.contentSize.height - self.tableView.bounds.height + self.tableView.adjustedContentInset.bottom)
-            let range2 = maxOffset2 - minOffset2
-            if range2 > 1.0 {
-                let targetOffset2 = minOffset2 + (targetOffsetPercent / 100.0) * range2
-                let clampedOffset2 = self.clampContentOffsetY(targetOffset2)
-                if abs(clampedOffset2 - self.tableView.contentOffset.y) >= 0.5 {
-                    UIView.performWithoutAnimation {
-                        self.tableView.setContentOffset(CGPoint(x: self.tableView.contentOffset.x, y: clampedOffset2), animated: false)
-                        self.tableView.layoutIfNeeded()
-                    }
-                }
+        // At 100%, always keep the last message in the swipe order so swipe-left lands on it (not the penultimate).
+        if targetDisplayPercent >= 100 {
+            let baseRowCount = max(0, self.tableView.numberOfRows(inSection: 0))
+            if baseRowCount > 0 {
+                self.setVoiceOverScrollbarAccessibilityElementActive(true, anchorTableRow: baseRowCount - 1)
             }
         }
 
@@ -2038,7 +2023,11 @@ public final class ChatVoiceOverOverlayView: UIView {
     }
 
     private func voiceOverScrollbarIsAtTop(visibleIndexPaths: [IndexPath]) -> Bool {
-        return visibleIndexPaths.contains(where: { $0.section == 0 && $0.row == 0 })
+        if visibleIndexPaths.contains(where: { $0.section == 0 && $0.row == 0 }) {
+            return true
+        }
+        let minOffset = -self.tableView.adjustedContentInset.top
+        return self.tableView.contentOffset.y - minOffset <= 1.0
     }
 
     private func voiceOverScrollbarIsAtBottom(visibleIndexPaths: [IndexPath]) -> Bool {
@@ -2046,27 +2035,17 @@ public final class ChatVoiceOverOverlayView: UIView {
         guard rowCount > 0 else {
             return true
         }
-        return visibleIndexPaths.contains(where: { $0.section == 0 && $0.row == rowCount - 1 })
-    }
-
-    private func updateVoiceOverScrollbarPercentInversionIfNeeded(visibleIndexPaths: [IndexPath]) {
-        guard !visibleIndexPaths.isEmpty else {
-            return
+        if visibleIndexPaths.contains(where: { $0.section == 0 && $0.row == rowCount - 1 }) {
+            return true
         }
-        let percentFromOffset = self.voiceOverScrollbarRawPercentFromContentOffset()
-        if self.voiceOverScrollbarIsAtTop(visibleIndexPaths: visibleIndexPaths) {
-            self.voiceOverScrollbarPercentIsInverted = percentFromOffset > 50.0
-        } else if self.voiceOverScrollbarIsAtBottom(visibleIndexPaths: visibleIndexPaths) {
-            self.voiceOverScrollbarPercentIsInverted = percentFromOffset < 50.0
-        }
+        let minOffset = -self.tableView.adjustedContentInset.top
+        let maxOffset = max(minOffset, self.tableView.contentSize.height - self.tableView.bounds.height + self.tableView.adjustedContentInset.bottom)
+        return maxOffset - self.tableView.contentOffset.y <= 1.0
     }
 
     private func voiceOverScrollbarRawDisplayPercent(visibleIndexPaths: [IndexPath]) -> CGFloat {
-        self.updateVoiceOverScrollbarPercentInversionIfNeeded(visibleIndexPaths: visibleIndexPaths)
-
         let percentFromOffset = self.voiceOverScrollbarRawPercentFromContentOffset()
-        let inverted = self.voiceOverScrollbarPercentIsInverted ?? false
-        var display = inverted ? (100.0 - percentFromOffset) : percentFromOffset
+        var display = percentFromOffset
 
         if self.voiceOverScrollbarIsAtBottom(visibleIndexPaths: visibleIndexPaths) {
             display = 100.0
@@ -3197,13 +3176,6 @@ public final class ChatVoiceOverOverlayView: UIView {
                     }
 
                     if self.voiceOverScrollbarIsAtBottom(visibleIndexPaths: self.voiceOverScrollbarVisibleIndexPathsSorted()) {
-                        if let visibleIndexPaths = self.tableView.indexPathsForVisibleRows?.sorted(), !visibleIndexPaths.isEmpty {
-                            let candidates = visibleIndexPaths.filter { $0.section == 0 && $0.row >= firstMessageRow }
-                            let effectiveCandidates = candidates.isEmpty ? visibleIndexPaths : candidates
-                            if let last = effectiveCandidates.last {
-                                return max(firstMessageRow, min(baseRowCount - 1, last.row))
-                            }
-                        }
                         return max(firstMessageRow, baseRowCount - 1)
                     }
                     if self.voiceOverScrollbarIsAtTop(visibleIndexPaths: self.voiceOverScrollbarVisibleIndexPathsSorted()) {
