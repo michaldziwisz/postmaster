@@ -1831,7 +1831,7 @@ public final class ChatVoiceOverOverlayView: UIView {
         let indexPath = candidates[candidates.count / 2]
         let row = max(1, min(totalMessages, indexPath.row - rowOffset + 1))
 
-        return strings.VoiceOver_ScrollStatus(row, totalMessages).string
+        return strings.VoiceOver_ScrollStatus("\(row)", "\(totalMessages)").string
     }
 
     fileprivate func voiceOverScrollbarAccessibilityIncrement() {
