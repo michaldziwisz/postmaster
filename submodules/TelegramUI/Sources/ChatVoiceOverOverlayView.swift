@@ -462,6 +462,18 @@ private final class ChatVoiceOverOverlayTableView: UITableView {
                 guard baseRowCount > 0 else {
                     return firstMessageRow
                 }
+                let lastRow = max(0, baseRowCount - 1)
+                let hasMessageRows = baseRowCount > firstMessageRow
+
+                let minOffset = -self.adjustedContentInset.top
+                let maxOffset = max(minOffset, self.contentSize.height - self.bounds.height + self.adjustedContentInset.bottom)
+                if maxOffset - self.contentOffset.y <= 1.0 {
+                    return lastRow
+                }
+                if self.contentOffset.y - minOffset <= 1.0 {
+                    return hasMessageRows ? firstMessageRow : lastRow
+                }
+
                 let fallback = max(firstMessageRow, baseRowCount / 2)
                 return max(firstMessageRow, min(baseRowCount - 1, anchorRow ?? fallback))
             }()
@@ -3167,19 +3179,22 @@ public final class ChatVoiceOverOverlayView: UIView {
                     guard baseRowCount > 0 else {
                         return firstMessageRow
                     }
+                    let lastRow = max(0, baseRowCount - 1)
+                    let hasMessageRows = baseRowCount > firstMessageRow
+
+                    if self.voiceOverScrollbarIsAtBottom(visibleIndexPaths: self.voiceOverScrollbarVisibleIndexPathsSorted()) {
+                        return lastRow
+                    }
+                    if self.voiceOverScrollbarIsAtTop(visibleIndexPaths: self.voiceOverScrollbarVisibleIndexPathsSorted()) {
+                        return hasMessageRows ? firstMessageRow : lastRow
+                    }
+
                     if let unfocusedRowElement = userInfo[UIAccessibility.unfocusedElementUserInfoKey] as? ChatVoiceOverOverlayRowAccessibilityElement,
                        unfocusedRowElement.overlay === self,
                        let unfocusedIndexPath = self.indexPath(for: unfocusedRowElement),
                        unfocusedIndexPath.section == 0
                     {
                         return max(firstMessageRow, min(baseRowCount - 1, unfocusedIndexPath.row))
-                    }
-
-                    if self.voiceOverScrollbarIsAtBottom(visibleIndexPaths: self.voiceOverScrollbarVisibleIndexPathsSorted()) {
-                        return max(firstMessageRow, baseRowCount - 1)
-                    }
-                    if self.voiceOverScrollbarIsAtTop(visibleIndexPaths: self.voiceOverScrollbarVisibleIndexPathsSorted()) {
-                        return firstMessageRow
                     }
                     if let visibleIndexPaths = self.tableView.indexPathsForVisibleRows?.sorted(), !visibleIndexPaths.isEmpty {
                         let candidates = visibleIndexPaths.filter { $0.section == 0 && $0.row >= firstMessageRow }
