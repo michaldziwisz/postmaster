@@ -144,26 +144,32 @@ private final class ChatVoiceOverOverlayTableView: UITableView {
         return overlay.tableAccessibilityElement(at: index)
     }
 
-    override func index(ofAccessibilityElement element: Any) -> Int {
-        if UIAccessibility.isVoiceOverRunning, let overlay = self.overlayForAccessibilityElements {
-            let baseIndex = overlay.tableAccessibilityIndex(of: element)
-            if baseIndex != NSNotFound {
-                return baseIndex
-            }
+	    override func index(ofAccessibilityElement element: Any) -> Int {
+	        if UIAccessibility.isVoiceOverRunning, let overlay = self.overlayForAccessibilityElements {
+	            let baseIndex = overlay.tableAccessibilityIndex(of: element)
+	            if baseIndex != NSNotFound {
+	                return baseIndex
+	            }
 
-            // When the native VoiceOver scrollbar is focused, iOS asks the scroll view container
-            // for its index to resolve swipe-left/right navigation. Since the scrollbar element is
-            // not part of our custom `accessibilityElements`, returning `NSNotFound` makes VoiceOver
-            // fall back to the parent container (e.g. the title), which feels like "falling out"
-            // of the message list. Map the scrollbar to a stable nearby row index instead.
-            if self.isProbablyNativeVoiceOverScrollbarElement(element) {
-                if let mappedIndex = self.voiceOverIndexForNativeScrollbar(using: overlay) {
-                    return mappedIndex
-                }
-            }
-        }
-        return super.index(ofAccessibilityElement: element)
-    }
+	            if let scrollbarElement = element as? ChatVoiceOverOverlayScrollbarAccessibilityElement, scrollbarElement.overlay === overlay {
+	                if let mappedIndex = self.voiceOverIndexForNativeScrollbar(using: overlay) {
+	                    return mappedIndex
+	                }
+	            }
+
+	            // When the native VoiceOver scrollbar is focused, iOS asks the scroll view container
+	            // for its index to resolve swipe-left/right navigation. Since the scrollbar element is
+	            // not part of our custom `accessibilityElements`, returning `NSNotFound` makes VoiceOver
+	            // fall back to the parent container (e.g. the title), which feels like "falling out"
+	            // of the message list. Map the scrollbar to a stable nearby row index instead.
+	            if self.isProbablyNativeVoiceOverScrollbarElement(element) {
+	                if let mappedIndex = self.voiceOverIndexForNativeScrollbar(using: overlay) {
+	                    return mappedIndex
+	                }
+	            }
+	        }
+	        return super.index(ofAccessibilityElement: element)
+	    }
 
 	    fileprivate func isProbablyNativeVoiceOverScrollbarElement(_ element: Any) -> Bool {
 	        if element is ChatVoiceOverOverlayRowAccessibilityElement {
@@ -383,9 +389,47 @@ private final class ChatVoiceOverOverlayTableView: UITableView {
             return nil
         }
 
-        // Let UIKit expose the native VoiceOver scrollbar in the right gutter.
+        // Provide an accessibility-only scrollbar element in the right gutter.
+        // This keeps swipe navigation deterministic (scrollbar -> messages) while remaining reachable via exploration.
         if self.isInVoiceOverScrollbarGutter(point) {
-            return nil
+            let baseRowCount = max(0, self.numberOfRows(inSection: 0))
+            let listPoint = CGPoint(x: max(self.bounds.minX + 1.0, self.bounds.maxX - Self.voiceOverScrollbarGutterWidth - 6.0), y: point.y)
+            let anchorRow: Int? = {
+                if let indexPath = self.indexPathForRow(at: listPoint), indexPath.section == 0 {
+                    return indexPath.row
+                }
+                guard let visibleIndexPaths = self.indexPathsForVisibleRows, !visibleIndexPaths.isEmpty else {
+                    return nil
+                }
+                var nearestIndexPath: IndexPath?
+                var nearestDistance: CGFloat = .greatestFiniteMagnitude
+                for indexPath in visibleIndexPaths {
+                    let rect = self.rectForRow(at: indexPath)
+                    let dy: CGFloat
+                    if point.y < rect.minY {
+                        dy = rect.minY - point.y
+                    } else if point.y > rect.maxY {
+                        dy = point.y - rect.maxY
+                    } else {
+                        dy = 0.0
+                    }
+                    if dy < nearestDistance {
+                        nearestDistance = dy
+                        nearestIndexPath = indexPath
+                    }
+                }
+                return nearestIndexPath?.row
+            }()
+            let insertionIndex: Int? = {
+                guard baseRowCount > 0 else {
+                    return 0
+                }
+                let clampedAnchor = max(0, min(baseRowCount - 1, anchorRow ?? (baseRowCount / 2)))
+                // Ensure there is always a "previous" message to swipe-left to.
+                return max(1, min(baseRowCount, clampedAnchor + 1))
+            }()
+            overlay.setVoiceOverScrollbarAccessibilityElementActive(true, insertionIndex: insertionIndex)
+            return overlay.voiceOverScrollbarAccessibilityElement
         }
 
         if let indexPath = self.indexPathForRow(at: point), let element = overlay.accessibilityElement(at: indexPath) {
@@ -476,6 +520,77 @@ private final class ChatVoiceOverOverlayCell: UITableViewCell {
     override func prepareForReuse() {
         super.prepareForReuse()
         self.onDidBecomeFocused = nil
+    }
+}
+
+private final class ChatVoiceOverOverlayScrollbarAccessibilityElement: UIAccessibilityElement {
+    weak var overlay: ChatVoiceOverOverlayView?
+    
+    init(container: AnyObject, overlay: ChatVoiceOverOverlayView) {
+        self.overlay = overlay
+        super.init(accessibilityContainer: container)
+        self.isAccessibilityElement = true
+    }
+    
+    override var accessibilityFrameInContainerSpace: CGRect {
+        get {
+            return self.overlay?.voiceOverScrollbarAccessibilityFrameInContainerSpace() ?? .zero
+        }
+        set {
+        }
+    }
+    
+    override var accessibilityFrame: CGRect {
+        get {
+            return self.overlay?.voiceOverScrollbarAccessibilityFrameInScreenSpace() ?? .zero
+        }
+        set {
+        }
+    }
+    
+    override var accessibilityLabel: String? {
+        get {
+            return self.overlay?.voiceOverScrollbarAccessibilityLabel()
+        }
+        set {
+        }
+    }
+    
+    override var accessibilityHint: String? {
+        get {
+            return self.overlay?.voiceOverScrollbarAccessibilityHint()
+        }
+        set {
+        }
+    }
+    
+    override var accessibilityValue: String? {
+        get {
+            return self.overlay?.voiceOverScrollbarAccessibilityValue()
+        }
+        set {
+        }
+    }
+    
+    override var accessibilityTraits: UIAccessibilityTraits {
+        get {
+            return [.adjustable]
+        }
+        set {
+        }
+    }
+    
+    override func accessibilityIncrement() {
+        self.overlay?.voiceOverScrollbarAccessibilityIncrement()
+    }
+    
+    override func accessibilityDecrement() {
+        self.overlay?.voiceOverScrollbarAccessibilityDecrement()
+    }
+    
+    override func accessibilityElementDidBecomeFocused() {
+        super.accessibilityElementDidBecomeFocused()
+        self.overlay?.noteVoiceOverNavigationActivity()
     }
 }
 
@@ -616,6 +731,10 @@ public final class ChatVoiceOverOverlayView: UIView {
     
     private let tableView = ChatVoiceOverOverlayTableView(frame: .zero, style: .plain)
     private let refreshControl = UIRefreshControl()
+
+    fileprivate lazy var voiceOverScrollbarAccessibilityElement: ChatVoiceOverOverlayScrollbarAccessibilityElement = {
+        return ChatVoiceOverOverlayScrollbarAccessibilityElement(container: self.tableView, overlay: self)
+    }()
     
     private let composerView = UIView()
     private let attachButton = UIButton(type: .system)
@@ -685,10 +804,8 @@ public final class ChatVoiceOverOverlayView: UIView {
     private var isComposerEnabled: Bool = true
 
     private var lastVoiceOverNavigationTimestamp: CFTimeInterval = 0.0
-    private var lastVoiceOverScrollbarFocusTimestamp: CFTimeInterval = 0.0
-    private var isPerformingAccessibilityFocusCorrection = false
-    private var lastObservedAccessibilityFocusedElement: AnyObject?
-    private var isVoiceOverScrollbarFocusModeActive = false
+    private var voiceOverScrollbarAccessibilityElementInsertionIndex: Int?
+    private var cachedVoiceOverScrollbarAccessibilityElementIndex: Int?
     
     public var actions = Actions()
     
@@ -1481,6 +1598,7 @@ public final class ChatVoiceOverOverlayView: UIView {
     private func invalidateAccessibilityElements() {
         self.needsAccessibilityElementsRebuild = true
         self.cachedAccessibilityElements = []
+        self.cachedVoiceOverScrollbarAccessibilityElementIndex = nil
     }
 
     fileprivate var tableAccessibilityElements: [Any] {
@@ -1502,6 +1620,13 @@ public final class ChatVoiceOverOverlayView: UIView {
     }
 
     fileprivate func tableAccessibilityIndex(of element: Any) -> Int {
+        if let scrollbarElement = element as? ChatVoiceOverOverlayScrollbarAccessibilityElement, scrollbarElement.overlay === self {
+            self.rebuildAccessibilityElementsIfNeeded()
+            if let index = self.cachedVoiceOverScrollbarAccessibilityElementIndex {
+                return index
+            }
+            return NSNotFound
+        }
         guard let element = element as? ChatVoiceOverOverlayRowAccessibilityElement else {
             return NSNotFound
         }
@@ -1510,12 +1635,23 @@ public final class ChatVoiceOverOverlayView: UIView {
         }
         switch element.kind {
         case .loadEarlier:
-            return self.shouldShowLoadEarlierRow ? 0 : NSNotFound
+            let baseIndex = self.shouldShowLoadEarlierRow ? 0 : NSNotFound
+            if baseIndex == NSNotFound {
+                return NSNotFound
+            }
+            if let scrollbarIndex = self.cachedVoiceOverScrollbarAccessibilityElementIndex, baseIndex >= scrollbarIndex {
+                return baseIndex + 1
+            }
+            return baseIndex
         case let .row(stableId):
             guard let rowIndex = self.rowIndexByStableId[stableId] else {
                 return NSNotFound
             }
-            return rowIndex + self.loadEarlierRowOffset
+            let baseIndex = rowIndex + self.loadEarlierRowOffset
+            if let scrollbarIndex = self.cachedVoiceOverScrollbarAccessibilityElementIndex, baseIndex >= scrollbarIndex {
+                return baseIndex + 1
+            }
+            return baseIndex
         }
     }
 
@@ -1563,7 +1699,28 @@ public final class ChatVoiceOverOverlayView: UIView {
         }
         self.rowAccessibilityElementsByStableId = newElementsByStableId
 
+        if let insertionIndex = self.voiceOverScrollbarAccessibilityElementInsertionIndex {
+            let clampedInsertionIndex = max(0, min(elements.count, insertionIndex))
+            self.voiceOverScrollbarAccessibilityElement.overlay = self
+            elements.insert(self.voiceOverScrollbarAccessibilityElement, at: clampedInsertionIndex)
+            self.cachedVoiceOverScrollbarAccessibilityElementIndex = clampedInsertionIndex
+        } else {
+            self.cachedVoiceOverScrollbarAccessibilityElementIndex = nil
+        }
+
         self.cachedAccessibilityElements = elements
+    }
+
+    fileprivate func setVoiceOverScrollbarAccessibilityElementActive(_ isActive: Bool, insertionIndex: Int?) {
+        guard UIAccessibility.isVoiceOverRunning else {
+            return
+        }
+        let resolvedInsertionIndex: Int? = isActive ? insertionIndex : nil
+        guard self.voiceOverScrollbarAccessibilityElementInsertionIndex != resolvedInsertionIndex else {
+            return
+        }
+        self.voiceOverScrollbarAccessibilityElementInsertionIndex = resolvedInsertionIndex
+        self.invalidateAccessibilityElements()
     }
 
     fileprivate func accessibilityElement(at indexPath: IndexPath) -> ChatVoiceOverOverlayRowAccessibilityElement? {
@@ -1637,6 +1794,52 @@ public final class ChatVoiceOverOverlayView: UIView {
         }
         let rect = self.tableView.rectForRow(at: indexPath)
         return self.tableView.convert(rect, to: nil)
+    }
+
+    fileprivate func voiceOverScrollbarAccessibilityFrameInContainerSpace() -> CGRect {
+        let bounds = self.tableView.bounds
+        let width = ChatVoiceOverOverlayTableView.voiceOverScrollbarGutterWidth
+        return CGRect(x: bounds.maxX - width, y: bounds.minY, width: width, height: bounds.height)
+    }
+
+    fileprivate func voiceOverScrollbarAccessibilityFrameInScreenSpace() -> CGRect {
+        return self.tableView.convert(self.voiceOverScrollbarAccessibilityFrameInContainerSpace(), to: nil)
+    }
+
+    fileprivate func voiceOverScrollbarAccessibilityLabel() -> String? {
+        return self.interfaceState?.strings.DialogList_SearchSectionMessages ?? defaultPresentationStrings.DialogList_SearchSectionMessages
+    }
+
+    fileprivate func voiceOverScrollbarAccessibilityHint() -> String? {
+        return self.interfaceState?.strings.SharedMedia_FastScrollTooltip ?? defaultPresentationStrings.SharedMedia_FastScrollTooltip
+    }
+
+    fileprivate func voiceOverScrollbarAccessibilityValue() -> String? {
+        let strings = self.interfaceState?.strings ?? defaultPresentationStrings
+
+        let rowOffset = self.loadEarlierRowOffset
+        let totalMessages = max(0, self.tableView.numberOfRows(inSection: 0) - rowOffset)
+        guard totalMessages > 0 else {
+            return nil
+        }
+        guard let visible = self.tableView.indexPathsForVisibleRows?.sorted(), !visible.isEmpty else {
+            return nil
+        }
+
+        let messageCandidates = visible.filter { $0.section == 0 && $0.row >= rowOffset }
+        let candidates = messageCandidates.isEmpty ? visible : messageCandidates
+        let indexPath = candidates[candidates.count / 2]
+        let row = max(1, min(totalMessages, indexPath.row - rowOffset + 1))
+
+        return strings.VoiceOver_ScrollStatus(row, totalMessages).string
+    }
+
+    fileprivate func voiceOverScrollbarAccessibilityIncrement() {
+        _ = self.tableView.accessibilityScroll(.down)
+    }
+
+    fileprivate func voiceOverScrollbarAccessibilityDecrement() {
+        _ = self.tableView.accessibilityScroll(.up)
     }
 
     fileprivate func voiceOverElementDidBecomeFocused(_ element: ChatVoiceOverOverlayRowAccessibilityElement) {
@@ -2709,126 +2912,36 @@ public final class ChatVoiceOverOverlayView: UIView {
     }
 
     private func handleAccessibilityElementFocused(notification: Notification) {
-        guard UIAccessibility.isVoiceOverRunning else {
-            return
-        }
-        guard !self.isPerformingAccessibilityFocusCorrection else {
-            return
-        }
-        guard let userInfo = notification.userInfo else {
+        guard UIAccessibility.isVoiceOverRunning, let userInfo = notification.userInfo else {
             return
         }
 
         let focusedElement = userInfo[UIAccessibility.focusedElementUserInfoKey]
-        let unfocusedCandidate: Any? = {
-            if let unfocused = userInfo[UIAccessibility.unfocusedElementUserInfoKey] {
-                return unfocused
+        let isScrollbarFocused: Bool = {
+            guard let focusedScrollbar = focusedElement as? ChatVoiceOverOverlayScrollbarAccessibilityElement else {
+                return false
             }
-            return self.lastObservedAccessibilityFocusedElement
+            return focusedScrollbar.overlay === self
         }()
-        defer {
-            if let focusedElement = focusedElement as AnyObject? {
-                self.lastObservedAccessibilityFocusedElement = focusedElement
+
+        if isScrollbarFocused {
+            if self.voiceOverScrollbarAccessibilityElementInsertionIndex == nil {
+                let baseRowCount = max(0, self.tableView.numberOfRows(inSection: 0))
+                let insertionIndex: Int? = {
+                    guard baseRowCount > 0 else {
+                        return 0
+                    }
+                    return max(1, min(baseRowCount, (baseRowCount / 2) + 1))
+                }()
+                self.setVoiceOverScrollbarAccessibilityElementActive(true, insertionIndex: insertionIndex)
             }
-        }
-
-        if let focusedElement, self.tableView.isProbablyNativeVoiceOverScrollbarElement(focusedElement) {
-            self.lastVoiceOverScrollbarFocusTimestamp = CACurrentMediaTime()
-
-            // Swiping right from the last message should continue into the composer (not to the scrollbar).
-            if self.isComposerEnabled, let unfocusedRow = unfocusedCandidate as? ChatVoiceOverOverlayRowAccessibilityElement {
-                let index = self.tableAccessibilityIndex(of: unfocusedRow)
-                if index != NSNotFound, index == self.tableAccessibilityElementCount - 1 {
-                    self.setVoiceOverScrollbarFocusModeActive(false)
-                    self.performAccessibilityFocusCorrection(to: self.attachButton)
-                    return
-                }
-            }
-            
-            self.setVoiceOverScrollbarFocusModeActive(true)
-            return
-        }
-
-        guard let unfocusedElement = unfocusedCandidate, self.tableView.isProbablyNativeVoiceOverScrollbarElement(unfocusedElement) else {
-            return
-        }
-        self.setVoiceOverScrollbarFocusModeActive(false)
-
-        guard let focusedElement, self.isTopBarAccessibilityElement(focusedElement) else {
-            return
-        }
-        guard let nearestMessage = self.nearestVisibleMessageAccessibilityElement() else {
-            return
-        }
-        self.performAccessibilityFocusCorrection(to: nearestMessage)
-    }
-
-    private func setVoiceOverScrollbarFocusModeActive(_ isActive: Bool) {
-        guard self.isVoiceOverScrollbarFocusModeActive != isActive else {
-            return
-        }
-        self.isVoiceOverScrollbarFocusModeActive = isActive
-
-        // Keep swipe navigation stable when the VoiceOver scrollbar is focused:
-        // - prevent flick-left from landing on the title bar,
-        // - prevent flick-right from jumping into composer controls.
-        self.topBarView.accessibilityElementsHidden = isActive
-        if isActive {
-            self.composerView.accessibilityElementsHidden = true
         } else {
-            self.updateComposerAccessibilityVisibility()
+            self.setVoiceOverScrollbarAccessibilityElementActive(false, insertionIndex: nil)
         }
     }
 
     private func updateComposerAccessibilityVisibility() {
-        // Respect both: (1) whether the composer is enabled for this chat, and (2) whether we are
-        // temporarily suppressing "chrome" elements while the VoiceOver scrollbar is focused.
-        self.composerView.accessibilityElementsHidden = !self.isComposerEnabled || self.isVoiceOverScrollbarFocusModeActive
-    }
-
-    private func isTopBarAccessibilityElement(_ element: Any) -> Bool {
-        if let view = element as? UIView {
-            if view === self.topBarView {
-                return true
-            }
-            return view.isDescendant(of: self.topBarView)
-        }
-        if let accessibilityElement = element as? UIAccessibilityElement, let containerView = accessibilityElement.accessibilityContainer as? UIView {
-            if containerView === self.topBarView {
-                return true
-            }
-            return containerView.isDescendant(of: self.topBarView)
-        }
-        return false
-    }
-
-    private func nearestVisibleMessageAccessibilityElement() -> ChatVoiceOverOverlayRowAccessibilityElement? {
-        guard UIAccessibility.isVoiceOverRunning else {
-            return nil
-        }
-        guard let visibleIndexPaths = self.tableView.indexPathsForVisibleRows?.sorted(), !visibleIndexPaths.isEmpty else {
-            return nil
-        }
-
-        let rowOffset = self.loadEarlierRowOffset
-        let messageCandidates = visibleIndexPaths.filter { $0.section == 0 && $0.row >= rowOffset }
-        let candidates = messageCandidates.isEmpty ? visibleIndexPaths : messageCandidates
-        let indexPath = candidates[candidates.count / 2]
-        return self.accessibilityElement(at: indexPath)
-    }
-
-    private func performAccessibilityFocusCorrection(to element: Any) {
-        guard UIAccessibility.isVoiceOverRunning else {
-            return
-        }
-        guard !self.isPerformingAccessibilityFocusCorrection else {
-            return
-        }
-        self.isPerformingAccessibilityFocusCorrection = true
-        UIAccessibility.post(notification: .layoutChanged, argument: element)
-        DispatchQueue.main.async { [weak self] in
-            self?.isPerformingAccessibilityFocusCorrection = false
-        }
+        self.composerView.accessibilityElementsHidden = !self.isComposerEnabled
     }
     
     private func handleKeyboard(notification: Notification) {
