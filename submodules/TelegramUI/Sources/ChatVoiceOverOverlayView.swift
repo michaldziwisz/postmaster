@@ -420,15 +420,25 @@ private final class ChatVoiceOverOverlayTableView: UITableView {
                 }
                 return nearestIndexPath?.row
             }()
-            let insertionIndex: Int? = {
-                guard baseRowCount > 0 else {
-                    return 0
+            let hasLoadEarlierRow: Bool = {
+                guard let first = overlay.tableAccessibilityElement(at: 0) as? ChatVoiceOverOverlayRowAccessibilityElement else {
+                    return false
                 }
-                let clampedAnchor = max(0, min(baseRowCount - 1, anchorRow ?? (baseRowCount / 2)))
-                // Ensure there is always a "previous" message to swipe-left to.
-                return max(1, min(baseRowCount, clampedAnchor + 1))
+                if case .loadEarlier = first.kind {
+                    return true
+                } else {
+                    return false
+                }
             }()
-            overlay.setVoiceOverScrollbarAccessibilityElementActive(true, insertionIndex: insertionIndex)
+            let firstMessageRow = hasLoadEarlierRow ? 1 : 0
+            let resolvedAnchorRow: Int = {
+                guard baseRowCount > 0 else {
+                    return firstMessageRow
+                }
+                let fallback = max(firstMessageRow, baseRowCount / 2)
+                return max(firstMessageRow, min(baseRowCount - 1, anchorRow ?? fallback))
+            }()
+            overlay.setVoiceOverScrollbarAccessibilityElementActive(true, anchorTableRow: resolvedAnchorRow)
             return overlay.voiceOverScrollbarAccessibilityElement
         }
 
@@ -804,7 +814,7 @@ public final class ChatVoiceOverOverlayView: UIView {
     private var isComposerEnabled: Bool = true
 
     private var lastVoiceOverNavigationTimestamp: CFTimeInterval = 0.0
-    private var voiceOverScrollbarAccessibilityElementInsertionIndex: Int?
+    private var voiceOverScrollbarAccessibilityElementAnchorTableRow: Int?
     private var cachedVoiceOverScrollbarAccessibilityElementIndex: Int?
     
     public var actions = Actions()
@@ -863,6 +873,9 @@ public final class ChatVoiceOverOverlayView: UIView {
         
         self.tableView.translatesAutoresizingMaskIntoConstraints = false
         self.tableView.overlayForAccessibilityElements = self
+        self.tableView.onDidPerformAccessibilityScroll = { [weak self] in
+            self?.voiceOverScrollbarDidPerformAccessibilityScroll()
+        }
         self.tableView.dataSource = self
         self.tableView.delegate = self
         self.tableView.estimatedRowHeight = 96.0
@@ -1639,6 +1652,9 @@ public final class ChatVoiceOverOverlayView: UIView {
             if baseIndex == NSNotFound {
                 return NSNotFound
             }
+            if let anchorRow = self.voiceOverScrollbarAccessibilityElementAnchorTableRow, baseIndex > anchorRow {
+                return NSNotFound
+            }
             if let scrollbarIndex = self.cachedVoiceOverScrollbarAccessibilityElementIndex, baseIndex >= scrollbarIndex {
                 return baseIndex + 1
             }
@@ -1648,6 +1664,9 @@ public final class ChatVoiceOverOverlayView: UIView {
                 return NSNotFound
             }
             let baseIndex = rowIndex + self.loadEarlierRowOffset
+            if let anchorRow = self.voiceOverScrollbarAccessibilityElementAnchorTableRow, baseIndex > anchorRow {
+                return NSNotFound
+            }
             if let scrollbarIndex = self.cachedVoiceOverScrollbarAccessibilityElementIndex, baseIndex >= scrollbarIndex {
                 return baseIndex + 1
             }
@@ -1689,9 +1708,21 @@ public final class ChatVoiceOverOverlayView: UIView {
             self.loadEarlierAccessibilityElement = nil
         }
 
+        let anchorTableRow = self.voiceOverScrollbarAccessibilityElementAnchorTableRow
+        let maxMessageIndexToInclude: Int? = anchorTableRow.flatMap { anchor in
+            return max(-1, anchor - self.loadEarlierRowOffset)
+        }
+        let messageCountToInclude: Int = {
+            guard let maxMessageIndexToInclude else {
+                return self.rows.count
+            }
+            return max(0, min(self.rows.count, maxMessageIndexToInclude + 1))
+        }()
+
         var newElementsByStableId: [UInt64: ChatVoiceOverOverlayRowAccessibilityElement] = [:]
-        newElementsByStableId.reserveCapacity(self.rows.count)
-        for row in self.rows {
+        newElementsByStableId.reserveCapacity(messageCountToInclude)
+        for index in 0 ..< messageCountToInclude {
+            let row = self.rows[index]
             let element = self.rowAccessibilityElementsByStableId[row.stableId] ?? ChatVoiceOverOverlayRowAccessibilityElement(container: self.tableView, overlay: self, kind: .row(stableId: row.stableId))
             element.overlay = self
             newElementsByStableId[row.stableId] = element
@@ -1699,11 +1730,10 @@ public final class ChatVoiceOverOverlayView: UIView {
         }
         self.rowAccessibilityElementsByStableId = newElementsByStableId
 
-        if let insertionIndex = self.voiceOverScrollbarAccessibilityElementInsertionIndex {
-            let clampedInsertionIndex = max(0, min(elements.count, insertionIndex))
+        if anchorTableRow != nil {
             self.voiceOverScrollbarAccessibilityElement.overlay = self
-            elements.insert(self.voiceOverScrollbarAccessibilityElement, at: clampedInsertionIndex)
-            self.cachedVoiceOverScrollbarAccessibilityElementIndex = clampedInsertionIndex
+            elements.append(self.voiceOverScrollbarAccessibilityElement)
+            self.cachedVoiceOverScrollbarAccessibilityElementIndex = elements.count - 1
         } else {
             self.cachedVoiceOverScrollbarAccessibilityElementIndex = nil
         }
@@ -1711,16 +1741,69 @@ public final class ChatVoiceOverOverlayView: UIView {
         self.cachedAccessibilityElements = elements
     }
 
-    fileprivate func setVoiceOverScrollbarAccessibilityElementActive(_ isActive: Bool, insertionIndex: Int?) {
+    fileprivate func setVoiceOverScrollbarAccessibilityElementActive(_ isActive: Bool, anchorTableRow: Int?) {
         guard UIAccessibility.isVoiceOverRunning else {
             return
         }
-        let resolvedInsertionIndex: Int? = isActive ? insertionIndex : nil
-        guard self.voiceOverScrollbarAccessibilityElementInsertionIndex != resolvedInsertionIndex else {
+        let resolvedAnchorTableRow: Int? = isActive ? anchorTableRow : nil
+        guard self.voiceOverScrollbarAccessibilityElementAnchorTableRow != resolvedAnchorTableRow else {
             return
         }
-        self.voiceOverScrollbarAccessibilityElementInsertionIndex = resolvedInsertionIndex
+        self.voiceOverScrollbarAccessibilityElementAnchorTableRow = resolvedAnchorTableRow
+        if resolvedAnchorTableRow != nil {
+            self.composerView.accessibilityElementsHidden = true
+        } else {
+            self.updateComposerAccessibilityVisibility()
+        }
         self.invalidateAccessibilityElements()
+    }
+
+    private func voiceOverScrollbarDidPerformAccessibilityScroll() {
+        guard UIAccessibility.isVoiceOverRunning else {
+            return
+        }
+        guard self.voiceOverScrollbarAccessibilityElementAnchorTableRow != nil else {
+            return
+        }
+
+        // Allow the scroll view to settle its visible rows before recomputing an anchor.
+        DispatchQueue.main.async { [weak self] in
+            guard let self else {
+                return
+            }
+            guard self.voiceOverScrollbarAccessibilityElementAnchorTableRow != nil else {
+                return
+            }
+
+            let baseRowCount = max(0, self.tableView.numberOfRows(inSection: 0))
+            let hasLoadEarlierRow: Bool = {
+                guard let first = self.tableAccessibilityElement(at: 0) as? ChatVoiceOverOverlayRowAccessibilityElement else {
+                    return false
+                }
+                if case .loadEarlier = first.kind {
+                    return true
+                } else {
+                    return false
+                }
+            }()
+            let firstMessageRow = hasLoadEarlierRow ? 1 : 0
+
+            let resolvedAnchorRow: Int = {
+                guard baseRowCount > 0 else {
+                    return firstMessageRow
+                }
+                if let visibleIndexPaths = self.tableView.indexPathsForVisibleRows?.sorted(), !visibleIndexPaths.isEmpty {
+                    let candidates = visibleIndexPaths.filter { $0.section == 0 && $0.row >= firstMessageRow }
+                    let effectiveCandidates = candidates.isEmpty ? visibleIndexPaths : candidates
+                    let anchorIndexPath = effectiveCandidates[effectiveCandidates.count / 2]
+                    return max(firstMessageRow, min(baseRowCount - 1, anchorIndexPath.row))
+                } else {
+                    return max(firstMessageRow, min(baseRowCount - 1, baseRowCount / 2))
+                }
+            }()
+
+            self.setVoiceOverScrollbarAccessibilityElementActive(true, anchorTableRow: resolvedAnchorRow)
+        }
     }
 
     fileprivate func accessibilityElement(at indexPath: IndexPath) -> ChatVoiceOverOverlayRowAccessibilityElement? {
@@ -1815,23 +1898,17 @@ public final class ChatVoiceOverOverlayView: UIView {
     }
 
     fileprivate func voiceOverScrollbarAccessibilityValue() -> String? {
-        let strings = self.interfaceState?.strings ?? defaultPresentationStrings
-
-        let rowOffset = self.loadEarlierRowOffset
-        let totalMessages = max(0, self.tableView.numberOfRows(inSection: 0) - rowOffset)
-        guard totalMessages > 0 else {
-            return nil
-        }
-        guard let visible = self.tableView.indexPathsForVisibleRows?.sorted(), !visible.isEmpty else {
-            return nil
+        let minOffset = -self.tableView.adjustedContentInset.top
+        let maxOffset = max(minOffset, self.tableView.contentSize.height - self.tableView.bounds.height + self.tableView.adjustedContentInset.bottom)
+        let range = maxOffset - minOffset
+        guard range > 1.0 else {
+            return "100%"
         }
 
-        let messageCandidates = visible.filter { $0.section == 0 && $0.row >= rowOffset }
-        let candidates = messageCandidates.isEmpty ? visible : messageCandidates
-        let indexPath = candidates[candidates.count / 2]
-        let row = max(1, min(totalMessages, indexPath.row - rowOffset + 1))
-
-        return strings.VoiceOver_ScrollStatus("\(row)", "\(totalMessages)").string
+        let progress = (self.tableView.contentOffset.y - minOffset) / range
+        let clamped = max(0.0, min(1.0, progress))
+        let percent = Int((clamped * 100.0).rounded())
+        return "\(percent)%"
     }
 
     fileprivate func voiceOverScrollbarAccessibilityIncrement() {
@@ -2925,23 +3002,42 @@ public final class ChatVoiceOverOverlayView: UIView {
         }()
 
         if isScrollbarFocused {
-            if self.voiceOverScrollbarAccessibilityElementInsertionIndex == nil {
+            if self.voiceOverScrollbarAccessibilityElementAnchorTableRow == nil {
                 let baseRowCount = max(0, self.tableView.numberOfRows(inSection: 0))
-                let insertionIndex: Int? = {
-                    guard baseRowCount > 0 else {
-                        return 0
+                let hasLoadEarlierRow: Bool = {
+                    guard let first = self.tableAccessibilityElement(at: 0) as? ChatVoiceOverOverlayRowAccessibilityElement else {
+                        return false
                     }
-                    return max(1, min(baseRowCount, (baseRowCount / 2) + 1))
+                    if case .loadEarlier = first.kind {
+                        return true
+                    } else {
+                        return false
+                    }
                 }()
-                self.setVoiceOverScrollbarAccessibilityElementActive(true, insertionIndex: insertionIndex)
+                let firstMessageRow = hasLoadEarlierRow ? 1 : 0
+
+                let resolvedAnchorRow: Int = {
+                    guard baseRowCount > 0 else {
+                        return firstMessageRow
+                    }
+                    if let visibleIndexPaths = self.tableView.indexPathsForVisibleRows?.sorted(), !visibleIndexPaths.isEmpty {
+                        let candidates = visibleIndexPaths.filter { $0.section == 0 && $0.row >= firstMessageRow }
+                        let effectiveCandidates = candidates.isEmpty ? visibleIndexPaths : candidates
+                        let anchorIndexPath = effectiveCandidates[effectiveCandidates.count / 2]
+                        return max(firstMessageRow, min(baseRowCount - 1, anchorIndexPath.row))
+                    } else {
+                        return max(firstMessageRow, min(baseRowCount - 1, baseRowCount / 2))
+                    }
+                }()
+                self.setVoiceOverScrollbarAccessibilityElementActive(true, anchorTableRow: resolvedAnchorRow)
             }
         } else {
-            self.setVoiceOverScrollbarAccessibilityElementActive(false, insertionIndex: nil)
+            self.setVoiceOverScrollbarAccessibilityElementActive(false, anchorTableRow: nil)
         }
     }
 
     private func updateComposerAccessibilityVisibility() {
-        self.composerView.accessibilityElementsHidden = !self.isComposerEnabled
+        self.composerView.accessibilityElementsHidden = !self.isComposerEnabled || (self.voiceOverScrollbarAccessibilityElementAnchorTableRow != nil)
     }
     
     private func handleKeyboard(notification: Notification) {
