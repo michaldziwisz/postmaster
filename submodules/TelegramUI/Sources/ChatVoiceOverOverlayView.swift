@@ -14,6 +14,7 @@ private final class ChatVoiceOverOverlayTableView: UITableView {
     var onDidPerformAccessibilityScroll: (() -> Void)?
     weak var overlayForAccessibilityElements: ChatVoiceOverOverlayView?
     fileprivate static let voiceOverScrollbarGutterWidth: CGFloat = 22.0
+    private static let voiceOverScrollbarAnnouncementPercentStep: Int = 5
 
     private func isInVoiceOverScrollbarGutter(_ point: CGPoint) -> Bool {
         let bounds = self.bounds
@@ -75,7 +76,10 @@ private final class ChatVoiceOverOverlayTableView: UITableView {
         if range > 1.0 {
             let progress = (self.contentOffset.y - minOffset) / range
             let clamped = max(0.0, min(1.0, progress))
-            let percent = Int((clamped * 100.0).rounded())
+            let rawPercent = (clamped * 100.0)
+            let step = max(1, Self.voiceOverScrollbarAnnouncementPercentStep)
+            let quantized = Int((rawPercent / CGFloat(step)).rounded()) * step
+            let percent = max(0, min(100, quantized))
             UIAccessibility.post(notification: .pageScrolled, argument: "\(percent)%")
         } else {
             UIAccessibility.post(notification: .pageScrolled, argument: nil)
@@ -367,7 +371,27 @@ private final class ChatVoiceOverOverlayTableView: UITableView {
 
         let candidates = visibleIndexPaths.filter { $0.section == 0 && $0.row >= firstMessageRow }
         let effectiveCandidates = candidates.isEmpty ? visibleIndexPaths : candidates
-        let anchorIndexPath = effectiveCandidates[effectiveCandidates.count / 2]
+        let anchorIndexPath: IndexPath = {
+            let minOffset = -self.adjustedContentInset.top
+            let maxOffset = max(minOffset, self.contentSize.height - self.bounds.height + self.adjustedContentInset.bottom)
+            if maxOffset - self.contentOffset.y <= 2.0, let last = effectiveCandidates.last {
+                return last
+            }
+            if self.contentOffset.y - minOffset <= 2.0, let first = effectiveCandidates.first {
+                return first
+            }
+            let visibleMidY = self.contentOffset.y + self.bounds.height * 0.5
+            var best = effectiveCandidates[0]
+            var bestDistance = abs(self.rectForRow(at: best).midY - visibleMidY)
+            for indexPath in effectiveCandidates.dropFirst() {
+                let distance = abs(self.rectForRow(at: indexPath).midY - visibleMidY)
+                if distance < bestDistance {
+                    bestDistance = distance
+                    best = indexPath
+                }
+            }
+            return best
+        }()
         let anchorRow = anchorIndexPath.row
 
         let clampedAnchor = min(max(anchorRow, firstMessageRow), elementCount - 1)
@@ -821,6 +845,7 @@ public final class ChatVoiceOverOverlayView: UIView {
     
     private static let maxLoadEarlierNoProgressCount: Int = 200
     private static let loadEarlierTimeout: TimeInterval = 12.0
+    private static let voiceOverScrollbarPercentStep: Int = 5
     
     private static let voiceMessageDurationFormatter: DateComponentsFormatter = {
         let formatter = DateComponentsFormatter()
@@ -1792,14 +1817,35 @@ public final class ChatVoiceOverOverlayView: UIView {
                 guard baseRowCount > 0 else {
                     return firstMessageRow
                 }
+                if self.isAtBottom() {
+                    if let visibleIndexPaths = self.tableView.indexPathsForVisibleRows?.sorted(), !visibleIndexPaths.isEmpty {
+                        let candidates = visibleIndexPaths.filter { $0.section == 0 && $0.row >= firstMessageRow }
+                        let effectiveCandidates = candidates.isEmpty ? visibleIndexPaths : candidates
+                        if let last = effectiveCandidates.last {
+                            return max(firstMessageRow, min(baseRowCount - 1, last.row))
+                        }
+                    }
+                    return max(firstMessageRow, baseRowCount - 1)
+                }
+                if self.isNearTop() {
+                    return firstMessageRow
+                }
                 if let visibleIndexPaths = self.tableView.indexPathsForVisibleRows?.sorted(), !visibleIndexPaths.isEmpty {
                     let candidates = visibleIndexPaths.filter { $0.section == 0 && $0.row >= firstMessageRow }
                     let effectiveCandidates = candidates.isEmpty ? visibleIndexPaths : candidates
-                    let anchorIndexPath = effectiveCandidates[effectiveCandidates.count / 2]
-                    return max(firstMessageRow, min(baseRowCount - 1, anchorIndexPath.row))
-                } else {
-                    return max(firstMessageRow, min(baseRowCount - 1, baseRowCount / 2))
+                    let visibleMidY = self.tableView.contentOffset.y + self.tableView.bounds.height * 0.5
+                    var best = effectiveCandidates[0]
+                    var bestDistance = abs(self.tableView.rectForRow(at: best).midY - visibleMidY)
+                    for indexPath in effectiveCandidates.dropFirst() {
+                        let distance = abs(self.tableView.rectForRow(at: indexPath).midY - visibleMidY)
+                        if distance < bestDistance {
+                            bestDistance = distance
+                            best = indexPath
+                        }
+                    }
+                    return max(firstMessageRow, min(baseRowCount - 1, best.row))
                 }
+                return max(firstMessageRow, min(baseRowCount - 1, baseRowCount / 2))
             }()
 
             self.setVoiceOverScrollbarAccessibilityElementActive(true, anchorTableRow: resolvedAnchorRow)
@@ -1905,18 +1951,57 @@ public final class ChatVoiceOverOverlayView: UIView {
             return "100%"
         }
 
-        let progress = (self.tableView.contentOffset.y - minOffset) / range
-        let clamped = max(0.0, min(1.0, progress))
-        let percent = Int((clamped * 100.0).rounded())
+        let progressFromTop = (self.tableView.contentOffset.y - minOffset) / range
+        let clamped = max(0.0, min(1.0, progressFromTop))
+        let rawPercent = clamped * 100.0
+        let step = max(1, Self.voiceOverScrollbarPercentStep)
+        let quantized = Int((rawPercent / CGFloat(step)).rounded(.down)) * step
+        let percent = max(0, min(100, quantized))
         return "\(percent)%"
     }
 
     fileprivate func voiceOverScrollbarAccessibilityIncrement() {
-        _ = self.tableView.accessibilityScroll(.down)
+        self.voiceOverScrollbarAccessibilityAdjustPercent(by: Self.voiceOverScrollbarPercentStep)
     }
 
     fileprivate func voiceOverScrollbarAccessibilityDecrement() {
-        _ = self.tableView.accessibilityScroll(.up)
+        self.voiceOverScrollbarAccessibilityAdjustPercent(by: -Self.voiceOverScrollbarPercentStep)
+    }
+
+    private func voiceOverScrollbarAccessibilityAdjustPercent(by percentDelta: Int) {
+        guard UIAccessibility.isVoiceOverRunning else {
+            return
+        }
+        let minOffset = -self.tableView.adjustedContentInset.top
+        let maxOffset = max(minOffset, self.tableView.contentSize.height - self.tableView.bounds.height + self.tableView.adjustedContentInset.bottom)
+        let range = maxOffset - minOffset
+        guard range > 1.0 else {
+            return
+        }
+
+        let progressFromTop = (self.tableView.contentOffset.y - minOffset) / range
+        let clamped = max(0.0, min(1.0, progressFromTop))
+        let rawPercent = clamped * 100.0
+        let step = max(1, Self.voiceOverScrollbarPercentStep)
+        let currentQuantized = Int((rawPercent / CGFloat(step)).rounded(.down)) * step
+
+        let targetPercent = max(0, min(100, currentQuantized + percentDelta))
+        let targetProgress = CGFloat(targetPercent) / 100.0
+        let targetOffset = minOffset + targetProgress * range
+        let clampedOffset = self.clampContentOffsetY(targetOffset)
+
+        if abs(clampedOffset - self.tableView.contentOffset.y) < 0.5 {
+            return
+        }
+
+        self.noteVoiceOverNavigationActivity()
+        UIView.performWithoutAnimation {
+            self.tableView.setContentOffset(CGPoint(x: self.tableView.contentOffset.x, y: clampedOffset), animated: false)
+            self.tableView.layoutIfNeeded()
+        }
+
+        UIAccessibility.post(notification: .pageScrolled, argument: "\(targetPercent)%")
+        self.voiceOverScrollbarDidPerformAccessibilityScroll()
     }
 
     fileprivate func voiceOverElementDidBecomeFocused(_ element: ChatVoiceOverOverlayRowAccessibilityElement) {
@@ -2994,14 +3079,24 @@ public final class ChatVoiceOverOverlayView: UIView {
         }
 
         let focusedElement = userInfo[UIAccessibility.focusedElementUserInfoKey]
-        let isScrollbarFocused: Bool = {
+        let isCustomScrollbarFocused: Bool = {
             guard let focusedScrollbar = focusedElement as? ChatVoiceOverOverlayScrollbarAccessibilityElement else {
                 return false
             }
             return focusedScrollbar.overlay === self
         }()
 
-        if isScrollbarFocused {
+        let isNativeScrollbarFocused: Bool = {
+            guard let focusedElement else {
+                return false
+            }
+            if focusedElement is ChatVoiceOverOverlayScrollbarAccessibilityElement {
+                return false
+            }
+            return self.tableView.isProbablyNativeVoiceOverScrollbarElement(focusedElement)
+        }()
+
+        if isCustomScrollbarFocused || isNativeScrollbarFocused {
             if self.voiceOverScrollbarAccessibilityElementAnchorTableRow == nil {
                 let baseRowCount = max(0, self.tableView.numberOfRows(inSection: 0))
                 let hasLoadEarlierRow: Bool = {
@@ -3020,16 +3115,56 @@ public final class ChatVoiceOverOverlayView: UIView {
                     guard baseRowCount > 0 else {
                         return firstMessageRow
                     }
+                    if let unfocusedRowElement = userInfo[UIAccessibility.unfocusedElementUserInfoKey] as? ChatVoiceOverOverlayRowAccessibilityElement,
+                       unfocusedRowElement.overlay === self,
+                       let unfocusedIndexPath = self.indexPath(for: unfocusedRowElement),
+                       unfocusedIndexPath.section == 0
+                    {
+                        return max(firstMessageRow, min(baseRowCount - 1, unfocusedIndexPath.row))
+                    }
+
+                    if self.isAtBottom() {
+                        if let visibleIndexPaths = self.tableView.indexPathsForVisibleRows?.sorted(), !visibleIndexPaths.isEmpty {
+                            let candidates = visibleIndexPaths.filter { $0.section == 0 && $0.row >= firstMessageRow }
+                            let effectiveCandidates = candidates.isEmpty ? visibleIndexPaths : candidates
+                            if let last = effectiveCandidates.last {
+                                return max(firstMessageRow, min(baseRowCount - 1, last.row))
+                            }
+                        }
+                        return max(firstMessageRow, baseRowCount - 1)
+                    }
+                    if self.isNearTop() {
+                        return firstMessageRow
+                    }
                     if let visibleIndexPaths = self.tableView.indexPathsForVisibleRows?.sorted(), !visibleIndexPaths.isEmpty {
                         let candidates = visibleIndexPaths.filter { $0.section == 0 && $0.row >= firstMessageRow }
                         let effectiveCandidates = candidates.isEmpty ? visibleIndexPaths : candidates
-                        let anchorIndexPath = effectiveCandidates[effectiveCandidates.count / 2]
-                        return max(firstMessageRow, min(baseRowCount - 1, anchorIndexPath.row))
+                        let visibleMidY = self.tableView.contentOffset.y + self.tableView.bounds.height * 0.5
+                        var best = effectiveCandidates[0]
+                        var bestDistance = abs(self.tableView.rectForRow(at: best).midY - visibleMidY)
+                        for indexPath in effectiveCandidates.dropFirst() {
+                            let distance = abs(self.tableView.rectForRow(at: indexPath).midY - visibleMidY)
+                            if distance < bestDistance {
+                                bestDistance = distance
+                                best = indexPath
+                            }
+                        }
+                        return max(firstMessageRow, min(baseRowCount - 1, best.row))
                     } else {
                         return max(firstMessageRow, min(baseRowCount - 1, baseRowCount / 2))
                     }
                 }()
                 self.setVoiceOverScrollbarAccessibilityElementActive(true, anchorTableRow: resolvedAnchorRow)
+            }
+
+            if isNativeScrollbarFocused {
+                _ = self.tableAccessibilityElements
+                DispatchQueue.main.async { [weak self] in
+                    guard let self, UIAccessibility.isVoiceOverRunning else {
+                        return
+                    }
+                    UIAccessibility.post(notification: .layoutChanged, argument: self.voiceOverScrollbarAccessibilityElement)
+                }
             }
         } else {
             self.setVoiceOverScrollbarAccessibilityElementActive(false, anchorTableRow: nil)
