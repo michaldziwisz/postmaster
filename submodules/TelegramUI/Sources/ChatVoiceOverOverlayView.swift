@@ -2668,7 +2668,12 @@ public final class ChatVoiceOverOverlayView: UIView {
         }
 
         let focusedElement = userInfo[UIAccessibility.focusedElementUserInfoKey]
-        let unfocusedCandidate = userInfo[UIAccessibility.unfocusedElementUserInfoKey] ?? self.lastObservedAccessibilityFocusedElement
+        let unfocusedCandidate: Any? = {
+            if let unfocused = userInfo[UIAccessibility.unfocusedElementUserInfoKey] {
+                return unfocused
+            }
+            return self.lastObservedAccessibilityFocusedElement
+        }()
         defer {
             if let focusedElement = focusedElement as AnyObject? {
                 self.lastObservedAccessibilityFocusedElement = focusedElement
