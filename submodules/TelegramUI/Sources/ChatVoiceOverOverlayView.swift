@@ -170,8 +170,27 @@ private final class ChatVoiceOverOverlayTableView: UITableView {
             return false
         }
 
-        guard let rawFrame = self.accessibilityFrame(forUnknownElement: element) else {
+        // Try to identify the internal scrollbar element by its class name first.
+        // This avoids relying on `accessibilityFrame` for private accessibility objects that
+        // sometimes report inconsistent coordinates.
+        let nameSuggestsScrollbar: Bool = {
+            let object = element as AnyObject
+            guard let cls = object_getClass(object) else {
+                return false
+            }
+            let className = NSStringFromClass(cls).lowercased()
+            if className.contains("scrollbar") {
+                return true
+            }
+            // Common internal naming patterns across iOS versions.
+            if className.contains("scroll") && (className.contains("indicator") || className.contains("ax") || className.contains("accessibility")) {
+                return true
+            }
             return false
+        }()
+
+        guard let rawFrame = self.accessibilityFrame(forUnknownElement: element) else {
+            return nameSuggestsScrollbar
         }
         guard !rawFrame.isEmpty,
               rawFrame.origin.x.isFinite,
@@ -208,7 +227,7 @@ private final class ChatVoiceOverOverlayTableView: UITableView {
             height: tableFrame.height + 48.0
         )
         guard gutter.intersects(frame) else {
-            return false
+            return nameSuggestsScrollbar
         }
 
         return true
