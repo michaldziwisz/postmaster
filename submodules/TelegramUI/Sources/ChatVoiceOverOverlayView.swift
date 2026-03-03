@@ -2101,7 +2101,7 @@ public final class ChatVoiceOverOverlayView: UIView {
         let visibleIndexPaths = self.voiceOverScrollbarVisibleIndexPathsSorted()
         let rawPercent = self.voiceOverScrollbarRawDisplayPercent(visibleIndexPaths: visibleIndexPaths)
         let step = max(1, Self.voiceOverScrollbarPercentStep)
-        let quantized = Int((rawPercent / CGFloat(step)).rounded(.down)) * step
+        let quantized = Int((rawPercent / CGFloat(step)).rounded()) * step
         let percent = max(0, min(100, quantized))
         return "\(percent)%"
     }
@@ -2124,7 +2124,7 @@ public final class ChatVoiceOverOverlayView: UIView {
         let visibleIndexPaths = self.voiceOverScrollbarVisibleIndexPathsSorted()
         let rawPercent = self.voiceOverScrollbarRawDisplayPercent(visibleIndexPaths: visibleIndexPaths)
         let step = max(1, Self.voiceOverScrollbarPercentStep)
-        let currentQuantized = Int((rawPercent / CGFloat(step)).rounded(.down)) * step
+        let currentQuantized = Int((rawPercent / CGFloat(step)).rounded()) * step
 
         let targetDisplayPercent = max(0, min(100, currentQuantized + percentDelta))
 
