@@ -12,6 +12,7 @@ import TelegramStringFormatting
 import MergeLists
 import Photos
 import PhotosUI
+import UniformTypeIdentifiers
 import LegacyComponents
 import LegacyMediaPickerUI
 import AttachmentUI
@@ -229,6 +230,7 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
     public var openAvatarEditor: () -> Void = {}
     
     private var completed = false
+    private var didPresentVoiceOverSystemPicker = false
     public var legacyCompletion: (_ fromGallery: Bool, _ signals: [Any], _ silently: Bool, _ scheduleTime: Int32?, ChatSendMessageActionSheetController.SendParameters?, @escaping (String) -> UIView?, @escaping () -> Void) -> Void = { _, _, _, _, _, _, _ in }
     
     public var requestAttachmentMenuExpansion: () -> Void = { }
@@ -331,6 +333,10 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
         fileprivate var isSuspended = false
         fileprivate var hasGallery = false
         private var isCameraPreviewVisible = true
+
+        private let voiceOverSystemPickerButtonNode: ASDisplayNode
+        private var voiceOverSystemPickerDelegate: AnyObject?
+        private var isVoiceOverSystemPickerLoading = false
         
         private var validLayout: (ContainerViewLayout, CGFloat)?
         
@@ -357,6 +363,15 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
         
             self.gridNode = GridNode()
             self.scrollingArea = SparseItemGridScrollingArea()
+
+            self.voiceOverSystemPickerButtonNode = ASDisplayNode(viewBlock: {
+                let button = UIButton(type: .system)
+                button.contentEdgeInsets = UIEdgeInsets(top: 12.0, left: 16.0, bottom: 12.0, right: 16.0)
+                button.layer.cornerRadius = 12.0
+                button.clipsToBounds = true
+                return button
+            })
+            self.voiceOverSystemPickerButtonNode.isHidden = true
             
 	            self.cameraWrapperView = UIView()
 	            self.cameraWrapperView.clipsToBounds = true
@@ -398,6 +413,7 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
             }
             self.containerNode.addSubnode(self.gridNode)
             self.containerNode.addSubnode(self.scrollingArea)
+            self.containerNode.addSubnode(self.voiceOverSystemPickerButtonNode)
             
             if case .glass = controller.style {
                 self.containerNode.view.addSubview(self.topEdgeEffectView)
@@ -411,6 +427,19 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
             
             let selectedCollection = controller.selectedCollection.get()
             let preloadPromise = self.preloadPromise
+            let useVoiceOverSystemPicker: Bool = {
+                guard UIAccessibility.isVoiceOverRunning else {
+                    return false
+                }
+                guard case let .assets(_, mode) = controller.subject, mode == .default else {
+                    return false
+                }
+                if #available(iOS 14.0, *) {
+                    return true
+                } else {
+                    return false
+                }
+            }()
             let updatedState: Signal<State, NoError>
             switch controller.subject {
             case let .assets(collection, mode):
@@ -422,6 +451,9 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
                 }
                 updatedState = combineLatest(mediaAssetsContext.mediaAccess(), mediaAssetsContext.cameraAccess())
                 |> mapToSignal { mediaAccess, cameraAccess -> Signal<State, NoError> in
+                    if useVoiceOverSystemPicker {
+                        return .single(.assets(fetchResult: nil, preload: false, drafts: [], mediaAccess: mediaAccess, cameraAccess: cameraAccess))
+                    }
                     if case .notDetermined = mediaAccess {
                         return .single(.assets(fetchResult: nil, preload: false, drafts: [], mediaAccess: mediaAccess, cameraAccess: cameraAccess))
                     } else if [.restricted, .denied].contains(mediaAccess) {
@@ -587,6 +619,11 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
             
             guard let controller = self.controller else {
                 return
+            }
+
+            if let button = self.voiceOverSystemPickerButtonNode.view as? UIButton {
+                button.addTarget(self, action: #selector(self.voiceOverSystemPickerButtonPressed), for: .touchUpInside)
+                self.updateVoiceOverSystemPickerButton(presentationData: self.presentationData)
             }
             
             self.gridNode.scrollView.alwaysBounceVertical = true
@@ -1140,8 +1177,200 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
             
             self.backgroundNode.backgroundColor = self.presentationData.theme.list.plainBackgroundColor
             self.backgroundNode.updateColor(color: self.presentationData.theme.rootController.tabBar.backgroundColor, transition: .immediate)
+
+            self.updateVoiceOverSystemPickerButton(presentationData: presentationData)
             
             self.updateSelectionState(animated: true)
+        }
+
+        private func updateVoiceOverSystemPickerButton(presentationData: PresentationData) {
+            guard let button = self.voiceOverSystemPickerButtonNode.view as? UIButton else {
+                return
+            }
+
+            if self.isVoiceOverSystemPickerLoading {
+                button.setTitle(presentationData.strings.Channel_NotificationLoading, for: .normal)
+                button.isEnabled = false
+            } else {
+                button.setTitle(presentationData.strings.Attachment_SelectFromGallery, for: .normal)
+                button.isEnabled = true
+            }
+
+            button.backgroundColor = presentationData.theme.list.itemAccentColor
+            button.setTitleColor(.white, for: .normal)
+            button.accessibilityLabel = button.currentTitle
+            button.accessibilityHint = presentationData.strings.VoiceOver_Chat_OpenHint
+        }
+
+        @objc private func voiceOverSystemPickerButtonPressed() {
+            self.presentVoiceOverSystemPicker()
+        }
+
+        func presentVoiceOverSystemPicker() {
+            guard let controller = self.controller else {
+                return
+            }
+            guard UIAccessibility.isVoiceOverRunning else {
+                return
+            }
+            guard #available(iOS 14.0, *) else {
+                return
+            }
+            guard case let .assets(_, mode) = controller.subject, mode == .default else {
+                return
+            }
+            guard !self.isVoiceOverSystemPickerLoading else {
+                return
+            }
+            if controller.bannedSendPhotos != nil && controller.bannedSendVideos != nil {
+                return
+            }
+
+            self.isVoiceOverSystemPickerLoading = true
+            self.updateVoiceOverSystemPickerButton(presentationData: self.presentationData)
+
+            var configuration = PHPickerConfiguration(photoLibrary: .shared())
+            if controller.bannedSendPhotos != nil && controller.bannedSendVideos == nil {
+                configuration.filter = .videos
+            } else if controller.bannedSendVideos != nil && controller.bannedSendPhotos == nil {
+                configuration.filter = .images
+            } else {
+                configuration.filter = .any(of: [.images, .videos])
+            }
+            configuration.selectionLimit = controller.enableMultiselection ? 100 : 1
+            configuration.preferredAssetRepresentationMode = .current
+
+            let picker = PHPickerViewController(configuration: configuration)
+            let delegate = VoiceOverSystemPickerDelegate(node: self)
+            self.voiceOverSystemPickerDelegate = delegate
+            picker.delegate = delegate
+
+            if let navigationController = controller.context.sharedContext.mainWindow?.viewController as? NavigationController, let topController = navigationController.topViewController {
+                topController.present(picker, animated: true, completion: nil)
+            } else {
+                controller.present(picker, animated: true, completion: nil)
+            }
+        }
+
+        @available(iOS 14.0, *)
+        private final class VoiceOverSystemPickerDelegate: NSObject, PHPickerViewControllerDelegate {
+            weak var node: Node?
+
+            init(node: Node) {
+                self.node = node
+            }
+
+            func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
+                picker.dismiss(animated: true)
+                self.node?.handleVoiceOverSystemPickerResults(results)
+            }
+        }
+
+        @available(iOS 14.0, *)
+        private func handleVoiceOverSystemPickerResults(_ results: [PHPickerResult]) {
+            guard let controller = self.controller, let interaction = controller.interaction, let selectionContext = interaction.selectionState else {
+                self.isVoiceOverSystemPickerLoading = false
+                self.updateVoiceOverSystemPickerButton(presentationData: self.presentationData)
+                return
+            }
+            self.voiceOverSystemPickerDelegate = nil
+
+            if results.isEmpty {
+                self.isVoiceOverSystemPickerLoading = false
+                self.updateVoiceOverSystemPickerButton(presentationData: self.presentationData)
+                return
+            }
+
+            let collectedItems = Atomic<[(Int, TGMediaSelectableItem)]>(value: [])
+            let group = DispatchGroup()
+
+            for (index, result) in results.enumerated() {
+                let provider = result.itemProvider
+
+                let movieType: String? = provider.registeredTypeIdentifiers.first(where: { typeIdentifier in
+                    if let type = UTType(typeIdentifier) {
+                        return type.conforms(to: .movie) || type.conforms(to: .video)
+                    } else {
+                        return false
+                    }
+                })
+
+                if let movieType {
+                    group.enter()
+                    provider.loadFileRepresentation(forTypeIdentifier: movieType) { url, _ in
+                        defer { group.leave() }
+                        guard let url else {
+                            return
+                        }
+                        let fileExtension = url.pathExtension
+                        let tempUrl = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true).appendingPathComponent(UUID().uuidString).appendingPathExtension(fileExtension)
+                        do {
+                            if FileManager.default.fileExists(atPath: tempUrl.path) {
+                                try FileManager.default.removeItem(at: tempUrl)
+                            }
+                            try FileManager.default.copyItem(at: url, to: tempUrl)
+                            let video = TGCameraCapturedVideo(url: tempUrl)
+                            _ = collectedItems.modify { current in
+                                var current = current
+                                current.append((index, video))
+                                return current
+                            }
+                        } catch {
+                        }
+                    }
+                } else if provider.canLoadObject(ofClass: UIImage.self) {
+                    group.enter()
+                    provider.loadObject(ofClass: UIImage.self) { object, _ in
+                        defer { group.leave() }
+                        if let image = object as? UIImage {
+                            _ = collectedItems.modify { current in
+                                var current = current
+                                current.append((index, image))
+                                return current
+                            }
+                        }
+                    }
+                }
+            }
+
+            group.notify(queue: .main) { [weak self] in
+                guard let self, let controller = self.controller else {
+                    return
+                }
+
+                let sortedItems = collectedItems.with { items in
+                    items.sorted(by: { $0.0 < $1.0 }).map(\.1)
+                }
+
+                if sortedItems.isEmpty {
+                    self.isVoiceOverSystemPickerLoading = false
+                    self.updateVoiceOverSystemPickerButton(presentationData: self.presentationData)
+                    return
+                }
+
+                selectionContext.clear()
+                selectionContext.grouping = true
+                for item in sortedItems {
+                    selectionContext.setItem(item, selected: true)
+                }
+
+                guard let signals = TGMediaAssetsController.pasteboardResultSignals(for: selectionContext, editingContext: interaction.editingState, intent: TGMediaAssetsControllerSendMediaIntent, currentItem: nil, descriptionGenerator: legacyAssetPickerItemGenerator()) else {
+                    self.isVoiceOverSystemPickerLoading = false
+                    self.updateVoiceOverSystemPickerButton(presentationData: self.presentationData)
+                    return
+                }
+
+                controller.completed = true
+                controller.legacyCompletion(true, signals, false, nil, nil, { _ in
+                    return nil
+                }, { [weak self] in
+                    self?.controller?.dismiss(animated: true)
+                })
+
+                Queue.mainQueue().after(1.5) { [weak controller] in
+                    controller?.completed = false
+                }
+            }
         }
         
         private(set) var currentDisplayMode: DisplayMode = .all {
@@ -1924,6 +2153,54 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
             let bottomEdgeEffectFrame = CGRect(origin: CGPoint(x: 0.0, y: layout.size.height - 88.0 - layout.additionalInsets.bottom), size: CGSize(width: layout.size.width, height: 88.0))
             transition.updateFrame(view: self.bottomEdgeEffectView, frame: bottomEdgeEffectFrame)
             self.bottomEdgeEffectView.update(content: self.currentDisplayMode == .all ? self.presentationData.theme.list.plainBackgroundColor : .clear, blur: true, alpha: 0.65, rect: bottomEdgeEffectFrame, edge: .bottom, edgeSize: bottomEdgeEffectFrame.height, transition: ComponentTransition(transition))
+
+            let shouldUseVoiceOverSystemPicker: Bool = {
+                guard layout.inVoiceOver else {
+                    return false
+                }
+                guard #available(iOS 14.0, *) else {
+                    return false
+                }
+                guard case let .assets(_, mode) = controller.subject, mode == .default else {
+                    return false
+                }
+                if controller.bannedSendPhotos != nil && controller.bannedSendVideos != nil {
+                    return false
+                }
+                return true
+            }()
+
+            if shouldUseVoiceOverSystemPicker {
+                self.voiceOverSystemPickerButtonNode.isHidden = false
+                self.gridNode.isHidden = true
+                self.scrollingArea.isHidden = true
+                self.manageNode?.isHidden = true
+                self.placeholderNode?.isHidden = true
+                self.cameraWrapperView.isHidden = true
+                self.cameraView?.isHidden = true
+                self.modernCameraView?.isHidden = true
+                self.cameraActivateAreaNode.isHidden = true
+            } else {
+                self.voiceOverSystemPickerButtonNode.isHidden = true
+                if bannedSendMedia == nil {
+                    self.gridNode.isHidden = false
+                }
+                self.scrollingArea.isHidden = false
+                self.manageNode?.isHidden = false
+                self.placeholderNode?.isHidden = false
+                self.cameraActivateAreaNode.isHidden = false
+            }
+
+            if !self.voiceOverSystemPickerButtonNode.isHidden, let button = self.voiceOverSystemPickerButtonNode.view as? UIButton {
+                let horizontalInset: CGFloat = 16.0 + layout.safeInsets.left
+                let availableWidth = layout.size.width - horizontalInset - (16.0 + layout.safeInsets.right)
+                let buttonSize = button.sizeThatFits(CGSize(width: availableWidth, height: CGFloat.greatestFiniteMagnitude))
+                let buttonHeight = max(44.0, buttonSize.height)
+                let topInset = insets.top
+                let bottomInset = layout.intrinsicInsets.bottom
+                let y = topInset + floor((layout.size.height - topInset - bottomInset - buttonHeight) / 2.0)
+                transition.updateFrame(node: self.voiceOverSystemPickerButtonNode, frame: CGRect(x: horizontalInset, y: y, width: availableWidth, height: buttonHeight))
+            }
         }
     }
     
@@ -2345,6 +2622,29 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
     
     deinit {
         self.presentationDataDisposable?.dispose()
+    }
+
+    override public func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+
+        guard UIAccessibility.isVoiceOverRunning else {
+            return
+        }
+        guard #available(iOS 14.0, *) else {
+            return
+        }
+        guard case let .assets(_, mode) = self.subject, mode == .default else {
+            return
+        }
+        guard !self.didPresentVoiceOverSystemPicker else {
+            return
+        }
+        if self.bannedSendPhotos != nil && self.bannedSendVideos != nil {
+            return
+        }
+
+        self.didPresentVoiceOverSystemPicker = true
+        self.controllerNode.presentVoiceOverSystemPicker()
     }
     
     override public func loadDisplayNode() {
