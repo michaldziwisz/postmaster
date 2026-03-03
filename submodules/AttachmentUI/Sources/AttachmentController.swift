@@ -425,6 +425,7 @@ public class AttachmentController: ViewController, MinimizableController {
         fileprivate let container: AttachmentContainer
         private let makeEntityInputView: () -> AttachmentTextInputPanelInputView?
         let panel: AttachmentPanel
+        private let closeButtonNode: WebAppCancelButtonNode
         
         fileprivate var currentType: AttachmentButtonType?
         fileprivate var currentControllers: [AttachmentContainable] = []
@@ -543,6 +544,8 @@ public class AttachmentController: ViewController, MinimizableController {
                 self.presentationData = controller.context.sharedContext.currentPresentationData.with { $0 }
             }
             
+            self.closeButtonNode = WebAppCancelButtonNode(theme: self.presentationData.theme, strings: self.presentationData.strings)
+            
             self.dim = ASDisplayNode()
             self.dim.alpha = 0.0
             self.dim.backgroundColor = UIColor(white: 0.0, alpha: 0.25)
@@ -575,6 +578,14 @@ public class AttachmentController: ViewController, MinimizableController {
             self.addSubnode(self.dim)
             self.addSubnode(self.shadowNode)
             self.addSubnode(self.wrapperNode)
+            self.addSubnode(self.closeButtonNode)
+            self.closeButtonNode.buttonNode.addTarget(self, action: #selector(self.closePressed), forControlEvents: .touchUpInside)
+            self.closeButtonNode.buttonNode.isAccessibilityElement = true
+            self.closeButtonNode.buttonNode.accessibilityLabel = self.presentationData.strings.Common_Close
+            self.closeButtonNode.buttonNode.accessibilityTraits = [.button]
+            if #available(iOS 11.0, *) {
+                self.closeButtonNode.buttonNode.view.accessibilitySortPriority = 1000.0
+            }
                         
             self.container.controllerRemoved = { [weak self] controller in
                 if let strongSelf = self, let layout = strongSelf.validLayout, !strongSelf.isDismissing {
@@ -768,6 +779,8 @@ public class AttachmentController: ViewController, MinimizableController {
                     }
                     self.presentationData = presentationData
                     self.container.presentationData = presentationData
+                    self.closeButtonNode.theme = presentationData.theme
+                    self.closeButtonNode.buttonNode.accessibilityLabel = presentationData.strings.Common_Close
                 })
             }
         }
@@ -788,6 +801,7 @@ public class AttachmentController: ViewController, MinimizableController {
             super.didLoad()
             
             self.view.disablesInteractiveModalDismiss = true
+            self.view.accessibilityViewIsModal = true
             
             self.dim.view.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(self.dimTapGesture(_:))))
             
@@ -821,6 +835,10 @@ public class AttachmentController: ViewController, MinimizableController {
                 self.inputContainerNode = inputContainerNode
                 self.addSubnode(inputContainerNode)
             }
+        }
+        
+        @objc private func closePressed() {
+            self.controller?.dismiss(animated: true)
         }
         
         private var didMaximizeOnce = false
@@ -1401,6 +1419,21 @@ public class AttachmentController: ViewController, MinimizableController {
             transition.updateFrame(node: self.shadowNode, frame: shadowFrame)
             transition.updateFrame(node: self.wrapperNode, frame: containerRect)
             
+            let closeButtonSize = self.closeButtonNode.calculateSizeThatFits(CGSize(width: containerRect.width, height: 56.0))
+            let closeButtonX: CGFloat
+            if containerRect.minX > 0.0 {
+                closeButtonX = containerRect.minX + 12.0
+            } else {
+                closeButtonX = containerRect.minX + layout.safeInsets.left + 12.0
+            }
+            let closeButtonY: CGFloat
+            if containerRect.minY > 0.0 {
+                closeButtonY = containerRect.minY + 6.0
+            } else {
+                closeButtonY = containerRect.minY + max(layout.safeInsets.top, layout.insets(options: [.statusBar]).top) + 6.0
+            }
+            transition.updateFrame(node: self.closeButtonNode, frame: CGRect(origin: CGPoint(x: closeButtonX, y: closeButtonY), size: closeButtonSize))
+            
             if !self.isUpdatingContainer && !self.isDismissing {
                 self.isUpdatingContainer = true
             
@@ -1539,6 +1572,11 @@ public class AttachmentController: ViewController, MinimizableController {
     
     public func requestMinimize(topEdgeOffset: CGFloat?, initialVelocity: CGFloat?) {
         self.node.minimize()
+    }
+    
+    override public func accessibilityPerformEscape() -> Bool {
+        self.dismiss(animated: true)
+        return true
     }
     
     public override func dismiss(animated flag: Bool, completion: (() -> Void)? = nil) {

@@ -343,6 +343,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
     private var voiceOverOverlayConstraints: [NSLayoutConstraint] = []
     private var voiceOverOverlayVoicePlaybackDisposable: Disposable?
     private var voiceOverOverlayVoicePlaybackState: ChatVoiceOverOverlayView.VoicePlaybackState?
+    private var voiceOverOverlayTopControllerDisposable: Disposable?
     private struct VoiceOverOverlaySavedState {
         var navigationBarIsHidden: Bool
         var navigationBarIsUserInteractionEnabled: Bool
@@ -355,6 +356,25 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
     private var upperInputPositionBound: CGFloat?
     private var keyboardGestureBeginLocation: CGPoint?
     private var keyboardGestureAccessoryHeight: CGFloat?
+
+    private func updateVoiceOverOverlayAccessibilityIsolation(viewControllers: [UIViewController]) {
+        guard let overlay = self.voiceOverOverlayView else {
+            return
+        }
+        guard let controller = self.controller else {
+            overlay.accessibilityViewIsModal = true
+            overlay.accessibilityElementsHidden = false
+            return
+        }
+        let isChatOnTop: Bool
+        if viewControllers.isEmpty {
+            isChatOnTop = true
+        } else {
+            isChatOnTop = viewControllers.last === controller
+        }
+        overlay.accessibilityViewIsModal = isChatOnTop
+        overlay.accessibilityElementsHidden = !isChatOnTop
+    }
     
     private var derivedLayoutState: ChatControllerNodeDerivedLayoutState?
     
@@ -980,6 +1000,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
         self.inlineSearchResultsReadyDisposable?.dispose()
         self.loadMoreSearchResultsDisposable?.dispose()
         self.voiceOverOverlayVoicePlaybackDisposable?.dispose()
+        self.voiceOverOverlayTopControllerDisposable?.dispose()
         
         if let observer = self.voiceOverStatusObserver {
             NotificationCenter.default.removeObserver(observer)
@@ -1231,6 +1252,18 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
             overlay.updateLoadEarlierState(canLoadEarlier: canLoadEarlier, isLoadingEarlier: isLoadingEarlier)
             
             self.view.bringSubviewToFront(overlay)
+
+            if self.voiceOverOverlayTopControllerDisposable == nil, let navigationController = self.controller?.effectiveNavigationController {
+                self.voiceOverOverlayTopControllerDisposable = (navigationController.viewControllersSignal
+                |> deliverOnMainQueue).startStrict(next: { [weak self] viewControllers in
+                    self?.updateVoiceOverOverlayAccessibilityIsolation(viewControllers: viewControllers)
+                })
+            }
+            if let navigationController = self.controller?.effectiveNavigationController {
+                self.updateVoiceOverOverlayAccessibilityIsolation(viewControllers: navigationController.viewControllers)
+            } else {
+                self.updateVoiceOverOverlayAccessibilityIsolation(viewControllers: [])
+            }
             
             if !self.didRequestVoiceOverScrollToEnd {
                 self.didRequestVoiceOverScrollToEnd = true
@@ -1281,6 +1314,8 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
             self.voiceOverOverlayVoicePlaybackState = nil
             self.voiceOverOverlayVoicePlaybackDisposable?.dispose()
             self.voiceOverOverlayVoicePlaybackDisposable = nil
+            self.voiceOverOverlayTopControllerDisposable?.dispose()
+            self.voiceOverOverlayTopControllerDisposable = nil
             self.voiceOverContextMenuAnchorNode?.view.removeFromSuperview()
             self.voiceOverContextMenuAnchorNode = nil
             if !self.voiceOverOverlayConstraints.isEmpty {
