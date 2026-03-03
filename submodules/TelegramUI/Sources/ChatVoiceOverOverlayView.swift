@@ -401,9 +401,7 @@ private final class ChatVoiceOverOverlayTableView: UITableView {
 
         // Return an index such that swipe-left always stays inside the message list.
         // VoiceOver focuses `index - 1` when swiping left from the scrollbar.
-        // Allow mapping to `elementCount` (one past the end) so that at the very bottom,
-        // swipe-left lands on the last message (not the penultimate).
-        return min(clampedAnchor + 1, elementCount)
+        return min(clampedAnchor + 1, elementCount - 1)
     }
 
     // MARK: - Touch exploration hit-testing
@@ -464,6 +462,92 @@ private final class ChatVoiceOverOverlayTableView: UITableView {
         let baseMethod =
             class_getInstanceMethod(UITableView.self, selector) ??
             class_getInstanceMethod(UIScrollView.self, selector) ??
+            class_getInstanceMethod(UIView.self, selector)
+        guard let baseMethod else {
+            return nil
+        }
+        typealias HitTestIMP = @convention(c) (AnyObject, Selector, CGPoint) -> AnyObject?
+        let imp = method_getImplementation(baseMethod)
+        let fn = unsafeBitCast(imp, to: HitTestIMP.self)
+        return fn(self, selector, point)
+    }
+
+    // iOS 18+ (new SDK signature).
+    @available(iOS 18.0, *)
+    public override func accessibilityHitTest(_ point: CGPoint, event: UIEvent?) -> Any? {
+        if let element = self.voiceOverCustomHitTest(point) {
+            return element
+        }
+        return super.accessibilityHitTest(point, event: event)
+    }
+}
+
+private final class ChatVoiceOverOverlayAccessibilityContainerView: UIView {
+    weak var overlayForAccessibilityElements: ChatVoiceOverOverlayView?
+
+    private func normalizeAccessibilityHitTestPointToLocal(_ point: CGPoint) -> CGPoint {
+        if self.bounds.contains(point) {
+            return point
+        }
+        let converted = self.convert(point, from: nil)
+        if self.bounds.contains(converted) {
+            return converted
+        }
+        return point
+    }
+
+    private func voiceOverCustomHitTest(_ point: CGPoint) -> Any? {
+        guard UIAccessibility.isVoiceOverRunning, let overlay = self.overlayForAccessibilityElements else {
+            return nil
+        }
+        let localPoint = self.normalizeAccessibilityHitTestPointToLocal(point)
+        return overlay.voiceOverAccessibilityContainerHitTest(pointInContainerSpace: localPoint)
+    }
+
+    override var accessibilityElements: [Any]? {
+        get {
+            guard UIAccessibility.isVoiceOverRunning else {
+                return nil
+            }
+            return self.overlayForAccessibilityElements?.tableAccessibilityElements
+        }
+        set {
+        }
+    }
+
+    override func accessibilityElementCount() -> Int {
+        guard UIAccessibility.isVoiceOverRunning else {
+            return super.accessibilityElementCount()
+        }
+        return self.overlayForAccessibilityElements?.tableAccessibilityElementCount ?? 0
+    }
+
+    override func accessibilityElement(at index: Int) -> Any? {
+        guard UIAccessibility.isVoiceOverRunning else {
+            return super.accessibilityElement(at: index)
+        }
+        return self.overlayForAccessibilityElements?.tableAccessibilityElement(at: index)
+    }
+
+    override func index(ofAccessibilityElement element: Any) -> Int {
+        guard UIAccessibility.isVoiceOverRunning else {
+            return super.index(ofAccessibilityElement: element)
+        }
+        return self.overlayForAccessibilityElements?.tableAccessibilityIndex(of: element) ?? NSNotFound
+    }
+
+    // iOS 17 and earlier.
+    @objc(accessibilityHitTest:)
+    func accessibilityHitTest(_ point: CGPoint) -> Any? {
+        if let element = self.voiceOverCustomHitTest(point) {
+            return element
+        }
+        if #available(iOS 18.0, *) {
+            return super.accessibilityHitTest(point, event: nil)
+        }
+
+        let selector = NSSelectorFromString("accessibilityHitTest:")
+        let baseMethod =
             class_getInstanceMethod(UIView.self, selector)
         guard let baseMethod else {
             return nil
@@ -716,10 +800,11 @@ public final class ChatVoiceOverOverlayView: UIView {
     private let profileButton = UIButton(type: .system)
     
     private let tableView = ChatVoiceOverOverlayTableView(frame: .zero, style: .plain)
+    private let tableAccessibilityContainerView = ChatVoiceOverOverlayAccessibilityContainerView()
     private let refreshControl = UIRefreshControl()
 
     fileprivate lazy var voiceOverScrollbarAccessibilityElement: ChatVoiceOverOverlayScrollbarAccessibilityElement = {
-        return ChatVoiceOverOverlayScrollbarAccessibilityElement(container: self.tableView, overlay: self)
+        return ChatVoiceOverOverlayScrollbarAccessibilityElement(container: self.tableAccessibilityContainerView, overlay: self)
     }()
     
     private let composerView = UIView()
@@ -870,14 +955,21 @@ public final class ChatVoiceOverOverlayView: UIView {
         // from auto-scrolling to offscreen rows during swipe navigation.
         self.tableView.accessibilityNavigationStyle = .automatic
         self.tableView.shouldGroupAccessibilityChildren = false
-        // Use native UITableView cell accessibility for messages to get:
-        // - the system VoiceOver scrollbar (localized, correct behavior),
-        // - working 3-finger scroll gestures,
-        // - predictable hit-testing during touch exploration.
-        self.tableView.accessibilityElementsHidden = false
+        // Hide the table view from the accessibility tree to prevent iOS from exposing its
+        // own VoiceOver scrollbar element ("two scrollbars" effect). We expose messages and
+        // a single stable scrollbar via `tableAccessibilityContainerView` instead.
+        self.tableView.accessibilityElementsHidden = true
         self.refreshControl.addTarget(self, action: #selector(self.refreshTriggered), for: .valueChanged)
         self.tableView.refreshControl = self.refreshControl
         self.addSubview(self.tableView)
+
+        self.tableAccessibilityContainerView.translatesAutoresizingMaskIntoConstraints = false
+        self.tableAccessibilityContainerView.overlayForAccessibilityElements = self
+        self.tableAccessibilityContainerView.isAccessibilityElement = false
+        self.tableAccessibilityContainerView.backgroundColor = .clear
+        // Don't block touches/scrolling when VoiceOver is not interacting with accessibility.
+        self.tableAccessibilityContainerView.isUserInteractionEnabled = false
+        self.addSubview(self.tableAccessibilityContainerView)
         
         self.composerView.translatesAutoresizingMaskIntoConstraints = false
         self.addSubview(self.composerView)
@@ -958,7 +1050,12 @@ public final class ChatVoiceOverOverlayView: UIView {
             self.tableView.topAnchor.constraint(equalTo: self.topBarView.bottomAnchor),
             self.tableView.leadingAnchor.constraint(equalTo: self.leadingAnchor),
             self.tableView.trailingAnchor.constraint(equalTo: self.trailingAnchor),
-            self.tableView.bottomAnchor.constraint(equalTo: self.composerView.topAnchor)
+            self.tableView.bottomAnchor.constraint(equalTo: self.composerView.topAnchor),
+
+            self.tableAccessibilityContainerView.topAnchor.constraint(equalTo: self.tableView.topAnchor),
+            self.tableAccessibilityContainerView.leadingAnchor.constraint(equalTo: self.tableView.leadingAnchor),
+            self.tableAccessibilityContainerView.trailingAnchor.constraint(equalTo: self.tableView.trailingAnchor),
+            self.tableAccessibilityContainerView.bottomAnchor.constraint(equalTo: self.tableView.bottomAnchor)
         ])
         
         self.composerView.setContentHuggingPriority(.required, for: .vertical)
@@ -967,9 +1064,7 @@ public final class ChatVoiceOverOverlayView: UIView {
         self.tableView.setContentCompressionResistancePriority(.defaultLow, for: .vertical)
 
         self.setupKeyboardObservers()
-        // Use the native iOS VoiceOver scrollbar for this table view.
-        // Avoid redirecting focus to a custom scrollbar element, as it creates the
-        // impression of having two different scrollbars and can cause focus to drift.
+        self.setupAccessibilityObservers()
     }
     
     required public init?(coder: NSCoder) {
@@ -1678,7 +1773,7 @@ public final class ChatVoiceOverOverlayView: UIView {
             if let current = self.loadEarlierAccessibilityElement {
                 element = current
             } else {
-                element = ChatVoiceOverOverlayRowAccessibilityElement(container: self.tableView, overlay: self, kind: .loadEarlier)
+                element = ChatVoiceOverOverlayRowAccessibilityElement(container: self.tableAccessibilityContainerView, overlay: self, kind: .loadEarlier)
                 self.loadEarlierAccessibilityElement = element
             }
             element.overlay = self
@@ -1702,7 +1797,7 @@ public final class ChatVoiceOverOverlayView: UIView {
         newElementsByStableId.reserveCapacity(messageCountToInclude)
         for index in 0 ..< messageCountToInclude {
             let row = self.rows[index]
-            let element = self.rowAccessibilityElementsByStableId[row.stableId] ?? ChatVoiceOverOverlayRowAccessibilityElement(container: self.tableView, overlay: self, kind: .row(stableId: row.stableId))
+            let element = self.rowAccessibilityElementsByStableId[row.stableId] ?? ChatVoiceOverOverlayRowAccessibilityElement(container: self.tableAccessibilityContainerView, overlay: self, kind: .row(stableId: row.stableId))
             element.overlay = self
             newElementsByStableId[row.stableId] = element
             elements.append(element)
@@ -1823,6 +1918,117 @@ public final class ChatVoiceOverOverlayView: UIView {
         return self.interfaceState?.strings ?? defaultPresentationStrings
     }
 
+    fileprivate func voiceOverAccessibilityContainerHitTest(pointInContainerSpace point: CGPoint) -> Any? {
+        guard UIAccessibility.isVoiceOverRunning else {
+            return nil
+        }
+
+        let containerBounds = self.tableAccessibilityContainerView.bounds
+        let gutterWidth = ChatVoiceOverOverlayTableView.voiceOverScrollbarGutterWidth
+        let isInGutter = point.x >= containerBounds.maxX - gutterWidth
+
+        let tablePoint = self.tableView.convert(point, from: self.tableAccessibilityContainerView)
+
+        if isInGutter {
+            let baseRowCount = max(0, self.tableView.numberOfRows(inSection: 0))
+            let listPoint = CGPoint(
+                x: max(self.tableView.bounds.minX + 1.0, self.tableView.bounds.maxX - gutterWidth - 6.0),
+                y: tablePoint.y
+            )
+            let anchorRow: Int? = {
+                if let indexPath = self.tableView.indexPathForRow(at: listPoint), indexPath.section == 0 {
+                    return indexPath.row
+                }
+                guard let visibleIndexPaths = self.tableView.indexPathsForVisibleRows, !visibleIndexPaths.isEmpty else {
+                    return nil
+                }
+                var nearestIndexPath: IndexPath?
+                var nearestDistance: CGFloat = .greatestFiniteMagnitude
+                for indexPath in visibleIndexPaths {
+                    let rect = self.tableView.rectForRow(at: indexPath)
+                    let dy: CGFloat
+                    if tablePoint.y < rect.minY {
+                        dy = rect.minY - tablePoint.y
+                    } else if tablePoint.y > rect.maxY {
+                        dy = tablePoint.y - rect.maxY
+                    } else {
+                        dy = 0.0
+                    }
+                    if dy < nearestDistance {
+                        nearestDistance = dy
+                        nearestIndexPath = indexPath
+                    }
+                }
+                return nearestIndexPath?.row
+            }()
+
+            let hasLoadEarlierRow: Bool = {
+                guard let first = self.tableAccessibilityElement(at: 0) as? ChatVoiceOverOverlayRowAccessibilityElement else {
+                    return false
+                }
+                if case .loadEarlier = first.kind {
+                    return true
+                } else {
+                    return false
+                }
+            }()
+            let firstMessageRow = hasLoadEarlierRow ? 1 : 0
+            let resolvedAnchorRow: Int = {
+                guard baseRowCount > 0 else {
+                    return firstMessageRow
+                }
+                let lastRow = max(0, baseRowCount - 1)
+                let hasMessageRows = baseRowCount > firstMessageRow
+
+                let minOffset = -self.tableView.adjustedContentInset.top
+                let maxOffset = max(minOffset, self.tableView.contentSize.height - self.tableView.bounds.height + self.tableView.adjustedContentInset.bottom)
+                if maxOffset - self.tableView.contentOffset.y <= 1.0 {
+                    return lastRow
+                }
+                if self.tableView.contentOffset.y - minOffset <= 1.0 {
+                    return hasMessageRows ? firstMessageRow : lastRow
+                }
+
+                let fallback = max(firstMessageRow, baseRowCount / 2)
+                return max(firstMessageRow, min(baseRowCount - 1, anchorRow ?? fallback))
+            }()
+
+            self.setVoiceOverScrollbarAccessibilityElementActive(true, anchorTableRow: resolvedAnchorRow)
+            return self.voiceOverScrollbarAccessibilityElement
+        }
+
+        if let indexPath = self.tableView.indexPathForRow(at: tablePoint), let element = self.accessibilityElement(at: indexPath) {
+            return element
+        }
+
+        // If the user explores between rows, fall back to the nearest visible row.
+        guard let visibleIndexPaths = self.tableView.indexPathsForVisibleRows, !visibleIndexPaths.isEmpty else {
+            return nil
+        }
+        var nearestIndexPath: IndexPath?
+        var nearestDistance: CGFloat = .greatestFiniteMagnitude
+        for indexPath in visibleIndexPaths {
+            let rect = self.tableView.rectForRow(at: indexPath)
+            let dy: CGFloat
+            if tablePoint.y < rect.minY {
+                dy = rect.minY - tablePoint.y
+            } else if tablePoint.y > rect.maxY {
+                dy = tablePoint.y - rect.maxY
+            } else {
+                dy = 0.0
+            }
+            if dy < nearestDistance {
+                nearestDistance = dy
+                nearestIndexPath = indexPath
+            }
+        }
+        if let nearestIndexPath, let element = self.accessibilityElement(at: nearestIndexPath) {
+            return element
+        }
+
+        return nil
+    }
+
     private func indexPath(for element: ChatVoiceOverOverlayRowAccessibilityElement) -> IndexPath? {
         switch element.kind {
         case .loadEarlier:
@@ -1858,7 +2064,8 @@ public final class ChatVoiceOverOverlayView: UIView {
         guard indexPath.section == 0, indexPath.row >= 0, indexPath.row < self.tableView.numberOfRows(inSection: 0) else {
             return .zero
         }
-        return self.tableView.rectForRow(at: indexPath)
+        let rect = self.tableView.rectForRow(at: indexPath)
+        return self.tableView.convert(rect, to: self.tableAccessibilityContainerView)
     }
 
     fileprivate func accessibilityFrameInScreenSpace(for element: ChatVoiceOverOverlayRowAccessibilityElement) -> CGRect {
@@ -1873,13 +2080,13 @@ public final class ChatVoiceOverOverlayView: UIView {
     }
 
     fileprivate func voiceOverScrollbarAccessibilityFrameInContainerSpace() -> CGRect {
-        let bounds = self.tableView.bounds
+        let bounds = self.tableAccessibilityContainerView.bounds
         let width = ChatVoiceOverOverlayTableView.voiceOverScrollbarGutterWidth
         return CGRect(x: bounds.maxX - width, y: bounds.minY, width: width, height: bounds.height)
     }
 
     fileprivate func voiceOverScrollbarAccessibilityFrameInScreenSpace() -> CGRect {
-        return self.tableView.convert(self.voiceOverScrollbarAccessibilityFrameInContainerSpace(), to: nil)
+        return self.tableAccessibilityContainerView.convert(self.voiceOverScrollbarAccessibilityFrameInContainerSpace(), to: nil)
     }
 
     fileprivate func voiceOverScrollbarAccessibilityLabel() -> String? {
@@ -3089,17 +3296,7 @@ public final class ChatVoiceOverOverlayView: UIView {
             return focusedScrollbar.overlay === self
         }()
 
-        let isNativeScrollbarFocused: Bool = {
-            guard let focusedElement else {
-                return false
-            }
-            if focusedElement is ChatVoiceOverOverlayScrollbarAccessibilityElement {
-                return false
-            }
-            return self.tableView.isProbablyNativeVoiceOverScrollbarElement(focusedElement)
-        }()
-
-        if isCustomScrollbarFocused || isNativeScrollbarFocused {
+        if isCustomScrollbarFocused {
             if self.voiceOverScrollbarAccessibilityElementAnchorTableRow == nil {
                 let baseRowCount = max(0, self.tableView.numberOfRows(inSection: 0))
                 let hasLoadEarlierRow: Bool = {
@@ -3154,15 +3351,6 @@ public final class ChatVoiceOverOverlayView: UIView {
                     }
                 }()
                 self.setVoiceOverScrollbarAccessibilityElementActive(true, anchorTableRow: resolvedAnchorRow)
-            }
-
-            if isNativeScrollbarFocused {
-                _ = self.tableAccessibilityElements
-                // Redirect focus immediately to the stable custom scrollbar element.
-                // If we delay this by even one runloop, users can swipe away from the native scrollbar
-                // and "fall out" into the title bar before the redirect happens, which feels like
-                // focus drifting and like there are "two" scrollbars.
-                UIAccessibility.post(notification: .layoutChanged, argument: self.voiceOverScrollbarAccessibilityElement)
             }
         } else {
             self.setVoiceOverScrollbarAccessibilityElementActive(false, anchorTableRow: nil)
