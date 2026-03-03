@@ -401,7 +401,9 @@ private final class ChatVoiceOverOverlayTableView: UITableView {
 
         // Return an index such that swipe-left always stays inside the message list.
         // VoiceOver focuses `index - 1` when swiping left from the scrollbar.
-        return min(clampedAnchor + 1, elementCount - 1)
+        // Allow mapping to `elementCount` (one past the end) so that at the very bottom,
+        // swipe-left lands on the last message (not the penultimate).
+        return min(clampedAnchor + 1, elementCount)
     }
 
     // MARK: - Touch exploration hit-testing
@@ -414,71 +416,6 @@ private final class ChatVoiceOverOverlayTableView: UITableView {
     private func voiceOverCustomHitTestInContainerSpace(_ point: CGPoint) -> Any? {
         guard UIAccessibility.isVoiceOverRunning, let overlay = self.overlayForAccessibilityElements else {
             return nil
-        }
-
-        // Provide an accessibility-only scrollbar element in the right gutter.
-        // This keeps swipe navigation deterministic (scrollbar -> messages) while remaining reachable via exploration.
-        if self.isInVoiceOverScrollbarGutter(point) {
-            let baseRowCount = max(0, self.numberOfRows(inSection: 0))
-            let listPoint = CGPoint(x: max(self.bounds.minX + 1.0, self.bounds.maxX - Self.voiceOverScrollbarGutterWidth - 6.0), y: point.y)
-            let anchorRow: Int? = {
-                if let indexPath = self.indexPathForRow(at: listPoint), indexPath.section == 0 {
-                    return indexPath.row
-                }
-                guard let visibleIndexPaths = self.indexPathsForVisibleRows, !visibleIndexPaths.isEmpty else {
-                    return nil
-                }
-                var nearestIndexPath: IndexPath?
-                var nearestDistance: CGFloat = .greatestFiniteMagnitude
-                for indexPath in visibleIndexPaths {
-                    let rect = self.rectForRow(at: indexPath)
-                    let dy: CGFloat
-                    if point.y < rect.minY {
-                        dy = rect.minY - point.y
-                    } else if point.y > rect.maxY {
-                        dy = point.y - rect.maxY
-                    } else {
-                        dy = 0.0
-                    }
-                    if dy < nearestDistance {
-                        nearestDistance = dy
-                        nearestIndexPath = indexPath
-                    }
-                }
-                return nearestIndexPath?.row
-            }()
-            let hasLoadEarlierRow: Bool = {
-                guard let first = overlay.tableAccessibilityElement(at: 0) as? ChatVoiceOverOverlayRowAccessibilityElement else {
-                    return false
-                }
-                if case .loadEarlier = first.kind {
-                    return true
-                } else {
-                    return false
-                }
-            }()
-            let firstMessageRow = hasLoadEarlierRow ? 1 : 0
-            let resolvedAnchorRow: Int = {
-                guard baseRowCount > 0 else {
-                    return firstMessageRow
-                }
-                let lastRow = max(0, baseRowCount - 1)
-                let hasMessageRows = baseRowCount > firstMessageRow
-
-                let minOffset = -self.adjustedContentInset.top
-                let maxOffset = max(minOffset, self.contentSize.height - self.bounds.height + self.adjustedContentInset.bottom)
-                if maxOffset - self.contentOffset.y <= 1.0 {
-                    return lastRow
-                }
-                if self.contentOffset.y - minOffset <= 1.0 {
-                    return hasMessageRows ? firstMessageRow : lastRow
-                }
-
-                let fallback = max(firstMessageRow, baseRowCount / 2)
-                return max(firstMessageRow, min(baseRowCount - 1, anchorRow ?? fallback))
-            }()
-            overlay.setVoiceOverScrollbarAccessibilityElementActive(true, anchorTableRow: resolvedAnchorRow)
-            return overlay.voiceOverScrollbarAccessibilityElement
         }
 
         if let indexPath = self.indexPathForRow(at: point), let element = overlay.accessibilityElement(at: indexPath) {
@@ -1030,7 +967,9 @@ public final class ChatVoiceOverOverlayView: UIView {
         self.tableView.setContentCompressionResistancePriority(.defaultLow, for: .vertical)
 
         self.setupKeyboardObservers()
-        self.setupAccessibilityObservers()
+        // Use the native iOS VoiceOver scrollbar for this table view.
+        // Avoid redirecting focus to a custom scrollbar element, as it creates the
+        // impression of having two different scrollbars and can cause focus to drift.
     }
     
     required public init?(coder: NSCoder) {
