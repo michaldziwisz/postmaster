@@ -3219,12 +3219,11 @@ public final class ChatVoiceOverOverlayView: UIView {
 
             if isNativeScrollbarFocused {
                 _ = self.tableAccessibilityElements
-                DispatchQueue.main.async { [weak self] in
-                    guard let self, UIAccessibility.isVoiceOverRunning else {
-                        return
-                    }
-                    UIAccessibility.post(notification: .layoutChanged, argument: self.voiceOverScrollbarAccessibilityElement)
-                }
+                // Redirect focus immediately to the stable custom scrollbar element.
+                // If we delay this by even one runloop, users can swipe away from the native scrollbar
+                // and "fall out" into the title bar before the redirect happens, which feels like
+                // focus drifting and like there are "two" scrollbars.
+                UIAccessibility.post(notification: .layoutChanged, argument: self.voiceOverScrollbarAccessibilityElement)
             }
         } else {
             self.setVoiceOverScrollbarAccessibilityElementActive(false, anchorTableRow: nil)
