@@ -54,7 +54,7 @@ jobs:
           attempt=1
           while [ $attempt -le $tries ]; do
             echo "Submodule update attempt ${attempt}/${tries}..."
-            if git submodule update --init --recursive --depth 1 --jobs 1; then
+            if git submodule update --init --recursive --jobs 1; then
               exit 0
             fi
             echo "Submodule update failed. Retrying in ${delay}s..."
