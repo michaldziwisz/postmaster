@@ -583,9 +583,6 @@ public class AttachmentController: ViewController, MinimizableController {
             self.closeButtonNode.buttonNode.isAccessibilityElement = true
             self.closeButtonNode.buttonNode.accessibilityLabel = self.presentationData.strings.Common_Close
             self.closeButtonNode.buttonNode.accessibilityTraits = [.button]
-            if #available(iOS 11.0, *) {
-                self.closeButtonNode.buttonNode.view.accessibilitySortPriority = 1000.0
-            }
                         
             self.container.controllerRemoved = { [weak self] controller in
                 if let strongSelf = self, let layout = strongSelf.validLayout, !strongSelf.isDismissing {

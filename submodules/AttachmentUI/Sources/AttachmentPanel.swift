@@ -1774,9 +1774,6 @@ final class AttachmentPanel: ASDisplayNode, ASScrollViewDelegate, ASGestureRecog
                 accessibilityTraits.insert(.selected)
             }
             buttonView.accessibilityTraits = accessibilityTraits
-            if #available(iOS 11.0, *) {
-                buttonView.accessibilitySortPriority = 900.0 - Double(i) * 0.01
-            }
         }
         var removeIds: [AnyHashable] = []
         for (id, itemView) in self.itemViews {
