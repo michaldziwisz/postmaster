@@ -798,6 +798,7 @@ public final class ChatVoiceOverOverlayView: UIView {
     private struct Row {
         enum Kind {
             case message(Message)
+            case unreadMarker
             case info(String)
         }
         
@@ -1346,7 +1347,7 @@ public final class ChatVoiceOverOverlayView: UIView {
     private func makeRows(from entries: [ChatHistoryEntry]) -> [Row] {
         var result: [Row] = []
         
-        let sortedEntries = entries.sorted(by: { $0.index < $1.index })
+        let sortedEntries = entries.sorted()
         for entry in sortedEntries {
             switch entry {
             case let .MessageEntry(message, _, _, _, _, _):
@@ -1356,7 +1357,7 @@ public final class ChatVoiceOverOverlayView: UIView {
                     result.append(Row(stableId: entry.stableId, index: message.index, kind: .message(message)))
                 }
             case .UnreadEntry:
-                break
+                result.append(Row(stableId: entry.stableId, index: entry.index, kind: .unreadMarker))
             case let .ChatInfoEntry(info, _):
                 switch info {
                 case let .botInfo(title, text, _, _):
@@ -1463,14 +1464,23 @@ public final class ChatVoiceOverOverlayView: UIView {
             return
         }
 
+        
         let row = self.rows[rowIndex]
         let resolved = self.resolveRow(row, state: state)
 
         cell.backgroundColor = state.theme.list.plainBackgroundColor
+        cell.selectionStyle = .none
         cell.textLabel?.text = resolved.title
         cell.textLabel?.textColor = state.theme.list.itemPrimaryTextColor
+        cell.textLabel?.textAlignment = .natural
         cell.detailTextLabel?.text = resolved.subtitle
         cell.detailTextLabel?.textColor = state.theme.list.itemSecondaryTextColor
+
+        if case .unreadMarker = row.kind {
+            cell.textLabel?.font = UIFont.preferredFont(forTextStyle: .headline)
+            cell.textLabel?.textAlignment = .center
+            cell.textLabel?.textColor = state.theme.list.itemAccentColor
+        }
 
         cell.accessibilityLabel = resolved.accessibilityLabel
         cell.accessibilityHint = resolved.hint
@@ -1590,6 +1600,8 @@ public final class ChatVoiceOverOverlayView: UIView {
         switch row.kind {
         case let .message(message):
             return self.isMessageActivatable(message) ? indexPath : nil
+        case .unreadMarker:
+            return nil
         case .info:
             return nil
         }
@@ -1629,6 +1641,8 @@ public final class ChatVoiceOverOverlayView: UIView {
         case let .info(text):
             let lines = max(1, min(6, (text.count / 44) + 1))
             return max(72.0, CGFloat(24 * lines + 28))
+        case .unreadMarker:
+            return 44.0
         case let .message(message):
             if !message.text.isEmpty {
                 let lines = max(1, min(8, (message.text.count / 36) + 1))
@@ -3269,6 +3283,9 @@ public final class ChatVoiceOverOverlayView: UIView {
         switch row.kind {
         case let .message(message):
             return self.resolveMessageRow(message: message, state: state)
+        case .unreadMarker:
+            let title = state.strings.Conversation_UnreadMessages
+            return (title, nil, title, nil, [.staticText, .header])
         case let .info(text):
             let title = text
             return (title, nil, title, nil, [.staticText])
