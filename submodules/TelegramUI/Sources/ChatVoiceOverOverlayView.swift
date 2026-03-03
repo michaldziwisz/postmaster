@@ -754,6 +754,10 @@ public final class ChatVoiceOverOverlayView: UIView {
         public var didEndLoadEarlier: (() -> Void)?
         public var scrollToLatest: (() -> Void)?
         public var activateMessage: ((Message) -> Void)?
+        public var toggleVoiceMessagePlayback: ((Message) -> Void)?
+        public var toggleCurrentVoicePlayback: (() -> Void)?
+        public var seekCurrentVoicePlayback: ((Double) -> Void)?
+        public var setCurrentVoicePlaybackRate: ((Double) -> Void)?
         public var openMessageContextMenu: ((Message, CGRect) -> Void)?
         
         public init(
@@ -767,6 +771,10 @@ public final class ChatVoiceOverOverlayView: UIView {
             didEndLoadEarlier: (() -> Void)? = nil,
             scrollToLatest: (() -> Void)? = nil,
             activateMessage: ((Message) -> Void)? = nil,
+            toggleVoiceMessagePlayback: ((Message) -> Void)? = nil,
+            toggleCurrentVoicePlayback: (() -> Void)? = nil,
+            seekCurrentVoicePlayback: ((Double) -> Void)? = nil,
+            setCurrentVoicePlaybackRate: ((Double) -> Void)? = nil,
             openMessageContextMenu: ((Message, CGRect) -> Void)? = nil
         ) {
             self.back = back
@@ -779,6 +787,10 @@ public final class ChatVoiceOverOverlayView: UIView {
             self.didEndLoadEarlier = didEndLoadEarlier
             self.scrollToLatest = scrollToLatest
             self.activateMessage = activateMessage
+            self.toggleVoiceMessagePlayback = toggleVoiceMessagePlayback
+            self.toggleCurrentVoicePlayback = toggleCurrentVoicePlayback
+            self.seekCurrentVoicePlayback = seekCurrentVoicePlayback
+            self.setCurrentVoicePlaybackRate = setCurrentVoicePlaybackRate
             self.openMessageContextMenu = openMessageContextMenu
         }
     }
@@ -812,6 +824,24 @@ public final class ChatVoiceOverOverlayView: UIView {
     private let inputTextView = UITextView()
     private let recordButton = UIButton(type: .system)
     private let sendButton = UIButton(type: .system)
+
+    private let voicePlayerView = UIView()
+    private let voicePlayerPlayPauseButton = UIButton(type: .system)
+    private let voicePlayerSpeedButton = UIButton(type: .system)
+    private let voicePlayerPositionSlider = UISlider()
+    private var voicePlayerHeightConstraint: NSLayoutConstraint?
+    private var voicePlayerSeekWorkItem: DispatchWorkItem?
+    private var isUpdatingVoicePlayerSlider = false
+
+    struct VoicePlaybackState: Equatable {
+        var messageId: MessageId
+        var isPlaying: Bool
+        var position: Double
+        var duration: Double
+        var baseRate: Double
+    }
+
+    private var voicePlaybackState: VoicePlaybackState?
     
     private var composerBottomConstraint: NSLayoutConstraint?
     private var composerHeightConstraint: NSLayoutConstraint?
@@ -973,6 +1003,24 @@ public final class ChatVoiceOverOverlayView: UIView {
         
         self.composerView.translatesAutoresizingMaskIntoConstraints = false
         self.addSubview(self.composerView)
+
+        self.voicePlayerView.translatesAutoresizingMaskIntoConstraints = false
+        self.voicePlayerView.isHidden = true
+        self.voicePlayerView.isUserInteractionEnabled = false
+        self.voicePlayerView.isAccessibilityElement = false
+        self.addSubview(self.voicePlayerView)
+
+        self.voicePlayerPlayPauseButton.translatesAutoresizingMaskIntoConstraints = false
+        self.voicePlayerPlayPauseButton.addTarget(self, action: #selector(self.voicePlayerPlayPausePressed), for: .touchUpInside)
+        self.voicePlayerView.addSubview(self.voicePlayerPlayPauseButton)
+
+        self.voicePlayerSpeedButton.translatesAutoresizingMaskIntoConstraints = false
+        self.voicePlayerSpeedButton.addTarget(self, action: #selector(self.voicePlayerSpeedPressed), for: .touchUpInside)
+        self.voicePlayerView.addSubview(self.voicePlayerSpeedButton)
+
+        self.voicePlayerPositionSlider.translatesAutoresizingMaskIntoConstraints = false
+        self.voicePlayerPositionSlider.addTarget(self, action: #selector(self.voicePlayerSliderValueChanged), for: .valueChanged)
+        self.voicePlayerView.addSubview(self.voicePlayerPositionSlider)
         
         self.attachButton.translatesAutoresizingMaskIntoConstraints = false
         self.attachButton.addTarget(self, action: #selector(self.attachPressed), for: .touchUpInside)
@@ -1000,6 +1048,9 @@ public final class ChatVoiceOverOverlayView: UIView {
         self.composerBottomConstraint = composerBottom
         let composerHeight = self.composerView.heightAnchor.constraint(equalToConstant: 64.0)
         self.composerHeightConstraint = composerHeight
+
+        let voicePlayerHeightConstraint = self.voicePlayerView.heightAnchor.constraint(equalToConstant: 0.0)
+        self.voicePlayerHeightConstraint = voicePlayerHeightConstraint
         
         NSLayoutConstraint.activate([
             self.topBarView.topAnchor.constraint(equalTo: self.safeAreaLayoutGuide.topAnchor),
@@ -1024,6 +1075,25 @@ public final class ChatVoiceOverOverlayView: UIView {
             self.composerView.trailingAnchor.constraint(equalTo: self.trailingAnchor),
             composerBottom,
             composerHeight,
+
+            self.voicePlayerView.leadingAnchor.constraint(equalTo: self.leadingAnchor),
+            self.voicePlayerView.trailingAnchor.constraint(equalTo: self.trailingAnchor),
+            self.voicePlayerView.bottomAnchor.constraint(equalTo: self.composerView.topAnchor),
+            voicePlayerHeightConstraint,
+
+            self.voicePlayerPlayPauseButton.leadingAnchor.constraint(equalTo: self.voicePlayerView.leadingAnchor, constant: 12.0),
+            self.voicePlayerPlayPauseButton.centerYAnchor.constraint(equalTo: self.voicePlayerView.centerYAnchor),
+            self.voicePlayerPlayPauseButton.widthAnchor.constraint(equalToConstant: 44.0),
+            self.voicePlayerPlayPauseButton.heightAnchor.constraint(equalToConstant: 44.0),
+
+            self.voicePlayerSpeedButton.trailingAnchor.constraint(equalTo: self.voicePlayerView.trailingAnchor, constant: -12.0),
+            self.voicePlayerSpeedButton.centerYAnchor.constraint(equalTo: self.voicePlayerView.centerYAnchor),
+            self.voicePlayerSpeedButton.widthAnchor.constraint(greaterThanOrEqualToConstant: 44.0),
+            self.voicePlayerSpeedButton.heightAnchor.constraint(equalToConstant: 44.0),
+
+            self.voicePlayerPositionSlider.leadingAnchor.constraint(equalTo: self.voicePlayerPlayPauseButton.trailingAnchor, constant: 10.0),
+            self.voicePlayerPositionSlider.trailingAnchor.constraint(equalTo: self.voicePlayerSpeedButton.leadingAnchor, constant: -10.0),
+            self.voicePlayerPositionSlider.centerYAnchor.constraint(equalTo: self.voicePlayerView.centerYAnchor),
             
             self.attachButton.leadingAnchor.constraint(equalTo: self.composerView.leadingAnchor, constant: 12.0),
             self.attachButton.bottomAnchor.constraint(equalTo: self.composerView.bottomAnchor, constant: -10.0),
@@ -1050,7 +1120,7 @@ public final class ChatVoiceOverOverlayView: UIView {
             self.tableView.topAnchor.constraint(equalTo: self.topBarView.bottomAnchor),
             self.tableView.leadingAnchor.constraint(equalTo: self.leadingAnchor),
             self.tableView.trailingAnchor.constraint(equalTo: self.trailingAnchor),
-            self.tableView.bottomAnchor.constraint(equalTo: self.composerView.topAnchor),
+            self.tableView.bottomAnchor.constraint(equalTo: self.voicePlayerView.topAnchor),
 
             self.tableAccessibilityContainerView.topAnchor.constraint(equalTo: self.tableView.topAnchor),
             self.tableAccessibilityContainerView.leadingAnchor.constraint(equalTo: self.tableView.leadingAnchor),
@@ -1092,6 +1162,7 @@ public final class ChatVoiceOverOverlayView: UIView {
         self.backgroundColor = state.theme.list.plainBackgroundColor
         self.topBarView.backgroundColor = state.theme.rootController.navigationBar.opaqueBackgroundColor
         self.composerView.backgroundColor = state.theme.chat.inputPanel.panelBackgroundColor
+        self.voicePlayerView.backgroundColor = state.theme.chat.inputPanel.panelBackgroundColor
         self.tableView.backgroundColor = state.theme.list.plainBackgroundColor
         
         self.inputTextView.backgroundColor = state.theme.list.itemBlocksBackgroundColor
@@ -1139,7 +1210,14 @@ public final class ChatVoiceOverOverlayView: UIView {
         
         self.updateRecordButton(state: state)
         self.updateTitle(state: state)
+        self.updateVoicePlayerControls()
         self.invalidateAccessibilityElements()
+    }
+
+    func updateVoicePlaybackState(_ state: VoicePlaybackState?) {
+        assert(Thread.isMainThread)
+        self.voicePlaybackState = state
+        self.updateVoicePlayerControls()
     }
     
     func updateEntries(_ entries: [ChatHistoryEntry]) {
@@ -1826,8 +1904,10 @@ public final class ChatVoiceOverOverlayView: UIView {
         self.voiceOverScrollbarAccessibilityElementAnchorTableRow = resolvedAnchorTableRow
         if resolvedAnchorTableRow != nil {
             self.composerView.accessibilityElementsHidden = true
+            self.voicePlayerView.accessibilityElementsHidden = true
         } else {
             self.updateComposerAccessibilityVisibility()
+            self.voicePlayerView.accessibilityElementsHidden = false
         }
         self.invalidateAccessibilityElements()
     }
@@ -2277,9 +2357,132 @@ public final class ChatVoiceOverOverlayView: UIView {
             guard self.isMessageActivatable(message) else {
                 return false
             }
-            self.actions.activateMessage?(message)
+            if self.isVoiceMessage(message), let action = self.actions.toggleVoiceMessagePlayback {
+                action(message)
+            } else {
+                self.actions.activateMessage?(message)
+            }
             return true
         }
+    }
+
+    private func isVoiceMessage(_ message: Message) -> Bool {
+        for media in message.media {
+            if let file = media as? TelegramMediaFile, file.isVoice {
+                return true
+            }
+        }
+        return false
+    }
+
+    private static func formatPlaybackTimestamp(_ seconds: Double) -> String {
+        let totalSeconds = max(Int32(0), Int32(seconds.rounded()))
+        let hours = totalSeconds / 3600
+        let minutes = totalSeconds / 60 % 60
+        let seconds = totalSeconds % 60
+        if hours > 0 {
+            return String(format: "%d:%02d:%02d", hours, minutes, seconds)
+        } else {
+            return String(format: "%d:%02d", minutes, seconds)
+        }
+    }
+
+    private func updateVoicePlayerControls() {
+        let state = self.interfaceState
+        let strings = state?.strings ?? defaultPresentationStrings
+
+        guard let playbackState = self.voicePlaybackState else {
+            self.voicePlayerSeekWorkItem?.cancel()
+            self.voicePlayerSeekWorkItem = nil
+            self.voicePlayerHeightConstraint?.constant = 0.0
+            self.voicePlayerView.isHidden = true
+            self.voicePlayerView.isUserInteractionEnabled = false
+            return
+        }
+
+        self.voicePlayerHeightConstraint?.constant = 56.0
+        self.voicePlayerView.isHidden = false
+        self.voicePlayerView.isUserInteractionEnabled = true
+
+        let isPlaying = playbackState.isPlaying
+        let playPauseImageName = isPlaying ? "pause.fill" : "play.fill"
+        self.voicePlayerPlayPauseButton.setImage(UIImage(systemName: playPauseImageName), for: .normal)
+        self.voicePlayerPlayPauseButton.accessibilityLabel = isPlaying ? strings.VoiceOver_Media_PlaybackPause : strings.VoiceOver_Media_PlaybackPlay
+        self.voicePlayerPlayPauseButton.accessibilityTraits = [.button, .startsMediaSession]
+
+        let duration = max(0.0, playbackState.duration)
+        let position = max(0.0, min(duration, playbackState.position))
+
+        self.isUpdatingVoicePlayerSlider = true
+        self.voicePlayerPositionSlider.minimumValue = 0.0
+        self.voicePlayerPositionSlider.maximumValue = Float(max(1.0, duration))
+        self.voicePlayerPositionSlider.value = Float(position)
+        self.isUpdatingVoicePlayerSlider = false
+
+        let bundle = getAppBundle()
+        self.voicePlayerPositionSlider.accessibilityLabel = bundle.localizedString(forKey: "VoiceOver.Media.PlaybackPosition", value: "Playback position", table: nil)
+        self.voicePlayerPositionSlider.accessibilityHint = nil
+        self.voicePlayerPositionSlider.accessibilityValue = "\(Self.formatPlaybackTimestamp(position)) / \(Self.formatPlaybackTimestamp(duration))"
+
+        let rate = AudioPlaybackRate(playbackState.baseRate)
+        self.voicePlayerSpeedButton.setTitle(rate.stringValue, for: .normal)
+        self.voicePlayerSpeedButton.accessibilityLabel = strings.VoiceOver_Media_PlaybackRate
+        self.voicePlayerSpeedButton.accessibilityHint = strings.VoiceOver_Media_PlaybackRateChange
+        self.voicePlayerSpeedButton.accessibilityValue = rate.stringValue
+        self.voicePlayerSpeedButton.accessibilityTraits = [.button]
+
+        self.voicePlayerPlayPauseButton.tintColor = state?.theme.rootController.navigationBar.accentTextColor ?? tintColor
+        self.voicePlayerSpeedButton.tintColor = state?.theme.rootController.navigationBar.accentTextColor ?? tintColor
+        self.voicePlayerPositionSlider.tintColor = state?.theme.list.itemAccentColor ?? tintColor
+    }
+
+    private func nextVoicePlaybackRate(current: AudioPlaybackRate) -> AudioPlaybackRate {
+        switch current {
+        case .x0_5, .x2:
+            return .x1
+        case .x1:
+            return .x1_5
+        case .x1_5:
+            return .x2
+        default:
+            if current.doubleValue < 0.5 {
+                return .x0_5
+            } else if current.doubleValue < 1.0 {
+                return .x1
+            } else if current.doubleValue < 1.5 {
+                return .x1_5
+            } else if current.doubleValue < 2.0 {
+                return .x2
+            } else {
+                return .x1
+            }
+        }
+    }
+
+    @objc private func voicePlayerPlayPausePressed() {
+        self.actions.toggleCurrentVoicePlayback?()
+    }
+
+    @objc private func voicePlayerSpeedPressed() {
+        guard let state = self.voicePlaybackState else {
+            return
+        }
+        let current = AudioPlaybackRate(state.baseRate)
+        let next = self.nextVoicePlaybackRate(current: current)
+        self.actions.setCurrentVoicePlaybackRate?(next.doubleValue)
+    }
+
+    @objc private func voicePlayerSliderValueChanged() {
+        guard !self.isUpdatingVoicePlayerSlider else {
+            return
+        }
+        let targetPosition = Double(self.voicePlayerPositionSlider.value)
+        self.voicePlayerSeekWorkItem?.cancel()
+        let workItem = DispatchWorkItem { [weak self] in
+            self?.actions.seekCurrentVoicePlayback?(targetPosition)
+        }
+        self.voicePlayerSeekWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2, execute: workItem)
     }
 
     fileprivate func voiceOverAccessibilityLabel(for element: ChatVoiceOverOverlayRowAccessibilityElement) -> String {
@@ -3359,6 +3562,7 @@ public final class ChatVoiceOverOverlayView: UIView {
 
     private func updateComposerAccessibilityVisibility() {
         self.composerView.accessibilityElementsHidden = !self.isComposerEnabled || (self.voiceOverScrollbarAccessibilityElementAnchorTableRow != nil)
+        self.voicePlayerView.accessibilityElementsHidden = (self.voiceOverScrollbarAccessibilityElementAnchorTableRow != nil)
     }
     
     private func handleKeyboard(notification: Notification) {

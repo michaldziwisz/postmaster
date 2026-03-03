@@ -341,6 +341,8 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
     
     private var voiceOverOverlayView: ChatVoiceOverOverlayView?
     private var voiceOverOverlayConstraints: [NSLayoutConstraint] = []
+    private var voiceOverOverlayVoicePlaybackDisposable: Disposable?
+    private var voiceOverOverlayVoicePlaybackState: ChatVoiceOverOverlayView.VoicePlaybackState?
     private struct VoiceOverOverlaySavedState {
         var navigationBarIsHidden: Bool
         var navigationBarIsUserInteractionEnabled: Bool
@@ -977,6 +979,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
         self.inputMediaNodeDataDisposable?.dispose()
         self.inlineSearchResultsReadyDisposable?.dispose()
         self.loadMoreSearchResultsDisposable?.dispose()
+        self.voiceOverOverlayVoicePlaybackDisposable?.dispose()
         
         if let observer = self.voiceOverStatusObserver {
             NotificationCenter.default.removeObserver(observer)
@@ -1094,6 +1097,50 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                     }
                     let _ = self.controllerInteraction.openMessage(message, OpenMessageParams(mode: .default))
                 }
+                overlay.actions.toggleVoiceMessagePlayback = { [weak self] message in
+                    guard let self else {
+                        return
+                    }
+
+                    let isVoiceMessage: Bool = message.media.contains(where: { media in
+                        if let file = media as? TelegramMediaFile {
+                            return file.isVoice
+                        }
+                        return false
+                    })
+
+                    if isVoiceMessage, let playbackState = self.voiceOverOverlayVoicePlaybackState, playbackState.messageId == message.id {
+                        let control: SharedMediaPlayerPlaybackControlAction = playbackState.isPlaying ? .pause : .play
+                        self.context.sharedContext.mediaManager.playlistControl(.playback(control), type: .voice)
+                    } else {
+                        let _ = self.controllerInteraction.openMessage(message, OpenMessageParams(mode: .default))
+                    }
+                }
+                overlay.actions.toggleCurrentVoicePlayback = { [weak self] in
+                    self?.context.sharedContext.mediaManager.playlistControl(.playback(.togglePlayPause), type: .voice)
+                }
+                overlay.actions.seekCurrentVoicePlayback = { [weak self] position in
+                    self?.context.sharedContext.mediaManager.playlistControl(.seek(position), type: .voice)
+                }
+                overlay.actions.setCurrentVoicePlaybackRate = { [weak self] rateValue in
+                    guard let self else {
+                        return
+                    }
+                    let rate = AudioPlaybackRate(rateValue)
+                    let _ = (self.context.sharedContext.accountManager.transaction { transaction -> AudioPlaybackRate in
+                        let settings = transaction.getSharedData(ApplicationSpecificSharedDataKeys.musicPlaybackSettings)?.get(MusicPlaybackSettings.self) ?? MusicPlaybackSettings.defaultSettings
+                        transaction.updateSharedData(ApplicationSpecificSharedDataKeys.musicPlaybackSettings, { _ in
+                            return PreferencesEntry(settings.withUpdatedVoicePlaybackRate(rate))
+                        })
+                        return rate
+                    }
+                    |> deliverOnMainQueue).start(next: { [weak self] baseRate in
+                        guard let self else {
+                            return
+                        }
+                        self.context.sharedContext.mediaManager.playlistControl(.setBaseRate(baseRate), type: .voice)
+                    })
+                }
                 overlay.actions.openMessageContextMenu = { [weak self] message, sourceRect in
                     guard let self, let anchorNode = self.voiceOverContextMenuAnchorNode else {
                         return
@@ -1112,6 +1159,51 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                 NSLayoutConstraint.activate(self.voiceOverOverlayConstraints)
                 
                 self.voiceOverOverlayView = overlay
+
+                if self.voiceOverOverlayVoicePlaybackDisposable == nil {
+                    self.voiceOverOverlayVoicePlaybackDisposable = (self.context.sharedContext.mediaManager.voiceMediaPlayerState
+                    |> deliverOnMainQueue).startStrict(next: { [weak self] value in
+                        guard let self else {
+                            return
+                        }
+                        
+                        let resolvedState: ChatVoiceOverOverlayView.VoicePlaybackState? = {
+                            guard let (account, stateOrLoading) = value, account.id == self.context.account.id else {
+                                return nil
+                            }
+                            guard case let .state(state) = stateOrLoading else {
+                                return nil
+                            }
+                            guard let itemId = state.item.id as? PeerMessagesMediaPlaylistItemId else {
+                                return nil
+                            }
+                            
+                            let messageId: MessageId = itemId.messageId
+                            if let chatPeerId = self.chatLocation.peerId, messageId.peerId != chatPeerId {
+                                return nil
+                            }
+                            
+                            let status = state.status
+                            let position: Double
+                            if status.generationTimestamp > 0.0, case .playing = status.status {
+                                position = status.timestamp + (CACurrentMediaTime() - status.generationTimestamp) * status.baseRate
+                            } else {
+                                position = status.timestamp
+                            }
+                            
+                            return ChatVoiceOverOverlayView.VoicePlaybackState(
+                                messageId: messageId,
+                                isPlaying: status.status == .playing,
+                                position: position,
+                                duration: status.duration,
+                                baseRate: status.baseRate
+                            )
+                        }()
+                        
+                        self.voiceOverOverlayVoicePlaybackState = resolvedState
+                        self.voiceOverOverlayView?.updateVoicePlaybackState(resolvedState)
+                    })
+                }
                 
                 self.historyNode.voiceOverHistoryEntriesUpdated = { [weak self] entries in
                     DispatchQueue.main.async {
@@ -1183,6 +1275,9 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                 overlay.removeFromSuperview()
             }
             self.voiceOverOverlayView = nil
+            self.voiceOverOverlayVoicePlaybackState = nil
+            self.voiceOverOverlayVoicePlaybackDisposable?.dispose()
+            self.voiceOverOverlayVoicePlaybackDisposable = nil
             self.voiceOverContextMenuAnchorNode?.view.removeFromSuperview()
             self.voiceOverContextMenuAnchorNode = nil
             if !self.voiceOverOverlayConstraints.isEmpty {

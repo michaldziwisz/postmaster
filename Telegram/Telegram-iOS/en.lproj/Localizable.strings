@@ -4738,6 +4738,7 @@ Sorry for the inconvenience.";
 "VoiceOver.Media.PlaybackStop" = "Stop playback";
 "VoiceOver.Media.PlaybackPlay" = "Play";
 "VoiceOver.Media.PlaybackPause" = "Pause";
+"VoiceOver.Media.PlaybackPosition" = "Playback position";
 "VoiceOver.Navigation.Compose" = "Compose";
 "VoiceOver.Navigation.Search" = "Search";
 "VoiceOver.Navigation.ProxySettings" = "Proxy settings";
