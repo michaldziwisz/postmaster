@@ -1161,14 +1161,17 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                 self.voiceOverOverlayView = overlay
 
                 if self.voiceOverOverlayVoicePlaybackDisposable == nil {
-                    self.voiceOverOverlayVoicePlaybackDisposable = (self.context.sharedContext.mediaManager.voiceMediaPlayerState
+                    self.voiceOverOverlayVoicePlaybackDisposable = (self.context.sharedContext.mediaManager.globalMediaPlayerState
                     |> deliverOnMainQueue).startStrict(next: { [weak self] value in
                         guard let self else {
                             return
                         }
                         
                         let resolvedState: ChatVoiceOverOverlayView.VoicePlaybackState? = {
-                            guard let (account, stateOrLoading) = value, account.id == self.context.account.id else {
+                            guard let (account, stateOrLoading, playerType) = value, account.id == self.context.account.id else {
+                                return nil
+                            }
+                            guard case .voice = playerType else {
                                 return nil
                             }
                             guard case let .state(state) = stateOrLoading else {
