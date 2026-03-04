@@ -12,7 +12,6 @@ import TelegramStringFormatting
 import MergeLists
 import Photos
 import PhotosUI
-import UniformTypeIdentifiers
 import LegacyComponents
 import LegacyMediaPickerUI
 import AttachmentUI
@@ -1281,104 +1280,44 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
                 return
             }
 
-            let collectedItems = Atomic<[(Int, TGMediaSelectableItem)]>(value: [])
-            let group = DispatchGroup()
-
-            for (index, result) in results.enumerated() {
-                let provider = result.itemProvider
-
-                let movieType: String? = provider.registeredTypeIdentifiers.first(where: { typeIdentifier in
-                    if let type = UTType(typeIdentifier) {
-                        return type.conforms(to: .movie) || type.conforms(to: .video)
-                    } else {
-                        return false
-                    }
-                })
-
-                if let movieType {
-                    group.enter()
-                    let loadItem: (String, [AnyHashable: Any]?, @escaping (NSSecureCoding?, Error?) -> Void) -> Void = provider.loadItem(forTypeIdentifier:options:completionHandler:)
-                    loadItem(movieType, nil, { (item: NSSecureCoding?, _: Error?) in
-                        defer { group.leave() }
-                        let url: URL?
-                        if let item = item as? URL {
-                            url = item
-                        } else if let item = item as? NSURL {
-                            url = item as URL
-                        } else {
-                            url = nil
-                        }
-                        guard let url else {
-                            return
-                        }
-                        let fileExtension = url.pathExtension
-                        let tempUrl = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true).appendingPathComponent(UUID().uuidString).appendingPathExtension(fileExtension)
-                        do {
-                            if FileManager.default.fileExists(atPath: tempUrl.path) {
-                                try FileManager.default.removeItem(at: tempUrl)
-                            }
-                            try FileManager.default.copyItem(at: url, to: tempUrl)
-                            let video = TGCameraCapturedVideo(url: tempUrl)
-                            _ = collectedItems.modify { current in
-                                var current = current
-                                current.append((index, video))
-                                return current
-                            }
-                        } catch {
-                        }
-                    })
-                } else if provider.canLoadObject(ofClass: UIImage.self) {
-                    group.enter()
-                    provider.loadObject(ofClass: UIImage.self) { object, _ in
-                        defer { group.leave() }
-                        if let image = object as? UIImage {
-                            _ = collectedItems.modify { current in
-                                var current = current
-                                current.append((index, image))
-                                return current
-                            }
-                        }
-                    }
+            let selectedAssets: [TGMediaAsset] = results.compactMap { result in
+                guard let assetIdentifier = result.assetIdentifier else {
+                    return nil
                 }
+                let fetchResult = PHAsset.fetchAssets(withLocalIdentifiers: [assetIdentifier], options: nil)
+                guard let phAsset = fetchResult.firstObject else {
+                    return nil
+                }
+                return TGMediaAsset(phAsset: phAsset)
             }
 
-            group.notify(queue: .main) { [weak self] in
-                guard let self, let controller = self.controller else {
-                    return
-                }
+            if selectedAssets.isEmpty {
+                self.isVoiceOverSystemPickerLoading = false
+                self.updateVoiceOverSystemPickerButton(presentationData: self.presentationData)
+                return
+            }
 
-                let sortedItems = collectedItems.with { items in
-                    items.sorted(by: { $0.0 < $1.0 }).map(\.1)
-                }
+            selectionContext.clear()
+            selectionContext.grouping = true
+            for asset in selectedAssets {
+                selectionContext.setItem(asset, selected: true)
+            }
 
-                if sortedItems.isEmpty {
-                    self.isVoiceOverSystemPickerLoading = false
-                    self.updateVoiceOverSystemPickerButton(presentationData: self.presentationData)
-                    return
-                }
+            guard let signals = TGMediaAssetsController.resultSignals(for: selectionContext, editingContext: interaction.editingState, intent: TGMediaAssetsControllerSendMediaIntent, currentItem: nil, storeAssets: true, convertToJpeg: false, descriptionGenerator: legacyAssetPickerItemGenerator(), saveEditedPhotos: controller.saveEditedPhotos) else {
+                self.isVoiceOverSystemPickerLoading = false
+                self.updateVoiceOverSystemPickerButton(presentationData: self.presentationData)
+                return
+            }
 
-                selectionContext.clear()
-                selectionContext.grouping = true
-                for item in sortedItems {
-                    selectionContext.setItem(item, selected: true)
-                }
+            controller.completed = true
+            controller.legacyCompletion(true, signals, false, nil, nil, { _ in
+                return nil
+            }, { [weak self] in
+                self?.controller?.dismiss(animated: true)
+            })
 
-                guard let signals = TGMediaAssetsController.pasteboardResultSignals(for: selectionContext, editingContext: interaction.editingState, intent: TGMediaAssetsControllerSendMediaIntent, currentItem: nil, descriptionGenerator: legacyAssetPickerItemGenerator()) else {
-                    self.isVoiceOverSystemPickerLoading = false
-                    self.updateVoiceOverSystemPickerButton(presentationData: self.presentationData)
-                    return
-                }
-
-                controller.completed = true
-                controller.legacyCompletion(true, signals, false, nil, nil, { _ in
-                    return nil
-                }, { [weak self] in
-                    self?.controller?.dismiss(animated: true)
-                })
-
-                Queue.mainQueue().after(1.5) { [weak controller] in
-                    controller?.completed = false
-                }
+            Queue.mainQueue().after(1.5) { [weak controller] in
+                controller?.completed = false
             }
         }
         
