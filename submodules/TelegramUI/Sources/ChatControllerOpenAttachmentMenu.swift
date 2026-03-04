@@ -2434,6 +2434,58 @@ extension ChatControllerImpl {
         guard let peer = self.presentationInterfaceState.renderedPeer?.peer else {
             return nil
         }
+        
+        if UIAccessibility.isVoiceOverRunning {
+            return VoiceOverComposePollController(
+                context: self.context,
+                initialData: ComposePollScreen.initialData(context: self.context),
+                isQuiz: isQuiz ?? false,
+                completion: { [weak self] poll in
+                    guard let self else {
+                        return
+                    }
+                    self.presentPaidMessageAlertIfNeeded(completion: { [weak self] postpone in
+                        guard let self else {
+                            return
+                        }
+                        let replyMessageSubject = self.presentationInterfaceState.interfaceState.replyMessageSubject
+                        self.chatDisplayNode.setupSendActionOnViewUpdate({ [weak self] in
+                            if let self {
+                                self.chatDisplayNode.collapseInput()
+                                
+                                self.updateChatPresentationInterfaceState(animated: true, interactive: false, {
+                                    $0.updatedInterfaceState { $0.withUpdatedReplyMessageSubject(nil).withUpdatedSendMessageEffect(nil).withUpdatedPostSuggestionState(nil) }
+                                })
+                            }
+                        }, nil)
+                        let message: EnqueueMessage = .message(
+                            text: "",
+                            attributes: [],
+                            inlineStickers: [:],
+                            mediaReference: .standalone(media: TelegramMediaPoll(
+                                pollId: MediaId(namespace: Namespaces.Media.LocalPoll, id: Int64.random(in: Int64.min...Int64.max)),
+                                publicity: poll.publicity,
+                                kind: poll.kind,
+                                text: poll.text.string,
+                                textEntities: poll.text.entities,
+                                options: poll.options,
+                                correctAnswers: poll.correctAnswers,
+                                results: poll.results,
+                                isClosed: false,
+                                deadlineTimeout: poll.deadlineTimeout
+                            )),
+                            threadId: self.chatLocation.threadId,
+                            replyToMessageId: nil,
+                            replyToStoryId: nil,
+                            localGroupingKey: nil,
+                            correlationId: nil,
+                            bubbleUpEmojiOrStickersets: []
+                        )
+                        self.sendMessages([message.withUpdatedReplyToMessageId(replyMessageSubject?.subjectModel)])
+                    })
+                }
+            )
+        }
         return ComposePollScreen(
             context: self.context,
             initialData: ComposePollScreen.initialData(context: self.context),
@@ -2489,6 +2541,48 @@ extension ChatControllerImpl {
     func configureTodoCreation() -> ViewController? {
         guard let peer = self.presentationInterfaceState.renderedPeer?.peer else {
             return nil
+        }
+        
+        if UIAccessibility.isVoiceOverRunning {
+            return VoiceOverComposeTodoController(
+                context: self.context,
+                initialData: ComposeTodoScreen.initialData(
+                    context: self.context
+                ),
+                completion: { [weak self] todo in
+                    guard let self else {
+                        return
+                    }
+                    self.presentPaidMessageAlertIfNeeded(completion: { [weak self] postpone in
+                        guard let self else {
+                            return
+                        }
+                        let replyMessageSubject = self.presentationInterfaceState.interfaceState.replyMessageSubject
+                        self.chatDisplayNode.setupSendActionOnViewUpdate({ [weak self] in
+                            if let self {
+                                self.chatDisplayNode.collapseInput()
+                                
+                                self.updateChatPresentationInterfaceState(animated: true, interactive: false, {
+                                    $0.updatedInterfaceState { $0.withUpdatedReplyMessageSubject(nil).withUpdatedSendMessageEffect(nil).withUpdatedPostSuggestionState(nil) }
+                                })
+                            }
+                        }, nil)
+                        let message: EnqueueMessage = .message(
+                            text: "",
+                            attributes: [],
+                            inlineStickers: [:],
+                            mediaReference: .standalone(media: todo),
+                            threadId: self.chatLocation.threadId,
+                            replyToMessageId: nil,
+                            replyToStoryId: nil,
+                            localGroupingKey: nil,
+                            correlationId: nil,
+                            bubbleUpEmojiOrStickersets: []
+                        )
+                        self.sendMessages([message.withUpdatedReplyToMessageId(replyMessageSubject?.subjectModel)])
+                    })
+                }
+            )
         }
         return ComposeTodoScreen(
             context: self.context,
@@ -2556,46 +2650,59 @@ extension ChatControllerImpl {
         
         let canEdit = canEditMessage(context: self.context, limitsConfiguration: self.context.currentLimitsConfiguration.with { EngineConfiguration.Limits($0) }, message: message)
         
-        let controller = ComposeTodoScreen(
+        let initialData = ComposeTodoScreen.initialData(
             context: self.context,
-            initialData: ComposeTodoScreen.initialData(
-                context: self.context,
-                existingTodo: existingTodo,
-                focusedId: itemId,
-                append: append,
-                canEdit: canEdit
-            ),
-            peer: EnginePeer(peer),
-            completion: { [weak self] todo in
-                guard let self else {
-                    return
+            existingTodo: existingTodo,
+            focusedId: itemId,
+            append: append,
+            canEdit: canEdit
+        )
+        
+        let completion: (TelegramMediaTodo) -> Void = { [weak self] todo in
+            guard let self else {
+                return
+            }
+            func areItemsOnlyAppended(existing: [TelegramMediaTodo.Item], updated: [TelegramMediaTodo.Item]) -> Bool {
+                guard updated.count >= existing.count else {
+                    return false
                 }
-                func areItemsOnlyAppended(existing: [TelegramMediaTodo.Item], updated: [TelegramMediaTodo.Item]) -> Bool {
-                    guard updated.count >= existing.count else {
+                for (index, existingItem) in existing.enumerated() {
+                    if index >= updated.count || updated[index] != existingItem {
                         return false
                     }
-                    for (index, existingItem) in existing.enumerated() {
-                        if index >= updated.count || updated[index] != existingItem {
-                            return false
-                        }
-                    }
-                    return true
                 }
-                
-                if canEdit && !areItemsOnlyAppended(existing: existingTodo.items, updated: todo.items) {
-                    let _ = self.context.engine.messages.requestEditMessage(
-                        messageId: messageId,
-                        text: "",
-                        media: .update(.standalone(media: todo)),
-                        entities: nil,
-                        inlineStickers: [:]
-                    ).start()
-                } else {
-                    let appendedItems = Array(todo.items[existingTodo.items.count ..< todo.items.count])
-                    let _ = self.context.engine.messages.appendTodoMessageItems(messageId: messageId, items: appendedItems).start()
-                }
+                return true
             }
-        )
+            
+            if canEdit && !areItemsOnlyAppended(existing: existingTodo.items, updated: todo.items) {
+                let _ = self.context.engine.messages.requestEditMessage(
+                    messageId: messageId,
+                    text: "",
+                    media: .update(.standalone(media: todo)),
+                    entities: nil,
+                    inlineStickers: [:]
+                ).start()
+            } else {
+                let appendedItems = Array(todo.items[existingTodo.items.count ..< todo.items.count])
+                let _ = self.context.engine.messages.appendTodoMessageItems(messageId: messageId, items: appendedItems).start()
+            }
+        }
+        
+        let controller: ViewController
+        if UIAccessibility.isVoiceOverRunning {
+            controller = VoiceOverComposeTodoController(
+                context: self.context,
+                initialData: initialData,
+                completion: completion
+            )
+        } else {
+            controller = ComposeTodoScreen(
+                context: self.context,
+                initialData: initialData,
+                peer: EnginePeer(peer),
+                completion: completion
+            )
+        }
         controller.navigationPresentation = .modal
         self.push(controller)
     }
