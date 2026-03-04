@@ -88,13 +88,7 @@ private func descriptionWithUrl(_ url: URL) -> ICloudFileDescription? {
             }
         }
         
-        var bookmarkOptions: URL.BookmarkCreationOptions = .suitableForBookmarkFile
-        if didStartAccessingSecurityScopedResource {
-            bookmarkOptions.insert(.withSecurityScope)
-            bookmarkOptions.insert(.securityScopeAllowOnlyReadAccess)
-        }
-        
-        guard let urlData = try? url.bookmarkData(options: bookmarkOptions, includingResourceValuesForKeys: nil, relativeTo: nil) else {
+        guard let urlData = try? url.bookmarkData(options: URL.BookmarkCreationOptions.suitableForBookmarkFile, includingResourceValuesForKeys: nil, relativeTo: nil) else {
             return nil
         }
         
