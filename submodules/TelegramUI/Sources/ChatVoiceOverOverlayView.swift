@@ -1273,9 +1273,7 @@ public final class ChatVoiceOverOverlayView: UIView {
         if self.tableView.isDragging || self.tableView.isDecelerating {
             delay = 0.2
         } else if UIAccessibility.isVoiceOverRunning, !self.isLoadEarlierInProgress {
-            if self.isVoiceOverNavigationInProgress() {
-                delay = 0.25
-            } else if self.lastApplyWasStableIdsOnly {
+            if self.lastApplyWasStableIdsOnly {
                 // Upload/progress updates can trigger very frequent history refreshes.
                 // Throttle them to keep VoiceOver responsive and avoid focus churn.
                 delay = 0.15
@@ -2945,6 +2943,44 @@ public final class ChatVoiceOverOverlayView: UIView {
                         return
                     }
                     UIAccessibility.post(notification: .layoutChanged, argument: focusedNonTableElementBeforeUpdate)
+                }
+            }
+        }
+
+        if UIAccessibility.isVoiceOverRunning, !didReloadTable, focusedCellIndexPathBeforeUpdate != nil {
+            let focusRebindIndexPath: IndexPath? = {
+                if let focusedMessageAnchorBeforeUpdate, let index = self.indexOfRow(for: focusedMessageAnchorBeforeUpdate) {
+                    return IndexPath(row: index + self.loadEarlierRowOffset, section: 0)
+                }
+                if let focusedCellIndexPathBeforeUpdate, focusedCellIndexPathBeforeUpdate.section == 0 {
+                    return focusedCellIndexPathBeforeUpdate
+                }
+                return nil
+            }()
+            
+            if let focusRebindIndexPath {
+                DispatchQueue.main.async { [weak self] in
+                    guard let self else {
+                        return
+                    }
+                    guard UIAccessibility.isVoiceOverRunning else {
+                        return
+                    }
+                    
+                    // Avoid stealing focus if VoiceOver is still inside the chat overlay.
+                    let focusedNow = UIAccessibility.focusedElement(using: .notificationVoiceOver)
+                    if let focusedRow = focusedNow as? ChatVoiceOverOverlayRowAccessibilityElement, focusedRow.overlay === self {
+                        return
+                    }
+                    if let focusedView = focusedNow as? UIView, focusedView.isDescendant(of: self) {
+                        return
+                    }
+                    
+                    if let element = self.accessibilityElement(at: focusRebindIndexPath) {
+                        UIAccessibility.post(notification: .layoutChanged, argument: element)
+                    } else {
+                        UIAccessibility.post(notification: .layoutChanged, argument: self.tableAccessibilityContainerView)
+                    }
                 }
             }
         }

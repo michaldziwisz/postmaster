@@ -81,6 +81,9 @@ private func descriptionWithUrl(_ url: URL) -> ICloudFileDescription? {
         guard url.startAccessingSecurityScopedResource() else {
             return nil
         }
+        defer {
+            url.stopAccessingSecurityScopedResource()
+        }
         
         guard let urlData = try? url.bookmarkData(options: URL.BookmarkCreationOptions.suitableForBookmarkFile, includingResourceValuesForKeys: nil, relativeTo: nil) else {
             return nil
@@ -105,11 +108,7 @@ private func descriptionWithUrl(_ url: URL) -> ICloudFileDescription? {
             }
         }
         
-        let result = ICloudFileDescription(urlData: urlData.base64EncodedString(), fileName: fileName, fileSize: fileSize, audioMetadata: audioMetadata)
-        
-        url.stopAccessingSecurityScopedResource()
-        
-        return result
+        return ICloudFileDescription(urlData: urlData.base64EncodedString(), fileName: fileName, fileSize: fileSize, audioMetadata: audioMetadata)
     } else {
         return nil
     }
