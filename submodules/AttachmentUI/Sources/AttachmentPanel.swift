@@ -1422,6 +1422,8 @@ final class AttachmentPanel: ASDisplayNode, ASScrollViewDelegate, ASGestureRecog
         if #available(iOS 13.0, *) {
             self.containerNode.layer.cornerCurve = .continuous
         }
+        self.selectedItemsContainer.isAccessibilityElement = false
+        self.selectedItemsContainer.accessibilityElementsHidden = true
     
         self.scrollNode.view.delegate = self.wrappedScrollViewDelegate
         self.scrollNode.view.showsHorizontalScrollIndicator = false

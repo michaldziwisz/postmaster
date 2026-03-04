@@ -1187,13 +1187,9 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
                 return
             }
 
-            if self.isVoiceOverSystemPickerLoading {
-                button.setTitle(presentationData.strings.Channel_NotificationLoading, for: .normal)
-                button.isEnabled = false
-            } else {
-                button.setTitle(presentationData.strings.Attachment_SelectFromGallery, for: .normal)
-                button.isEnabled = true
-            }
+            let title = presentationData.strings.Attachment_SelectFromGallery
+            button.setTitle(title, for: .normal)
+            button.isEnabled = !self.isVoiceOverSystemPickerLoading
 
             button.backgroundColor = presentationData.theme.list.itemAccentColor
             button.setTitleColor(.white, for: .normal)
@@ -1225,9 +1221,6 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
                 return
             }
 
-            self.isVoiceOverSystemPickerLoading = true
-            self.updateVoiceOverSystemPickerButton(presentationData: self.presentationData)
-
             var configuration = PHPickerConfiguration(photoLibrary: .shared())
             if controller.bannedSendPhotos != nil && controller.bannedSendVideos == nil {
                 configuration.filter = .videos
@@ -1243,16 +1236,36 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
             let delegate = VoiceOverSystemPickerDelegate(node: self)
             self.voiceOverSystemPickerDelegate = delegate
             picker.delegate = delegate
+            picker.presentationController?.delegate = delegate
 
-            if let navigationController = controller.context.sharedContext.mainWindow?.viewController as? NavigationController, let topController = navigationController.topViewController {
-                topController.present(picker, animated: true, completion: nil)
-            } else {
-                controller.present(picker, animated: true, completion: nil)
+            let basePresenter: UIViewController = {
+                if let rootController = controller.view.window?.rootViewController {
+                    return rootController
+                }
+                if let rootController = controller.context.sharedContext.mainWindow?.viewController as? UIViewController {
+                    return rootController
+                }
+                return controller
+            }()
+            let presenter = self.topMostViewControllerForPresentation(from: basePresenter)
+
+            self.isVoiceOverSystemPickerLoading = true
+            self.updateVoiceOverSystemPickerButton(presentationData: self.presentationData)
+            presenter.present(picker, animated: true, completion: nil)
+
+            Queue.mainQueue().after(0.7) { [weak self, weak presenter, weak picker] in
+                guard let self, self.isVoiceOverSystemPickerLoading else {
+                    return
+                }
+                if presenter?.presentedViewController !== picker {
+                    self.isVoiceOverSystemPickerLoading = false
+                    self.updateVoiceOverSystemPickerButton(presentationData: self.presentationData)
+                }
             }
         }
 
         @available(iOS 14.0, *)
-        private final class VoiceOverSystemPickerDelegate: NSObject, PHPickerViewControllerDelegate {
+        private final class VoiceOverSystemPickerDelegate: NSObject, PHPickerViewControllerDelegate, UIAdaptivePresentationControllerDelegate {
             weak var node: Node?
 
             init(node: Node) {
@@ -1263,6 +1276,36 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
                 picker.dismiss(animated: true)
                 self.node?.handleVoiceOverSystemPickerResults(results)
             }
+
+            func presentationControllerDidDismiss(_ presentationController: UIPresentationController) {
+                self.node?.handleVoiceOverSystemPickerDismissed()
+            }
+        }
+
+        private func handleVoiceOverSystemPickerDismissed() {
+            self.voiceOverSystemPickerDelegate = nil
+            self.isVoiceOverSystemPickerLoading = false
+            self.updateVoiceOverSystemPickerButton(presentationData: self.presentationData)
+        }
+
+        private func topMostViewControllerForPresentation(from controller: UIViewController) -> UIViewController {
+            var current: UIViewController = controller
+            while true {
+                if let presented = current.presentedViewController, !presented.isBeingDismissed {
+                    current = presented
+                    continue
+                }
+                if let navigationController = current as? UINavigationController, let visibleViewController = navigationController.visibleViewController, visibleViewController !== current {
+                    current = visibleViewController
+                    continue
+                }
+                if let tabBarController = current as? UITabBarController, let selectedViewController = tabBarController.selectedViewController, selectedViewController !== current {
+                    current = selectedViewController
+                    continue
+                }
+                break
+            }
+            return current
         }
 
         @available(iOS 14.0, *)
