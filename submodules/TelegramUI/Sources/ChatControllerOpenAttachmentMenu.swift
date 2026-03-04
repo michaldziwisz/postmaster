@@ -37,7 +37,10 @@ import ComposeTodoScreen
 import ComposePollUI
 import Photos
 import PhotosUI
+import ObjectiveC
 import AttachmentFileController
+
+private var voiceOverSystemPhotoPickerDelegateKey: UInt8 = 0
 
 extension ChatControllerImpl {
     enum AttachMenuSubject {
@@ -895,12 +898,13 @@ extension ChatControllerImpl {
         configuration.selectionLimit = selectionLimit
         configuration.preferredAssetRepresentationMode = .current
         
-        let picker = VoiceOverSystemPhotoPickerController(
-            configuration: configuration,
-            completion: { [weak self] results in
-                self?.handleVoiceOverSystemPhotoPickerResults(results, selectionLimit: selectionLimit, saveEditedPhotos: saveEditedPhotos)
-            }
-        )
+        let picker = PHPickerViewController(configuration: configuration)
+        let delegate = VoiceOverSystemPhotoPickerDelegate(completion: { [weak self] results in
+            self?.handleVoiceOverSystemPhotoPickerResults(results, selectionLimit: selectionLimit, saveEditedPhotos: saveEditedPhotos)
+        })
+        picker.delegate = delegate
+        picker.presentationController?.delegate = delegate
+        objc_setAssociatedObject(picker, &voiceOverSystemPhotoPickerDelegateKey, delegate, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
         
         let basePresenter: UIViewController = {
             if let rootController = self.view.window?.rootViewController {
@@ -975,21 +979,28 @@ extension ChatControllerImpl {
     }
 
     @available(iOS 14.0, *)
-    private final class VoiceOverSystemPhotoPickerController: PHPickerViewController, PHPickerViewControllerDelegate {
+    private final class VoiceOverSystemPhotoPickerDelegate: NSObject, PHPickerViewControllerDelegate, UIAdaptivePresentationControllerDelegate {
         private let completion: ([PHPickerResult]) -> Void
+        private var didComplete = false
         
-        init(configuration: PHPickerConfiguration, completion: @escaping ([PHPickerResult]) -> Void) {
+        init(completion: @escaping ([PHPickerResult]) -> Void) {
             self.completion = completion
-            super.init(configuration: configuration)
-            self.delegate = self
-        }
-        
-        required init?(coder: NSCoder) {
-            fatalError("init(coder:) has not been implemented")
         }
         
         func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
             picker.dismiss(animated: true)
+            self.complete(results)
+        }
+        
+        func presentationControllerDidDismiss(_ presentationController: UIPresentationController) {
+            self.complete([])
+        }
+        
+        private func complete(_ results: [PHPickerResult]) {
+            guard !self.didComplete else {
+                return
+            }
+            self.didComplete = true
             self.completion(results)
         }
     }
