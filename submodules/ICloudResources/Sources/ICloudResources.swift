@@ -78,14 +78,23 @@ public struct ICloudFileDescription {
 
 private func descriptionWithUrl(_ url: URL) -> ICloudFileDescription? {
     if #available(iOSApplicationExtension 9.0, iOS 9.0, *) {
-        guard url.startAccessingSecurityScopedResource() else {
-            return nil
-        }
+        // `UIDocumentPickerViewController(forOpeningContentTypes:asCopy:)` can return an URL inside the app
+        // sandbox which is *not* a security-scoped resource. In that case `startAccessing...` returns false,
+        // but the file is still readable.
+        let didStartAccessingSecurityScopedResource = url.startAccessingSecurityScopedResource()
         defer {
-            url.stopAccessingSecurityScopedResource()
+            if didStartAccessingSecurityScopedResource {
+                url.stopAccessingSecurityScopedResource()
+            }
         }
         
-        guard let urlData = try? url.bookmarkData(options: URL.BookmarkCreationOptions.suitableForBookmarkFile, includingResourceValuesForKeys: nil, relativeTo: nil) else {
+        var bookmarkOptions: URL.BookmarkCreationOptions = .suitableForBookmarkFile
+        if didStartAccessingSecurityScopedResource {
+            bookmarkOptions.insert(.withSecurityScope)
+            bookmarkOptions.insert(.securityScopeAllowOnlyReadAccess)
+        }
+        
+        guard let urlData = try? url.bookmarkData(options: bookmarkOptions, includingResourceValuesForKeys: nil, relativeTo: nil) else {
             return nil
         }
         
@@ -174,13 +183,17 @@ public func iCloudFileDescription(_ url: URL) -> Signal<ICloudFileDescription?, 
 
 private final class ICloudFileResourceCopyItem: MediaResourceDataFetchCopyLocalItem {
     private let url: URL
+    private let needsStopAccessingSecurityScopedResource: Bool
     
-    init(url: URL) {
+    init(url: URL, needsStopAccessingSecurityScopedResource: Bool) {
         self.url = url
+        self.needsStopAccessingSecurityScopedResource = needsStopAccessingSecurityScopedResource
     }
     
     deinit {
-        self.url.stopAccessingSecurityScopedResource()
+        if self.needsStopAccessingSecurityScopedResource {
+            self.url.stopAccessingSecurityScopedResource()
+        }
     }
     
     func copyTo(url: URL) -> Bool {
@@ -219,11 +232,25 @@ public func fetchICloudFileResource(resource: ICloudFileResource) -> Signal<Medi
             }
         }
         
-        guard url.startAccessingSecurityScopedResource() else {
-            subscriber.putCompletion()
-            return EmptyDisposable
-        }
+        let didStartAccessingSecurityScopedResource = url.startAccessingSecurityScopedResource()
+        // If the URL isn't security-scoped (e.g. it was imported as a copy into the sandbox),
+        // we can still proceed without calling `startAccessing...`.
         
+        var didHandOffSecurityScopeToCopyItem = false
+        var didStopAccessingSecurityScopedResource = false
+        let stopAccessingSecurityScopedResourceIfNeeded = {
+            guard didStartAccessingSecurityScopedResource else {
+                return
+            }
+            guard !didHandOffSecurityScopeToCopyItem else {
+                return
+            }
+            guard !didStopAccessingSecurityScopedResource else {
+                return
+            }
+            didStopAccessingSecurityScopedResource = true
+            url.stopAccessingSecurityScopedResource()
+        }
         let complete = {
             if resource.thumbnail {
                 let tempFile = TempBox.shared.tempFile(fileName: "thumb.jpg")
@@ -237,8 +264,13 @@ public func fetchICloudFileResource(resource: ICloudFileResource) -> Signal<Medi
                 if let _ = try? data.write(to: URL(fileURLWithPath: tempFile.path)) {
                     subscriber.putNext(.moveTempFile(file: tempFile))
                 }
+
+                stopAccessingSecurityScopedResourceIfNeeded()
             } else {
-                subscriber.putNext(.copyLocalItem(ICloudFileResourceCopyItem(url: url)))
+                if didStartAccessingSecurityScopedResource {
+                    didHandOffSecurityScopeToCopyItem = true
+                }
+                subscriber.putNext(.copyLocalItem(ICloudFileResourceCopyItem(url: url, needsStopAccessingSecurityScopedResource: didStartAccessingSecurityScopedResource)))
             }
             subscriber.putCompletion()
         }
@@ -256,12 +288,14 @@ public func fetchICloudFileResource(resource: ICloudFileResource) -> Signal<Medi
                 //url.stopAccessingSecurityScopedResource()
                 complete()
             } else {
+                stopAccessingSecurityScopedResourceIfNeeded()
                 subscriber.putCompletion()
             }
         })
         
         return ActionDisposable {
             fileCoordinator.cancel()
+            stopAccessingSecurityScopedResourceIfNeeded()
         }
     }
 }
