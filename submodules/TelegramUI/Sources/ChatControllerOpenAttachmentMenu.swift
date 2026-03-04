@@ -36,6 +36,7 @@ import ShareController
 import ComposeTodoScreen
 import ComposePollUI
 import Photos
+import PhotosUI
 import AttachmentFileController
 
 extension ChatControllerImpl {
@@ -296,6 +297,19 @@ extension ChatControllerImpl {
                         })
                     }
                 }
+                return
+            }
+
+            if UIAccessibility.isVoiceOverRunning, case .default = subject {
+                strongSelf.presentVoiceOverSystemAttachmentMenu(
+                    saveEditedPhotos: dataSettings.storeEditedPhotos,
+                    bannedSendPhotos: bannedSendPhotos,
+                    bannedSendVideos: bannedSendVideos,
+                    bannedSendFiles: bannedSendFiles,
+                    canSendPolls: canSendPolls,
+                    canSendTodos: canSendTodos,
+                    enableMultiselection: enableMultiselection
+                )
                 return
             }
             
@@ -783,6 +797,201 @@ extension ChatControllerImpl {
                 present()
             }
         })
+    }
+
+    private func presentVoiceOverSystemAttachmentMenu(
+        saveEditedPhotos: Bool,
+        bannedSendPhotos: (Int32, Bool)?,
+        bannedSendVideos: (Int32, Bool)?,
+        bannedSendFiles: (Int32, Bool)?,
+        canSendPolls: Bool,
+        canSendTodos: Bool,
+        enableMultiselection: Bool
+    ) {
+        let presentationData = self.presentationData
+        
+        var selectionLimit = enableMultiselection ? 100 : 1
+        if let peer = self.presentationInterfaceState.renderedPeer?.peer, let channel = peer as? TelegramChannel, channel.isRestrictedBySlowmode {
+            selectionLimit = min(selectionLimit, 10)
+        }
+        
+        let alertController = UIAlertController(title: nil, message: nil, preferredStyle: .actionSheet)
+        
+        if bannedSendPhotos == nil || bannedSendVideos == nil {
+            if #available(iOS 14.0, *) {
+                alertController.addAction(UIAlertAction(title: presentationData.strings.Attachment_Gallery, style: .default, handler: { [weak self] _ in
+                    self?.presentVoiceOverSystemPhotoPicker(
+                        selectionLimit: selectionLimit,
+                        saveEditedPhotos: saveEditedPhotos,
+                        bannedSendPhotos: bannedSendPhotos,
+                        bannedSendVideos: bannedSendVideos
+                    )
+                }))
+            } else {
+                alertController.addAction(UIAlertAction(title: presentationData.strings.Attachment_Gallery, style: .default, handler: { [weak self] _ in
+                    self?.presentOldMediaPicker(fileMode: false, editingMedia: false, completion: { [weak self] signals, silentPosting, scheduleTime in
+                        self?.enqueueMediaMessages(fromGallery: true, signals: signals, silentPosting: silentPosting, scheduleTime: scheduleTime > 0 ? scheduleTime : nil)
+                    })
+                }))
+            }
+        }
+        
+        if bannedSendFiles == nil {
+            alertController.addAction(UIAlertAction(title: presentationData.strings.Attachment_File, style: .default, handler: { [weak self] _ in
+                self?.presentICloudFileGallery()
+            }))
+        }
+        
+        if canSendPolls {
+            alertController.addAction(UIAlertAction(title: presentationData.strings.AttachmentMenu_Poll, style: .default, handler: { [weak self] _ in
+                if let controller = self?.configurePollCreation() {
+                    self?.effectiveNavigationController?.pushViewController(controller)
+                }
+            }))
+        }
+        
+        if canSendTodos {
+            alertController.addAction(UIAlertAction(title: presentationData.strings.Attachment_Todo, style: .default, handler: { [weak self] _ in
+                if let controller = self?.configureTodoCreation() {
+                    self?.effectiveNavigationController?.pushViewController(controller)
+                }
+            }))
+        }
+        
+        alertController.addAction(UIAlertAction(title: presentationData.strings.Common_Cancel, style: .cancel))
+        
+        if let popoverController = alertController.popoverPresentationController {
+            if let sourceView = self.chatDisplayNode.getAttachmentButton() {
+                popoverController.sourceView = sourceView
+                popoverController.sourceRect = sourceView.bounds
+            } else {
+                popoverController.sourceView = self.view
+                popoverController.sourceRect = CGRect(x: self.view.bounds.midX, y: self.view.bounds.maxY - 1.0, width: 1.0, height: 1.0)
+            }
+        }
+        
+        if let mainWindow = self.context.sharedContext.mainWindow {
+            mainWindow.presentNative(alertController)
+        } else {
+            self.present(alertController, animated: true)
+        }
+    }
+
+    @available(iOS 14.0, *)
+    private func presentVoiceOverSystemPhotoPicker(
+        selectionLimit: Int,
+        saveEditedPhotos: Bool,
+        bannedSendPhotos: (Int32, Bool)?,
+        bannedSendVideos: (Int32, Bool)?
+    ) {
+        var configuration = PHPickerConfiguration(photoLibrary: .shared())
+        if bannedSendPhotos != nil && bannedSendVideos == nil {
+            configuration.filter = .videos
+        } else if bannedSendVideos != nil && bannedSendPhotos == nil {
+            configuration.filter = .images
+        } else {
+            configuration.filter = .any(of: [.images, .videos])
+        }
+        configuration.selectionLimit = selectionLimit
+        configuration.preferredAssetRepresentationMode = .current
+        
+        let picker = VoiceOverSystemPhotoPickerController(
+            configuration: configuration,
+            completion: { [weak self] results in
+                self?.handleVoiceOverSystemPhotoPickerResults(results, selectionLimit: selectionLimit, saveEditedPhotos: saveEditedPhotos)
+            }
+        )
+        
+        let basePresenter: UIViewController = {
+            if let rootController = self.view.window?.rootViewController {
+                return rootController
+            }
+            if let rootController = self.context.sharedContext.mainWindow?.viewController as? UIViewController {
+                return rootController
+            }
+            return self
+        }()
+        let presenter = self.topMostViewControllerForPresentation(from: basePresenter)
+        presenter.present(picker, animated: true, completion: nil)
+    }
+    
+    @available(iOS 14.0, *)
+    private func handleVoiceOverSystemPhotoPickerResults(_ results: [PHPickerResult], selectionLimit: Int, saveEditedPhotos: Bool) {
+        if results.isEmpty {
+            return
+        }
+        
+        let selectedAssets: [TGMediaAsset] = results.compactMap { result in
+            guard let assetIdentifier = result.assetIdentifier else {
+                return nil
+            }
+            let fetchResult = PHAsset.fetchAssets(withLocalIdentifiers: [assetIdentifier], options: nil)
+            guard let phAsset = fetchResult.firstObject else {
+                return nil
+            }
+            return TGMediaAsset(phAsset: phAsset)
+        }
+        
+        if selectedAssets.isEmpty {
+            return
+        }
+        
+        guard let selectionContext = TGMediaSelectionContext(groupingAllowed: false, selectionLimit: Int32(selectionLimit)) else {
+            return
+        }
+        let editingContext = TGMediaEditingContext()
+        
+        selectionContext.clear()
+        selectionContext.grouping = true
+        for asset in selectedAssets {
+            selectionContext.setItem(asset, selected: true)
+        }
+        
+        guard let signals = TGMediaAssetsController.resultSignals(for: selectionContext, editingContext: editingContext, intent: TGMediaAssetsControllerSendMediaIntent, currentItem: nil, storeAssets: true, convertToJpeg: false, descriptionGenerator: legacyAssetPickerItemGenerator(), saveEditedPhotos: saveEditedPhotos) else {
+            return
+        }
+        
+        self.enqueueMediaMessages(fromGallery: true, signals: signals, silentPosting: false)
+    }
+
+    private func topMostViewControllerForPresentation(from controller: UIViewController) -> UIViewController {
+        var current: UIViewController = controller
+        while true {
+            if let presented = current.presentedViewController, !presented.isBeingDismissed {
+                current = presented
+                continue
+            }
+            if let navigationController = current as? UINavigationController, let visibleViewController = navigationController.visibleViewController, visibleViewController !== current {
+                current = visibleViewController
+                continue
+            }
+            if let tabBarController = current as? UITabBarController, let selectedViewController = tabBarController.selectedViewController, selectedViewController !== current {
+                current = selectedViewController
+                continue
+            }
+            break
+        }
+        return current
+    }
+
+    @available(iOS 14.0, *)
+    private final class VoiceOverSystemPhotoPickerController: PHPickerViewController, PHPickerViewControllerDelegate {
+        private let completion: ([PHPickerResult]) -> Void
+        
+        init(configuration: PHPickerConfiguration, completion: @escaping ([PHPickerResult]) -> Void) {
+            self.completion = completion
+            super.init(configuration: configuration)
+            self.delegate = self
+        }
+        
+        required init?(coder: NSCoder) {
+            fatalError("init(coder:) has not been implemented")
+        }
+        
+        func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
+            picker.dismiss(animated: true)
+            self.completion(results)
+        }
     }
     
     func presentEditingAttachmentMenu(editMediaOptions: MessageMediaEditingOptions?, editMediaReference: AnyMediaReference?) {
