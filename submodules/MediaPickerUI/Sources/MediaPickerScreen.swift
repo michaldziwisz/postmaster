@@ -1297,7 +1297,7 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
 
                 if let movieType {
                     group.enter()
-                    _ = provider.loadItem(forTypeIdentifier: movieType, options: (nil as [AnyHashable: Any]?), completionHandler: { (item: NSSecureCoding?, _: Error?) in
+                    let _: Progress? = provider.loadItem(forTypeIdentifier: movieType, options: (nil as [AnyHashable: Any]?), completionHandler: { (item: NSSecureCoding?, _: Error?) in
                         defer { group.leave() }
                         let url: URL?
                         if let item = item as? URL {
