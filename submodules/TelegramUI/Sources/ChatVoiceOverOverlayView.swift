@@ -1295,10 +1295,6 @@ public final class ChatVoiceOverOverlayView: UIView {
                 self.schedulePendingEntriesApplyIfNeeded()
                 return
             }
-            if UIAccessibility.isVoiceOverRunning, !self.isLoadEarlierInProgress, self.isVoiceOverNavigationInProgress() {
-                self.schedulePendingEntriesApplyIfNeeded()
-                return
-            }
             self.applyPendingEntriesIfPossible()
             self.schedulePendingEntriesApplyIfNeeded()
         }
@@ -2646,9 +2642,6 @@ public final class ChatVoiceOverOverlayView: UIView {
             if self.tableView.isDragging || self.tableView.isDecelerating {
                 return
             }
-            if UIAccessibility.isVoiceOverRunning, !self.isLoadEarlierInProgress, self.isVoiceOverNavigationInProgress() {
-                return
-            }
         }
         self.pendingEntries = nil
         self.applyEntries(entries)
@@ -2664,6 +2657,7 @@ public final class ChatVoiceOverOverlayView: UIView {
         let shouldPinToLatest = previousWasAtBottom && self.shouldFollowLatest
         let previousWasWaitingForLoadEarlier = self.isWaitingForLoadEarlier
         let previousWasLoadEarlierInProgress = previousWasWaitingForLoadEarlier || self.isLoadingEarlierHistory
+        let shouldSuppressVoiceOverFocusRestoration = UIAccessibility.isVoiceOverRunning && !previousWasLoadEarlierInProgress && self.isVoiceOverNavigationInProgress(graceInterval: 0.45)
         let loadEarlierInitiationFocus = previousWasLoadEarlierInProgress ? self.loadEarlierInitiationFocus : nil
         let focusedNonTableElementBeforeUpdate = self.focusedNonTableOverlayView()
         let focusedCellIndexPathBeforeUpdate = self.focusedTableViewIndexPath()
@@ -2868,7 +2862,7 @@ public final class ChatVoiceOverOverlayView: UIView {
             didLoadEarlierProgress = false
         }
         
-        if UIAccessibility.isVoiceOverRunning {
+        if UIAccessibility.isVoiceOverRunning, !shouldSuppressVoiceOverFocusRestoration {
             if didReloadTable {
                 let shouldRestoreFocusToMessages = focusedMessageAnchorBeforeUpdate != nil
                 let shouldRestoreFocusToLoadEarlierRow = (focusedMessageAnchorBeforeUpdate == nil) && (focusedCellIndexPathBeforeUpdate?.row == 0) && self.shouldShowLoadEarlierRow

@@ -1025,6 +1025,7 @@ extension ChatControllerImpl {
             }
 
             self.enqueueMediaMessageDisposable.set((combineLatest(signals)
+            |> runOn(Queue.concurrentDefaultQueue())
             |> deliverOnMainQueue).startStrict(next: { [weak self] results in
                 guard let self else {
                     return
@@ -1535,6 +1536,7 @@ extension ChatControllerImpl {
                         signals.append(iCloudFileDescription(url))
                     }
                     strongSelf.enqueueMediaMessageDisposable.set((combineLatest(signals)
+                    |> runOn(Queue.concurrentDefaultQueue())
                     |> deliverOnMainQueue).startStrict(next: { results in
                         if let strongSelf = self {
                             let replyMessageSubject = strongSelf.presentationInterfaceState.interfaceState.replyMessageSubject
