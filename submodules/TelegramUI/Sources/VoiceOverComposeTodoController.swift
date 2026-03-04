@@ -6,8 +6,9 @@ import TelegramPresentationData
 import AccountContext
 import TelegramCore
 import ComposeTodoScreen
+import AttachmentUI
 
-final class VoiceOverComposeTodoController: ViewController, UITableViewDataSource, UITableViewDelegate {
+final class VoiceOverComposeTodoController: ViewController, UITableViewDataSource, UITableViewDelegate, AttachmentContainable {
     private enum Section: Int, CaseIterable {
         case title
         case tasks
@@ -41,6 +42,21 @@ final class VoiceOverComposeTodoController: ViewController, UITableViewDataSourc
     
     private var allowOthersToComplete: Bool = true
     private var allowOthersToAppend: Bool = true
+    
+    // MARK: - AttachmentContainable
+    var requestAttachmentMenuExpansion: () -> Void = {}
+    var updateNavigationStack: (@escaping ([AttachmentContainable]) -> ([AttachmentContainable], AttachmentMediaPickerContext?)) -> Void = { _ in }
+    var parentController: () -> ViewController? = { return nil }
+    var updateTabBarAlpha: (CGFloat, ContainedViewLayoutTransition) -> Void = { _, _ in }
+    var updateTabBarVisibility: (Bool, ContainedViewLayoutTransition) -> Void = { _, _ in }
+    var cancelPanGesture: () -> Void = { }
+    var isContainerPanning: () -> Bool = { return false }
+    var isContainerExpanded: () -> Bool = { return false }
+    var isMinimized: Bool = false
+    
+    var mediaPickerContext: AttachmentMediaPickerContext? {
+        return nil
+    }
     
     init(
         context: AccountContext,
@@ -115,7 +131,11 @@ final class VoiceOverComposeTodoController: ViewController, UITableViewDataSourc
     override func loadView() {
         super.loadView()
         
-        self.view.addSubview(self.tableView)
+        if let navigationBarView = self.navigationBar?.view {
+            self.view.insertSubview(self.tableView, belowSubview: navigationBarView)
+        } else {
+            self.view.addSubview(self.tableView)
+        }
         self.view.backgroundColor = self.presentationData.theme.list.plainBackgroundColor
         self.tableView.backgroundColor = self.presentationData.theme.list.plainBackgroundColor
     }
@@ -132,11 +152,31 @@ final class VoiceOverComposeTodoController: ViewController, UITableViewDataSourc
     override func containerLayoutUpdated(_ layout: ContainerViewLayout, transition: ContainedViewLayoutTransition) {
         super.containerLayoutUpdated(layout, transition: transition)
         
-        let navigationHeight = self.navigationLayout(layout: layout).navigationFrame.maxY
-        let frame = CGRect(x: 0.0, y: navigationHeight, width: layout.size.width, height: layout.size.height - navigationHeight)
-        transition.updateFrame(view: self.tableView, frame: frame)
+        self.updateTableLayout(size: layout.size, safeInsets: layout.safeInsets, navigationHeight: self.navigationLayout(layout: layout).navigationFrame.maxY, transition: transition)
+    }
+
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
         
-        let insets = UIEdgeInsets(top: 0.0, left: 0.0, bottom: layout.safeInsets.bottom, right: 0.0)
+        // Fallback for presentations that don't drive `containerLayoutUpdated` (e.g. plain UIKit UINavigationController).
+        guard self.currentlyAppliedLayout == nil else {
+            return
+        }
+        let navigationHeight = max(self.navigationBar?.frame.maxY ?? 0.0, self.view.safeAreaInsets.top)
+        self.updateTableLayout(size: self.view.bounds.size, safeInsets: self.view.safeAreaInsets, navigationHeight: navigationHeight, transition: nil)
+    }
+    
+    private func updateTableLayout(size: CGSize, safeInsets: UIEdgeInsets, navigationHeight: CGFloat, transition: ContainedViewLayoutTransition?) {
+        let height = max(0.0, size.height - navigationHeight)
+        let frame = CGRect(x: 0.0, y: navigationHeight, width: size.width, height: height)
+        
+        if let transition {
+            transition.updateFrame(view: self.tableView, frame: frame)
+        } else {
+            self.tableView.frame = frame
+        }
+        
+        let insets = UIEdgeInsets(top: 0.0, left: 0.0, bottom: safeInsets.bottom, right: 0.0)
         self.tableView.contentInset = insets
         self.tableView.scrollIndicatorInsets = insets
     }
