@@ -1297,7 +1297,7 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
 
                 if let movieType {
                     group.enter()
-                    provider.loadFileRepresentation(forTypeIdentifier: movieType) { url, _ in
+                    _ = provider.loadFileRepresentation(forTypeIdentifier: movieType) { (url: URL?, _: Error?) in
                         defer { group.leave() }
                         guard let url else {
                             return
