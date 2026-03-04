@@ -58,9 +58,9 @@ final class VoiceOverComposeTodoController: ViewController, UITableViewDataSourc
         
         self.statusBar.statusBarStyle = self.presentationData.theme.rootController.statusBarStyle.style
         
-        if initialData.append {
+        if initialData.appendValue {
             self.title = self.presentationData.strings.CreateTodo_AddTitle
-        } else if initialData.existingTodo != nil {
+        } else if initialData.existingTodoValue != nil {
             self.title = self.presentationData.strings.CreateTodo_EditTitle
         } else {
             self.title = self.presentationData.strings.CreateTodo_Title
@@ -68,7 +68,7 @@ final class VoiceOverComposeTodoController: ViewController, UITableViewDataSourc
         
         self.navigationItem.leftBarButtonItem = UIBarButtonItem(title: self.presentationData.strings.Common_Cancel, style: .plain, target: self, action: #selector(self.cancelPressed))
         
-        let doneTitle = (initialData.existingTodo != nil) ? self.presentationData.strings.CreateTodo_Save : self.presentationData.strings.CreateTodo_Send
+        let doneTitle = (initialData.existingTodoValue != nil) ? self.presentationData.strings.CreateTodo_Save : self.presentationData.strings.CreateTodo_Send
         self.navigationItem.rightBarButtonItem = UIBarButtonItem(title: doneTitle, style: .done, target: self, action: #selector(self.donePressed))
         self.navigationItem.rightBarButtonItem?.isEnabled = false
         
@@ -81,16 +81,16 @@ final class VoiceOverComposeTodoController: ViewController, UITableViewDataSourc
             self.navigationBar?.updatePresentationData(NavigationBarPresentationData(presentationTheme: presentationData.theme, presentationStrings: presentationData.strings), transition: .immediate)
             self.statusBar.statusBarStyle = presentationData.theme.rootController.statusBarStyle.style
             
-            if self.initialData.append {
+            if self.initialData.appendValue {
                 self.title = presentationData.strings.CreateTodo_AddTitle
-            } else if self.initialData.existingTodo != nil {
+            } else if self.initialData.existingTodoValue != nil {
                 self.title = presentationData.strings.CreateTodo_EditTitle
             } else {
                 self.title = presentationData.strings.CreateTodo_Title
             }
             
             self.navigationItem.leftBarButtonItem?.title = presentationData.strings.Common_Cancel
-            self.navigationItem.rightBarButtonItem?.title = (self.initialData.existingTodo != nil) ? presentationData.strings.CreateTodo_Save : presentationData.strings.CreateTodo_Send
+            self.navigationItem.rightBarButtonItem?.title = (self.initialData.existingTodoValue != nil) ? presentationData.strings.CreateTodo_Save : presentationData.strings.CreateTodo_Send
             self.tableView.reloadData()
         })
         
@@ -123,7 +123,7 @@ final class VoiceOverComposeTodoController: ViewController, UITableViewDataSourc
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         
-        if UIAccessibility.isVoiceOverRunning, self.initialData.append {
+        if UIAccessibility.isVoiceOverRunning, self.initialData.appendValue {
             // In append mode, focus the first empty task field to encourage adding new tasks.
             self.focusFirstEditableTaskFieldIfPossible()
         }
@@ -194,7 +194,7 @@ final class VoiceOverComposeTodoController: ViewController, UITableViewDataSourc
     func tableView(_ tableView: UITableView, titleForFooterInSection section: Int) -> String? {
         switch Section(rawValue: section) ?? .title {
         case .tasks:
-            let remaining = max(0, self.initialData.maxTodoItemsCount - self.tasks.count)
+            let remaining = max(0, self.initialData.maxTodoItemsCountValue - self.tasks.count)
             if remaining == 0 {
                 return self.presentationData.strings.CreateTodo_TaskCountLimitReached
             }
@@ -208,9 +208,9 @@ final class VoiceOverComposeTodoController: ViewController, UITableViewDataSourc
         switch Section(rawValue: indexPath.section) ?? .title {
         case .title:
             let cell = tableView.dequeueReusableCell(withIdentifier: "textField", for: indexPath) as! VoiceOverFormTextFieldCell
-            cell.maxLength = self.initialData.maxTodoTextLength
+            cell.maxLength = self.initialData.maxTodoTextLengthValue
             let canEditTitle: Bool = {
-                if self.initialData.existingTodo != nil, !self.initialData.canEdit {
+                if self.initialData.existingTodoValue != nil, !self.initialData.canEditValue {
                     return false
                 }
                 return true
@@ -240,7 +240,7 @@ final class VoiceOverComposeTodoController: ViewController, UITableViewDataSourc
             case let .task(index):
                 let model = self.tasks[index]
                 let cell = tableView.dequeueReusableCell(withIdentifier: "textField", for: indexPath) as! VoiceOverFormTextFieldCell
-                cell.maxLength = self.initialData.maxTodoItemLength
+                cell.maxLength = self.initialData.maxTodoItemLengthValue
                 let placeholder: String = {
                     if model.isExisting {
                         return self.presentationData.strings.CreateTodo_TaskPlaceholder
@@ -355,10 +355,10 @@ final class VoiceOverComposeTodoController: ViewController, UITableViewDataSourc
     // MARK: - Helpers
     
     private func loadInitialState() {
-        if let existing = self.initialData.existingTodo {
+        if let existing = self.initialData.existingTodoValue {
             self.titleText = existing.text
             
-            let editableExisting = self.initialData.canEdit
+            let editableExisting = self.initialData.canEditValue
             self.tasks = existing.items.map { item in
                 TaskModel(id: item.id, text: item.text, isEditable: editableExisting, isExisting: true)
             }
@@ -375,7 +375,7 @@ final class VoiceOverComposeTodoController: ViewController, UITableViewDataSourc
         }
         
         // If the user is allowed to append (but not edit), ensure at least one empty editable row exists.
-        if self.initialData.existingTodo != nil, !self.initialData.canEdit {
+        if self.initialData.existingTodoValue != nil, !self.initialData.canEditValue {
             if self.tasks.first(where: { !$0.isExisting && $0.isEditable }) == nil {
                 self.addTaskIfPossible(focusNew: false)
             }
@@ -386,7 +386,7 @@ final class VoiceOverComposeTodoController: ViewController, UITableViewDataSourc
     
     private func taskRowModels() -> [TaskRow] {
         var rows: [TaskRow] = self.tasks.indices.map { .task(index: $0) }
-        if self.tasks.count < self.initialData.maxTodoItemsCount {
+        if self.tasks.count < self.initialData.maxTodoItemsCountValue {
             rows.append(.add)
         }
         return rows
@@ -446,7 +446,7 @@ final class VoiceOverComposeTodoController: ViewController, UITableViewDataSourc
     }
     
     private func addTaskIfPossible(focusNew: Bool) {
-        guard self.tasks.count < self.initialData.maxTodoItemsCount else {
+        guard self.tasks.count < self.initialData.maxTodoItemsCountValue else {
             return
         }
         self.tasks.append(TaskModel(id: self.nextTaskId, text: "", isEditable: true, isExisting: false))
@@ -487,7 +487,7 @@ final class VoiceOverComposeTodoController: ViewController, UITableViewDataSourc
         }
         
         // If we can't edit the original todo, ensure we are actually appending something.
-        if let existing = self.initialData.existingTodo, !self.initialData.canEdit {
+        if let existing = self.initialData.existingTodoValue, !self.initialData.canEditValue {
             if mappedItems.count <= existing.items.count {
                 return nil
             }

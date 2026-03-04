@@ -184,7 +184,7 @@ final class VoiceOverComposePollController: ViewController, UITableViewDataSourc
     func tableView(_ tableView: UITableView, titleForFooterInSection sectionIndex: Int) -> String? {
         switch self.section(at: sectionIndex) {
         case .options:
-            let remaining = max(0, self.initialData.maxPollAnswersCount - self.nonEmptyOptionCountUpperBound())
+            let remaining = max(0, self.initialData.maxPollAnswersCountValue - self.nonEmptyOptionCountUpperBound())
             if remaining == 0 {
                 return self.presentationData.strings.CreatePoll_AllOptionsAdded
             }
@@ -198,7 +198,7 @@ final class VoiceOverComposePollController: ViewController, UITableViewDataSourc
         switch self.section(at: indexPath.section) {
         case .question:
             let cell = tableView.dequeueReusableCell(withIdentifier: "textField", for: indexPath) as! VoiceOverFormTextFieldCell
-            cell.maxLength = self.initialData.maxPollTextLength
+            cell.maxLength = self.initialData.maxPollTextLengthValue
             cell.configure(
                 text: self.questionText,
                 placeholder: self.presentationData.strings.CreatePoll_TextPlaceholder,
@@ -222,7 +222,7 @@ final class VoiceOverComposePollController: ViewController, UITableViewDataSourc
             switch row {
             case let .option(index):
                 let cell = tableView.dequeueReusableCell(withIdentifier: "textField", for: indexPath) as! VoiceOverFormTextFieldCell
-                cell.maxLength = self.initialData.maxPollOptionLength
+                cell.maxLength = self.initialData.maxPollOptionLengthValue
                 let placeholder = "\(self.presentationData.strings.CreatePoll_OptionPlaceholder) \(index + 1)"
                 cell.configure(
                     text: self.optionTexts[index],
@@ -388,7 +388,7 @@ final class VoiceOverComposePollController: ViewController, UITableViewDataSourc
     
     private func optionRowModels() -> [OptionRow] {
         var rows: [OptionRow] = self.optionTexts.indices.map { .option(index: $0) }
-        if self.optionTexts.count < self.initialData.maxPollAnswersCount {
+        if self.optionTexts.count < self.initialData.maxPollAnswersCountValue {
             rows.append(.add)
         }
         return rows
@@ -454,7 +454,7 @@ final class VoiceOverComposePollController: ViewController, UITableViewDataSourc
     }
     
     private func addOptionIfPossible(focusNew: Bool) {
-        guard self.optionTexts.count < self.initialData.maxPollAnswersCount else {
+        guard self.optionTexts.count < self.initialData.maxPollAnswersCountValue else {
             return
         }
         self.optionTexts.append("")
@@ -531,4 +531,3 @@ final class VoiceOverComposePollController: ViewController, UITableViewDataSourc
         self.navigationItem.rightBarButtonItem?.isEnabled = (self.buildPoll() != nil)
     }
 }
-

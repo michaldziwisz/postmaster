@@ -1946,3 +1946,20 @@ public class ComposePollScreen: ViewControllerComponentContainer, AttachmentCont
         return true
     }
 }
+
+// MARK: - Accessibility / External Consumers
+// Expose `InitialData` values for VoiceOver-only native compose screens.
+// Stored properties remain `fileprivate` to keep the original encapsulation.
+extension ComposePollScreen.InitialData {
+    public var maxPollTextLengthValue: Int {
+        return self.maxPollTextLength
+    }
+    
+    public var maxPollOptionLengthValue: Int {
+        return self.maxPollOptionLength
+    }
+    
+    public var maxPollAnswersCountValue: Int {
+        return self.maxPollAnswersCount
+    }
+}

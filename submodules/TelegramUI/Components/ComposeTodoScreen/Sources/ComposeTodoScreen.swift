@@ -1877,4 +1877,38 @@ public class ComposeTodoScreen: ViewControllerComponentContainer, AttachmentCont
             return true
         }
     }
+
+    // MARK: - Accessibility / External Consumers
+    // Expose `InitialData` values for VoiceOver-only native compose screens.
+    // Stored properties remain `fileprivate` to keep the original encapsulation.
+}
+
+extension ComposeTodoScreen.InitialData {
+    public var maxTodoTextLengthValue: Int {
+        return self.maxTodoTextLength
+    }
+    
+    public var maxTodoItemLengthValue: Int {
+        return self.maxTodoItemLength
+    }
+    
+    public var maxTodoItemsCountValue: Int {
+        return self.maxTodoItemsCount
+    }
+    
+    public var existingTodoValue: TelegramMediaTodo? {
+        return self.existingTodo
+    }
+    
+    public var focusedIdValue: Int32? {
+        return self.focusedId
+    }
+    
+    public var appendValue: Bool {
+        return self.append
+    }
+    
+    public var canEditValue: Bool {
+        return self.canEdit
+    }
 }
