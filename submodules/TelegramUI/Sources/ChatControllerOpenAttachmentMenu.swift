@@ -37,10 +37,12 @@ import ComposeTodoScreen
 import ComposePollUI
 import Photos
 import PhotosUI
+import UniformTypeIdentifiers
 import ObjectiveC
 import AttachmentFileController
 
 private var voiceOverSystemPhotoPickerDelegateKey: UInt8 = 0
+private var voiceOverSystemDocumentPickerDelegateKey: UInt8 = 0
 
 extension ChatControllerImpl {
     enum AttachMenuSubject {
@@ -841,7 +843,7 @@ extension ChatControllerImpl {
         
         if bannedSendFiles == nil {
             alertController.addAction(UIAlertAction(title: presentationData.strings.Attachment_File, style: .default, handler: { [weak self] _ in
-                self?.presentICloudFileGallery()
+                self?.presentVoiceOverSystemFilePicker()
             }))
         }
         
@@ -958,6 +960,170 @@ extension ChatControllerImpl {
         self.enqueueMediaMessages(fromGallery: true, signals: signals, silentPosting: false)
     }
 
+    private func presentVoiceOverSystemFilePicker(editingMessage: Bool = false) {
+        let picker: UIDocumentPickerViewController
+        if #available(iOS 14.0, *) {
+            picker = UIDocumentPickerViewController(forOpeningContentTypes: [UTType.item], asCopy: true)
+        } else {
+            picker = UIDocumentPickerViewController(documentTypes: ["public.item"], in: .open)
+        }
+        if #available(iOS 11.0, *) {
+            picker.allowsMultipleSelection = true
+        }
+
+        let delegate = VoiceOverSystemDocumentPickerDelegate(completion: { [weak self] urls in
+            self?.handleVoiceOverSystemFilePickerResults(urls, editingMessage: editingMessage)
+        })
+        picker.delegate = delegate
+        picker.presentationController?.delegate = delegate
+        objc_setAssociatedObject(picker, &voiceOverSystemDocumentPickerDelegateKey, delegate, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
+
+        if let popoverController = picker.popoverPresentationController {
+            if let sourceView = self.chatDisplayNode.getAttachmentButton() {
+                popoverController.sourceView = sourceView
+                popoverController.sourceRect = sourceView.bounds
+            } else {
+                popoverController.sourceView = self.view
+                popoverController.sourceRect = CGRect(x: self.view.bounds.midX, y: self.view.bounds.maxY - 1.0, width: 1.0, height: 1.0)
+            }
+        }
+
+        let basePresenter: UIViewController = {
+            if let rootController = self.view.window?.rootViewController {
+                return rootController
+            }
+            if let rootController = self.context.sharedContext.mainWindow?.viewController as? UIViewController {
+                return rootController
+            }
+            return self
+        }()
+        let presenter = self.topMostViewControllerForPresentation(from: basePresenter)
+        presenter.present(picker, animated: true, completion: nil)
+    }
+
+    private func handleVoiceOverSystemFilePickerResults(_ urls: [URL], editingMessage: Bool) {
+        guard !urls.isEmpty else {
+            return
+        }
+
+        let _ = (self.context.engine.data.get(
+            TelegramEngine.EngineData.Item.Peer.Peer(id: self.context.account.peerId),
+            TelegramEngine.EngineData.Item.Configuration.UserLimits(isPremium: false),
+            TelegramEngine.EngineData.Item.Configuration.UserLimits(isPremium: true)
+        )
+        |> deliverOnMainQueue).startStandalone(next: { [weak self] result in
+            guard let self else {
+                return
+            }
+            let (accountPeer, limits, premiumLimits) = result
+            let isPremium = accountPeer?.isPremium ?? false
+
+            var signals: [Signal<ICloudFileDescription?, NoError>] = []
+            signals.reserveCapacity(urls.count)
+            for url in urls {
+                signals.append(iCloudFileDescription(url))
+            }
+
+            self.enqueueMediaMessageDisposable.set((combineLatest(signals)
+            |> deliverOnMainQueue).startStrict(next: { [weak self] results in
+                guard let self else {
+                    return
+                }
+                let replyMessageSubject = self.presentationInterfaceState.interfaceState.replyMessageSubject
+
+                for item in results {
+                    if let item = item {
+                        if item.fileSize > Int64(premiumLimits.maxUploadFileParts) * 512 * 1024 {
+                            let controller = PremiumLimitScreen(context: self.context, subject: .files, count: 4, action: {
+                                return true
+                            })
+                            self.push(controller)
+                            return
+                        } else if item.fileSize > Int64(limits.maxUploadFileParts) * 512 * 1024 && !isPremium {
+                            let context = self.context
+                            var replaceImpl: ((ViewController) -> Void)?
+                            let controller = PremiumLimitScreen(context: context, subject: .files, count: 2, action: {
+                                replaceImpl?(PremiumIntroScreen(context: context, source: .upload))
+                                return true
+                            })
+                            replaceImpl = { [weak controller] c in
+                                controller?.replace(with: c)
+                            }
+                            self.push(controller)
+                            return
+                        }
+                    }
+                }
+
+                var groupingKey: Int64?
+                var fileTypes: (music: Bool, other: Bool) = (false, false)
+                if results.count > 1 {
+                    for item in results {
+                        if let item = item {
+                            let pathExtension = (item.fileName as NSString).pathExtension.lowercased()
+                            if ["mp3", "m4a"].contains(pathExtension) {
+                                fileTypes.music = true
+                            } else {
+                                fileTypes.other = true
+                            }
+                        }
+                    }
+                }
+                if fileTypes.music != fileTypes.other {
+                    groupingKey = Int64.random(in: Int64.min ... Int64.max)
+                }
+
+                var messages: [EnqueueMessage] = []
+                for item in results {
+                    if let item = item {
+                        let fileId = Int64.random(in: Int64.min ... Int64.max)
+                        let mimeType = guessMimeTypeByFileExtension((item.fileName as NSString).pathExtension)
+                        var previewRepresentations: [TelegramMediaImageRepresentation] = []
+                        if mimeType.hasPrefix("image/") || mimeType == "application/pdf" {
+                            previewRepresentations.append(TelegramMediaImageRepresentation(dimensions: PixelDimensions(width: 320, height: 320), resource: ICloudFileResource(urlData: item.urlData, thumbnail: true), progressiveSizes: [], immediateThumbnailData: nil, hasVideo: false, isPersonal: false))
+                        }
+                        var attributes: [TelegramMediaFileAttribute] = []
+                        attributes.append(.FileName(fileName: item.fileName))
+                        if let audioMetadata = item.audioMetadata {
+                            attributes.append(.Audio(isVoice: false, duration: audioMetadata.duration, title: audioMetadata.title, performer: audioMetadata.performer, waveform: nil))
+                        }
+
+                        let file = TelegramMediaFile(fileId: MediaId(namespace: Namespaces.Media.LocalFile, id: fileId), partialReference: nil, resource: ICloudFileResource(urlData: item.urlData, thumbnail: false), previewRepresentations: previewRepresentations, videoThumbnails: [], immediateThumbnailData: nil, mimeType: mimeType, size: Int64(item.fileSize), attributes: attributes, alternativeRepresentations: [])
+                        let message: EnqueueMessage = .message(text: "", attributes: [], inlineStickers: [:], mediaReference: .standalone(media: file), threadId: self.chatLocation.threadId, replyToMessageId: replyMessageSubject?.subjectModel, replyToStoryId: nil, localGroupingKey: groupingKey, correlationId: nil, bubbleUpEmojiOrStickersets: [])
+                        messages.append(message)
+                    }
+                    if let _ = groupingKey, messages.count % 10 == 0 {
+                        groupingKey = Int64.random(in: Int64.min ... Int64.max)
+                    }
+                }
+
+                guard !messages.isEmpty else {
+                    return
+                }
+                if editingMessage {
+                    self.editMessageMediaWithMessages(messages)
+                } else {
+                    self.chatDisplayNode.setupSendActionOnViewUpdate({ [weak self] in
+                        guard let self else {
+                            return
+                        }
+                        self.chatDisplayNode.collapseInput()
+
+                        self.updateChatPresentationInterfaceState(animated: true, interactive: false, {
+                            $0.updatedInterfaceState { $0.withUpdatedReplyMessageSubject(nil).withUpdatedSendMessageEffect(nil).withUpdatedPostSuggestionState(nil) }
+                        })
+                    }, nil)
+                    self.presentPaidMessageAlertIfNeeded(completion: { [weak self] postpone in
+                        guard let self else {
+                            return
+                        }
+                        self.sendMessages(messages, postpone: postpone)
+                    })
+                }
+            }))
+        })
+    }
+
     private func topMostViewControllerForPresentation(from controller: UIViewController) -> UIViewController {
         var current: UIViewController = controller
         while true {
@@ -1002,6 +1168,39 @@ extension ChatControllerImpl {
             }
             self.didComplete = true
             self.completion(results)
+        }
+    }
+
+    private final class VoiceOverSystemDocumentPickerDelegate: NSObject, UIDocumentPickerDelegate, UIAdaptivePresentationControllerDelegate {
+        private let completion: ([URL]) -> Void
+        private var didComplete = false
+
+        init(completion: @escaping ([URL]) -> Void) {
+            self.completion = completion
+        }
+
+        func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
+            controller.dismiss(animated: true, completion: { [weak self] in
+                self?.complete([])
+            })
+        }
+
+        func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
+            controller.dismiss(animated: true, completion: { [weak self] in
+                self?.complete(urls)
+            })
+        }
+
+        func presentationControllerDidDismiss(_ presentationController: UIPresentationController) {
+            self.complete([])
+        }
+
+        private func complete(_ urls: [URL]) {
+            guard !self.didComplete else {
+                return
+            }
+            self.didComplete = true
+            self.completion(urls)
         }
     }
     

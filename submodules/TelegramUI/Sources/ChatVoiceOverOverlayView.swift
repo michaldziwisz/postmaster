@@ -905,6 +905,11 @@ public final class ChatVoiceOverOverlayView: UIView {
 
     private var isComposerEnabled: Bool = true
 
+    private var lastEntriesApplyTimestamp: CFTimeInterval = 0.0
+    private var lastApplyWasStableIdsOnly: Bool = false
+    private var lastStableIdsOnlyVisibleReloadTimestamp: CFTimeInterval = 0.0
+    private var voiceOverFocusRecoveryWorkItem: DispatchWorkItem?
+
     private var lastVoiceOverNavigationTimestamp: CFTimeInterval = 0.0
     private var voiceOverScrollbarAccessibilityElementAnchorTableRow: Int?
     private var cachedVoiceOverScrollbarAccessibilityElementIndex: Int?
@@ -1267,8 +1272,16 @@ public final class ChatVoiceOverOverlayView: UIView {
         let delay: TimeInterval
         if self.tableView.isDragging || self.tableView.isDecelerating {
             delay = 0.2
-        } else if UIAccessibility.isVoiceOverRunning, !self.isLoadEarlierInProgress, self.isVoiceOverNavigationInProgress() {
-            delay = 0.25
+        } else if UIAccessibility.isVoiceOverRunning, !self.isLoadEarlierInProgress {
+            if self.isVoiceOverNavigationInProgress() {
+                delay = 0.25
+            } else if self.lastApplyWasStableIdsOnly {
+                // Upload/progress updates can trigger very frequent history refreshes.
+                // Throttle them to keep VoiceOver responsive and avoid focus churn.
+                delay = 0.15
+            } else {
+                delay = 0.05
+            }
         } else {
             delay = 0.05
         }
@@ -2644,6 +2657,7 @@ public final class ChatVoiceOverOverlayView: UIView {
     private func applyEntries(_ entries: [ChatHistoryEntry]) {
         let incomingRows = self.makeRows(from: entries)
         let newRows = self.mergeRows(existing: self.rows, incoming: incomingRows)
+        let now = CACurrentMediaTime()
         
         let previousWasAtBottom = self.isAtBottom()
         self.updateShouldFollowLatestFromFocus()
@@ -2663,9 +2677,16 @@ public final class ChatVoiceOverOverlayView: UIView {
         let newStableIds = newRows.map { $0.stableId }
         if previousStableIds == newStableIds {
             self.rows = newRows
-            self.updateRowIndexByStableId()
-            self.invalidateAccessibilityElements()
-            self.reloadVisibleRows(excluding: focusedCellIndexPathBeforeUpdate)
+            self.lastEntriesApplyTimestamp = now
+            self.lastApplyWasStableIdsOnly = true
+
+            // Keep UI updates lightweight for progress-only refreshes (e.g. uploads).
+            // The accessibility labels/hints are computed dynamically from `self.rows`,
+            // so we don't need to rebuild accessibility elements on every update.
+            if now - self.lastStableIdsOnlyVisibleReloadTimestamp > 0.25 {
+                self.lastStableIdsOnlyVisibleReloadTimestamp = now
+                self.reloadVisibleRows(excluding: focusedCellIndexPathBeforeUpdate)
+            }
             if self.forceScrollToBottomOnNextApply {
                 self.forceScrollToBottomOnNextApply = false
                 if shouldPinToLatest {
@@ -2675,16 +2696,12 @@ public final class ChatVoiceOverOverlayView: UIView {
             if self.refreshControl.isRefreshing, !previousWasWaitingForLoadEarlier {
                 self.refreshControl.endRefreshing()
             }
-            if UIAccessibility.isVoiceOverRunning, let focusedNonTableElementBeforeUpdate {
-                DispatchQueue.main.async { [weak focusedNonTableElementBeforeUpdate] in
-                    guard let focusedNonTableElementBeforeUpdate else {
-                        return
-                    }
-                    UIAccessibility.post(notification: .layoutChanged, argument: focusedNonTableElementBeforeUpdate)
-                }
-            }
+            self.scheduleVoiceOverFocusRecoveryIfNeeded()
             return
         }
+
+        self.lastEntriesApplyTimestamp = now
+        self.lastApplyWasStableIdsOnly = false
 
         self.loadEarlierNoProgressCount = 0
         let previousContentOffsetY = self.tableView.contentOffset.y
@@ -2937,6 +2954,8 @@ public final class ChatVoiceOverOverlayView: UIView {
                 }
             }
         }
+
+        self.scheduleVoiceOverFocusRecoveryIfNeeded()
         
         if didLoadEarlierProgress {
             self.loadEarlierInitiationFocus = nil
@@ -3081,6 +3100,80 @@ public final class ChatVoiceOverOverlayView: UIView {
             return nil
         }
         return focusedView
+    }
+
+    private func scheduleVoiceOverFocusRecoveryIfNeeded() {
+        guard UIAccessibility.isVoiceOverRunning else {
+            return
+        }
+        guard self.voiceOverFocusRecoveryWorkItem == nil else {
+            return
+        }
+        guard UIAccessibility.focusedElement(using: .notificationVoiceOver) == nil else {
+            return
+        }
+
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self else {
+                return
+            }
+            self.voiceOverFocusRecoveryWorkItem = nil
+
+            guard UIAccessibility.isVoiceOverRunning else {
+                return
+            }
+            guard UIAccessibility.focusedElement(using: .notificationVoiceOver) == nil else {
+                return
+            }
+
+            // In some transitions (e.g. returning from system pickers), VoiceOver can lose focus.
+            // Also ensure the composer isn't left hidden because a scrollbar element was active.
+            self.setVoiceOverScrollbarAccessibilityElementActive(false, anchorTableRow: nil)
+
+            let targetIndexPath = self.voiceOverFallbackFocusIndexPath()
+            if let targetIndexPath, let element = self.accessibilityElement(at: targetIndexPath) {
+                UIAccessibility.post(notification: .screenChanged, argument: element)
+            } else {
+                UIAccessibility.post(notification: .screenChanged, argument: self.titleLabel)
+            }
+        }
+
+        self.voiceOverFocusRecoveryWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15, execute: workItem)
+    }
+
+    private func voiceOverFallbackFocusIndexPath() -> IndexPath? {
+        let rowCount = max(0, self.tableView.numberOfRows(inSection: 0))
+        guard rowCount > 0 else {
+            return nil
+        }
+
+        guard let visibleIndexPaths = self.tableView.indexPathsForVisibleRows?.sorted(), !visibleIndexPaths.isEmpty else {
+            return IndexPath(row: max(0, rowCount - 1), section: 0)
+        }
+
+        let firstMessageRow = self.loadEarlierRowOffset
+        let candidates = visibleIndexPaths.filter { $0.section == 0 && $0.row >= firstMessageRow }
+        let effectiveCandidates = candidates.isEmpty ? visibleIndexPaths : candidates
+
+        if self.isAtBottom() {
+            return effectiveCandidates.last
+        }
+        if self.isNearTop() {
+            return effectiveCandidates.first
+        }
+
+        let visibleMidY = self.tableView.contentOffset.y + self.tableView.bounds.height * 0.5
+        var best = effectiveCandidates[0]
+        var bestDistance = abs(self.tableView.rectForRow(at: best).midY - visibleMidY)
+        for indexPath in effectiveCandidates.dropFirst() {
+            let distance = abs(self.tableView.rectForRow(at: indexPath).midY - visibleMidY)
+            if distance < bestDistance {
+                bestDistance = distance
+                best = indexPath
+            }
+        }
+        return best
     }
     
     private func mergeRows(existing: [Row], incoming: [Row]) -> [Row] {
