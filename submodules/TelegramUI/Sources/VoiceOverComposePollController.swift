@@ -188,7 +188,7 @@ final class VoiceOverComposePollController: ViewController, UITableViewDataSourc
             if remaining == 0 {
                 return self.presentationData.strings.CreatePoll_AllOptionsAdded
             }
-            return self.presentationData.strings.CreatePoll_OptionCountFooterFormat(Int32(remaining)).string
+            return self.presentationData.strings.CreatePoll_OptionCountFooterFormat(Int32(remaining))
         default:
             return nil
         }

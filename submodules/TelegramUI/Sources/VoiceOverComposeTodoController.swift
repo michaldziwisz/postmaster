@@ -198,7 +198,7 @@ final class VoiceOverComposeTodoController: ViewController, UITableViewDataSourc
             if remaining == 0 {
                 return self.presentationData.strings.CreateTodo_TaskCountLimitReached
             }
-            return self.presentationData.strings.CreateTodo_TaskCountFooterFormat(Int32(remaining)).string
+            return self.presentationData.strings.CreateTodo_TaskCountFooterFormat(Int32(remaining))
         default:
             return nil
         }
