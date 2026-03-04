@@ -1316,10 +1316,10 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
                 return
             }
             self.voiceOverSystemPickerDelegate = nil
+            self.isVoiceOverSystemPickerLoading = false
+            self.updateVoiceOverSystemPickerButton(presentationData: self.presentationData)
 
             if results.isEmpty {
-                self.isVoiceOverSystemPickerLoading = false
-                self.updateVoiceOverSystemPickerButton(presentationData: self.presentationData)
                 return
             }
 
@@ -1335,8 +1335,6 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
             }
 
             if selectedAssets.isEmpty {
-                self.isVoiceOverSystemPickerLoading = false
-                self.updateVoiceOverSystemPickerButton(presentationData: self.presentationData)
                 return
             }
 
@@ -1347,8 +1345,6 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
             }
 
             guard let signals = TGMediaAssetsController.resultSignals(for: selectionContext, editingContext: interaction.editingState, intent: TGMediaAssetsControllerSendMediaIntent, currentItem: nil, storeAssets: true, convertToJpeg: false, descriptionGenerator: legacyAssetPickerItemGenerator(), saveEditedPhotos: controller.saveEditedPhotos) else {
-                self.isVoiceOverSystemPickerLoading = false
-                self.updateVoiceOverSystemPickerButton(presentationData: self.presentationData)
                 return
             }
 

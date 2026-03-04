@@ -1771,11 +1771,14 @@ final class AttachmentPanel: ASDisplayNode, ASScrollViewDelegate, ASGestureRecog
             }
             buttonView.isAccessibilityElement = true
             buttonView.accessibilityLabel = accessibilityTitle
+            buttonView.accessibilityElementsHidden = true
             var accessibilityTraits: UIAccessibilityTraits = [.button]
             if i == self.selectedIndex {
                 accessibilityTraits.insert(.selected)
             }
             buttonView.accessibilityTraits = accessibilityTraits
+            selectedButtonView.isAccessibilityElement = false
+            selectedButtonView.accessibilityElementsHidden = true
         }
         var removeIds: [AnyHashable] = []
         for (id, itemView) in self.itemViews {
