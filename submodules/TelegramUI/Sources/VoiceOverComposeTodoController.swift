@@ -138,37 +138,49 @@ final class VoiceOverComposeTodoController: ViewController, UITableViewDataSourc
         }
         self.view.backgroundColor = self.presentationData.theme.list.plainBackgroundColor
         self.tableView.backgroundColor = self.presentationData.theme.list.plainBackgroundColor
+        self.tableView.contentInsetAdjustmentBehavior = .never
     }
     
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         
-        if UIAccessibility.isVoiceOverRunning, self.initialData.appendValue {
-            // In append mode, focus the first empty task field to encourage adding new tasks.
-            self.focusFirstEditableTaskFieldIfPossible()
+        guard UIAccessibility.isVoiceOverRunning else {
+            return
+        }
+        
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            
+            if self.initialData.appendValue {
+                // In append mode, focus the first empty task field to encourage adding new tasks.
+                self.focusFirstEditableTaskFieldIfPossible()
+            }
+            
+            let indexPath = IndexPath(row: 0, section: Section.title.rawValue)
+            if let cell = self.tableView.cellForRow(at: indexPath) as? VoiceOverFormTextFieldCell {
+                UIAccessibility.post(notification: .screenChanged, argument: cell.textField)
+            } else {
+                UIAccessibility.post(notification: .screenChanged, argument: self.tableView)
+            }
         }
     }
     
     override func containerLayoutUpdated(_ layout: ContainerViewLayout, transition: ContainedViewLayoutTransition) {
         super.containerLayoutUpdated(layout, transition: transition)
         
-        self.updateTableLayout(size: layout.size, safeInsets: layout.safeInsets, navigationHeight: self.navigationLayout(layout: layout).navigationFrame.maxY, transition: transition)
+        let navigationHeight = max(0.0, self.cleanNavigationHeight)
+        self.updateTableLayout(size: layout.size, safeInsets: layout.safeInsets, navigationHeight: navigationHeight, transition: transition)
     }
 
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         
-        // Fallback for presentations that don't drive `containerLayoutUpdated` (e.g. plain UIKit UINavigationController).
-        guard self.currentlyAppliedLayout == nil else {
-            return
-        }
-        let navigationHeight = max(self.navigationBar?.frame.maxY ?? 0.0, self.view.safeAreaInsets.top)
+        let navigationHeight = max(0.0, self.cleanNavigationHeight)
         self.updateTableLayout(size: self.view.bounds.size, safeInsets: self.view.safeAreaInsets, navigationHeight: navigationHeight, transition: nil)
     }
     
     private func updateTableLayout(size: CGSize, safeInsets: UIEdgeInsets, navigationHeight: CGFloat, transition: ContainedViewLayoutTransition?) {
-        let height = max(0.0, size.height - navigationHeight)
-        let frame = CGRect(x: 0.0, y: navigationHeight, width: size.width, height: height)
+        let frame = CGRect(origin: .zero, size: size)
         
         if let transition {
             transition.updateFrame(view: self.tableView, frame: frame)
@@ -176,7 +188,7 @@ final class VoiceOverComposeTodoController: ViewController, UITableViewDataSourc
             self.tableView.frame = frame
         }
         
-        let insets = UIEdgeInsets(top: 0.0, left: 0.0, bottom: safeInsets.bottom, right: 0.0)
+        let insets = UIEdgeInsets(top: navigationHeight, left: 0.0, bottom: safeInsets.bottom, right: 0.0)
         self.tableView.contentInset = insets
         self.tableView.scrollIndicatorInsets = insets
     }
