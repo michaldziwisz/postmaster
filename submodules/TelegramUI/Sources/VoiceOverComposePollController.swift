@@ -16,6 +16,7 @@ final class VoiceOverComposePollController: ViewController, UITableViewDataSourc
         case options
         case settings
         case correctAnswer
+        case submit
     }
     
     private enum OptionRow {
@@ -210,7 +211,7 @@ final class VoiceOverComposePollController: ViewController, UITableViewDataSourc
             return Section(rawValue: index) ?? .question
         } else {
             // Without quiz, omit `correctAnswer`
-            let mapped: [Section] = [.question, .options, .settings]
+            let mapped: [Section] = [.question, .options, .settings, .submit]
             return mapped[min(index, mapped.count - 1)]
         }
     }
@@ -225,6 +226,8 @@ final class VoiceOverComposePollController: ViewController, UITableViewDataSourc
             return self.isQuiz ? 1 : 2
         case .correctAnswer:
             return max(1, self.nonEmptyOptionIndices().count)
+        case .submit:
+            return 1
         }
     }
     
@@ -238,6 +241,8 @@ final class VoiceOverComposePollController: ViewController, UITableViewDataSourc
             return nil
         case .correctAnswer:
             return self.presentationData.strings.CreatePoll_Quiz
+        case .submit:
+            return nil
         }
     }
     
@@ -248,10 +253,22 @@ final class VoiceOverComposePollController: ViewController, UITableViewDataSourc
             if remaining == 0 {
                 return self.presentationData.strings.CreatePoll_AllOptionsAdded
             }
-            return self.presentationData.strings.CreatePoll_OptionCountFooterFormat(Int32(remaining))
+            let rawString = self.presentationData.strings.CreatePoll_OptionCountFooterFormat(Int32(remaining))
+            return self.remainingCountFooterText(rawString: rawString, count: remaining)
         default:
             return nil
         }
+    }
+    
+    private func remainingCountFooterText(rawString: String, count: Int) -> String {
+        guard rawString.contains("{count}") else {
+            return rawString
+        }
+        return rawString.replacingOccurrences(of: "{count}", with: "\(count)")
+    }
+    
+    private func indexOfSubmitSection() -> Int {
+        return self.isQuiz ? Section.submit.rawValue : 3
     }
     
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
@@ -364,6 +381,22 @@ final class VoiceOverComposePollController: ViewController, UITableViewDataSourc
                 cell.accessoryType = .none
             }
             return cell
+            
+        case .submit:
+            let cell = UITableViewCell(style: .default, reuseIdentifier: nil)
+            cell.selectionStyle = .default
+            
+            let title = self.presentationData.strings.CreatePoll_Create
+            let isEnabled = (self.buildPoll() != nil)
+            
+            cell.textLabel?.text = title
+            cell.textLabel?.textAlignment = .center
+            cell.textLabel?.textColor = isEnabled ? self.presentationData.theme.list.itemAccentColor : self.presentationData.theme.list.itemDisabledTextColor
+            
+            cell.accessibilityLabel = title
+            cell.accessibilityTraits = isEnabled ? [.button] : [.button, .notEnabled]
+            
+            return cell
         }
     }
     
@@ -388,6 +421,9 @@ final class VoiceOverComposePollController: ViewController, UITableViewDataSourc
             self.selectedCorrectAnswerOriginalIndex = originalIndex
             tableView.reloadSections(IndexSet(integer: indexPath.section), with: .none)
             self.updateDoneEnabled()
+            
+        case .submit:
+            self.donePressed()
             
         default:
             break
@@ -588,6 +624,16 @@ final class VoiceOverComposePollController: ViewController, UITableViewDataSourc
     }
     
     private func updateDoneEnabled() {
-        self.navigationItem.rightBarButtonItem?.isEnabled = (self.buildPoll() != nil)
+        let isEnabled = (self.buildPoll() != nil)
+        self.navigationItem.rightBarButtonItem?.isEnabled = isEnabled
+        
+        let indexPath = IndexPath(row: 0, section: self.indexOfSubmitSection())
+        if let cell = self.tableView.cellForRow(at: indexPath) {
+            let title = self.presentationData.strings.CreatePoll_Create
+            cell.textLabel?.text = title
+            cell.textLabel?.textColor = isEnabled ? self.presentationData.theme.list.itemAccentColor : self.presentationData.theme.list.itemDisabledTextColor
+            cell.accessibilityLabel = title
+            cell.accessibilityTraits = isEnabled ? [.button] : [.button, .notEnabled]
+        }
     }
 }

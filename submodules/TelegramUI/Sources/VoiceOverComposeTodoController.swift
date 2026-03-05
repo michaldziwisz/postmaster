@@ -14,6 +14,7 @@ final class VoiceOverComposeTodoController: ViewController, UITableViewDataSourc
         case title
         case tasks
         case settings
+        case submit
     }
     
     private enum TaskRow {
@@ -235,6 +236,8 @@ final class VoiceOverComposeTodoController: ViewController, UITableViewDataSourc
             return self.taskRowModels().count
         case .settings:
             return 2
+        case .submit:
+            return 1
         }
     }
     
@@ -246,6 +249,8 @@ final class VoiceOverComposeTodoController: ViewController, UITableViewDataSourc
             return nil
         case .settings:
             return nil
+        case .submit:
+            return nil
         }
     }
     
@@ -256,10 +261,18 @@ final class VoiceOverComposeTodoController: ViewController, UITableViewDataSourc
             if remaining == 0 {
                 return self.presentationData.strings.CreateTodo_TaskCountLimitReached
             }
-            return self.presentationData.strings.CreateTodo_TaskCountFooterFormat(Int32(remaining))
+            let rawString = self.presentationData.strings.CreateTodo_TaskCountFooterFormat(Int32(remaining))
+            return self.remainingCountFooterText(rawString: rawString, count: remaining)
         default:
             return nil
         }
+    }
+    
+    private func remainingCountFooterText(rawString: String, count: Int) -> String {
+        guard rawString.contains("{count}") else {
+            return rawString
+        }
+        return rawString.replacingOccurrences(of: "{count}", with: "\(count)")
     }
     
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
@@ -356,6 +369,22 @@ final class VoiceOverComposeTodoController: ViewController, UITableViewDataSourc
             }
             
             return cell
+            
+        case .submit:
+            let cell = UITableViewCell(style: .default, reuseIdentifier: nil)
+            cell.selectionStyle = .default
+            
+            let title = (self.initialData.existingTodoValue != nil) ? self.presentationData.strings.CreateTodo_Save : self.presentationData.strings.CreateTodo_Send
+            let isEnabled = (self.buildTodo() != nil)
+            
+            cell.textLabel?.text = title
+            cell.textLabel?.textAlignment = .center
+            cell.textLabel?.textColor = isEnabled ? self.presentationData.theme.list.itemAccentColor : self.presentationData.theme.list.itemDisabledTextColor
+            
+            cell.accessibilityLabel = title
+            cell.accessibilityTraits = isEnabled ? [.button] : [.button, .notEnabled]
+            
+            return cell
         }
     }
     
@@ -364,12 +393,16 @@ final class VoiceOverComposeTodoController: ViewController, UITableViewDataSourc
             tableView.deselectRow(at: indexPath, animated: true)
         }
         
-        guard Section(rawValue: indexPath.section) == .tasks else {
-            return
-        }
-        let rows = self.taskRowModels()
-        if indexPath.row < rows.count, case .add = rows[indexPath.row] {
-            self.addTaskIfPossible(focusNew: true)
+        switch Section(rawValue: indexPath.section) ?? .title {
+        case .tasks:
+            let rows = self.taskRowModels()
+            if indexPath.row < rows.count, case .add = rows[indexPath.row] {
+                self.addTaskIfPossible(focusNew: true)
+            }
+        case .submit:
+            self.donePressed()
+        default:
+            break
         }
     }
     
@@ -563,6 +596,16 @@ final class VoiceOverComposeTodoController: ViewController, UITableViewDataSourc
     }
     
     private func updateDoneEnabled() {
-        self.navigationItem.rightBarButtonItem?.isEnabled = (self.buildTodo() != nil)
+        let isEnabled = (self.buildTodo() != nil)
+        self.navigationItem.rightBarButtonItem?.isEnabled = isEnabled
+        
+        let indexPath = IndexPath(row: 0, section: Section.submit.rawValue)
+        if let cell = self.tableView.cellForRow(at: indexPath) {
+            let title = (self.initialData.existingTodoValue != nil) ? self.presentationData.strings.CreateTodo_Save : self.presentationData.strings.CreateTodo_Send
+            cell.textLabel?.text = title
+            cell.textLabel?.textColor = isEnabled ? self.presentationData.theme.list.itemAccentColor : self.presentationData.theme.list.itemDisabledTextColor
+            cell.accessibilityLabel = title
+            cell.accessibilityTraits = isEnabled ? [.button] : [.button, .notEnabled]
+        }
     }
 }
