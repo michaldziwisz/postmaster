@@ -3632,6 +3632,92 @@ public final class ChatVoiceOverOverlayView: UIView {
                 
                 hint = state.strings.VoiceOver_Chat_OpenHint
                 return (todoTitle.isEmpty ? typeText : todoTitle, subtitle, accessibilityLabel, hint, traits)
+            } else if let contact = media as? TelegramMediaContact {
+                traits.insert(.button)
+                
+                let typeText: String
+                if isIncoming {
+                    if announceIncomingAuthors, let authorName {
+                        typeText = state.strings.VoiceOver_Chat_ContactFrom(authorName).string
+                    } else {
+                        typeText = state.strings.VoiceOver_Chat_Contact
+                    }
+                } else {
+                    typeText = state.strings.VoiceOver_Chat_YourContact
+                }
+                
+                var displayName = ""
+                if !contact.firstName.isEmpty {
+                    displayName.append(contact.firstName)
+                }
+                if !contact.lastName.isEmpty {
+                    if !displayName.isEmpty {
+                        displayName.append(" ")
+                    }
+                    displayName.append(contact.lastName)
+                }
+                if displayName.isEmpty {
+                    displayName = state.strings.VoiceOver_Chat_Contact
+                }
+                
+                var baseLabel = ""
+                baseLabel.append(typeText)
+                baseLabel.append(". ")
+                baseLabel.append(displayName)
+                if !contact.phoneNumber.isEmpty {
+                    baseLabel.append(". ")
+                    baseLabel.append(state.strings.VoiceOver_Chat_ContactPhoneNumber)
+                    baseLabel.append(": ")
+                    baseLabel.append(contact.phoneNumber)
+                }
+                
+                accessibilityLabel = baseLabel
+                hint = state.strings.VoiceOver_Chat_OpenHint
+                return (displayName, subtitle, accessibilityLabel, hint, traits)
+            } else if let map = media as? TelegramMediaMap {
+                traits.insert(.button)
+                
+                let typeText = state.strings.Attachment_Location
+                
+                var baseLabel = ""
+                baseLabel.append(typeText)
+                
+                if let venue = map.venue {
+                    if !venue.title.isEmpty {
+                        baseLabel.append(". ")
+                        baseLabel.append(venue.title)
+                    }
+                    if let venueAddress = venue.address, !venueAddress.isEmpty {
+                        baseLabel.append(". ")
+                        baseLabel.append(venueAddress)
+                    }
+                } else if let address = map.address {
+                    var parts: [String] = []
+                    if let street = address.street, !street.isEmpty { parts.append(street) }
+                    if let city = address.city, !city.isEmpty { parts.append(city) }
+                    if let state = address.state, !state.isEmpty { parts.append(state) }
+                    if !address.country.isEmpty { parts.append(address.country) }
+                    if !parts.isEmpty {
+                        baseLabel.append(". ")
+                        baseLabel.append(parts.joined(separator: ", "))
+                    }
+                }
+                
+                if !message.text.isEmpty {
+                    baseLabel.append(". ")
+                    baseLabel.append(state.strings.VoiceOver_Chat_Caption(message.text).string)
+                }
+                
+                if isIncoming, announceIncomingAuthors, let authorName {
+                    accessibilityLabel = "\(authorName). \(baseLabel)"
+                } else if !isIncoming {
+                    accessibilityLabel = "\(state.strings.DialogList_You). \(baseLabel)"
+                } else {
+                    accessibilityLabel = baseLabel
+                }
+                
+                hint = state.strings.VoiceOver_Chat_OpenHint
+                return (typeText, subtitle, accessibilityLabel, hint, traits)
             } else if let _ = media as? TelegramMediaImage {
                 traits.insert(.image)
                 if isIncoming {
@@ -3707,6 +3793,12 @@ public final class ChatVoiceOverOverlayView: UIView {
                 return true
             }
             if media is TelegramMediaFile {
+                return true
+            }
+            if media is TelegramMediaContact {
+                return true
+            }
+            if media is TelegramMediaMap {
                 return true
             }
             if media is TelegramMediaPoll {

@@ -344,6 +344,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
     private var voiceOverOverlayVoicePlaybackDisposable: Disposable?
     private var voiceOverOverlayVoicePlaybackState: ChatVoiceOverOverlayView.VoicePlaybackState?
     private var voiceOverOverlayTopControllerDisposable: Disposable?
+    private var voiceOverOverlayModalIsolationTimer: SwiftSignalKit.Timer?
     private struct VoiceOverOverlaySavedState {
         var navigationBarIsHidden: Bool
         var navigationBarIsUserInteractionEnabled: Bool
@@ -373,13 +374,51 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
         } else {
             isChatOnTop = viewControllers.last === controller
         }
-        overlay.accessibilityViewIsModal = isChatOnTop
-        overlay.accessibilityElementsHidden = !isChatOnTop
+        
+        func topMostViewController(_ root: UIViewController) -> UIViewController {
+            var current: UIViewController = root
+            while true {
+                if let presented = current.presentedViewController {
+                    current = presented
+                    continue
+                }
+                if let navigationController = current as? UINavigationController, let visible = navigationController.visibleViewController {
+                    current = visible
+                    continue
+                }
+                if let tabBarController = current as? UITabBarController, let selected = tabBarController.selectedViewController {
+                    current = selected
+                    continue
+                }
+                if let splitController = current as? UISplitViewController, let last = splitController.viewControllers.last {
+                    current = last
+                    continue
+                }
+                break
+            }
+            return current
+        }
+        
+        // Pushed controllers update `viewControllers`, but modals do not. When a modal is presented
+        // over the chat (e.g. media gallery), VoiceOver must not stay trapped inside the chat
+        // overlay view. Detect such cases by checking the actual top-most view controller.
+        var resolvedIsChatOnTop = isChatOnTop
+        if resolvedIsChatOnTop {
+            if let window = controller.view.window ?? overlay.window, let root = window.rootViewController {
+                let topController = topMostViewController(root)
+                if topController !== controller {
+                    resolvedIsChatOnTop = false
+                }
+            }
+        }
+        
+        overlay.accessibilityViewIsModal = resolvedIsChatOnTop
+        overlay.accessibilityElementsHidden = !resolvedIsChatOnTop
         
         // When the chat is not the top-most controller, we must restore the navigation bar so pushed
         // controllers (e.g. poll results) have a visible Back/Close button.
         if let navigationBarView = self.navigationBar?.view {
-            if isChatOnTop {
+            if resolvedIsChatOnTop {
                 navigationBarView.accessibilityElementsHidden = true
                 navigationBarView.isHidden = true
                 navigationBarView.isUserInteractionEnabled = false
@@ -395,7 +434,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
             }
         }
         
-        if wasHidden, isChatOnTop {
+        if wasHidden, resolvedIsChatOnTop {
             overlay.voiceOverDidReturnToChat()
         }
     }
@@ -1140,7 +1179,37 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                     guard let self else {
                         return
                     }
-                    let _ = self.controllerInteraction.openMessage(message, OpenMessageParams(mode: .default))
+                    
+                    // `openMessage` can present controllers modally (e.g. gallery/map/contact preview).
+                    // When the overlay remains `accessibilityViewIsModal`, VoiceOver can appear to hang
+                    // because it is still trapped inside the overlay even though a new screen is visible.
+                    // Proactively release the modal trap before opening.
+                    if self.historyNode.messageInCurrentHistoryView(message.id) != nil, let overlay = self.voiceOverOverlayView {
+                        overlay.accessibilityViewIsModal = false
+                        overlay.accessibilityElementsHidden = true
+                    }
+                    
+                    let didOpen = self.controllerInteraction.openMessage(message, OpenMessageParams(mode: .default))
+                    
+                    DispatchQueue.main.async { [weak self] in
+                        guard let self else {
+                            return
+                        }
+                        if let navigationController = self.controller?.effectiveNavigationController {
+                            self.updateVoiceOverOverlayAccessibilityIsolation(viewControllers: navigationController.viewControllers)
+                        } else {
+                            self.updateVoiceOverOverlayAccessibilityIsolation(viewControllers: [])
+                        }
+                    }
+                    
+                    if didOpen {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                            guard UIAccessibility.isVoiceOverRunning else {
+                                return
+                            }
+                            UIAccessibility.post(notification: .screenChanged, argument: nil)
+                        }
+                    }
                 }
                 overlay.actions.openPollMessage = { [weak self] message in
                     guard let self else {
@@ -1346,6 +1415,22 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                     self?.updateVoiceOverOverlayAccessibilityIsolation(viewControllers: viewControllers)
                 })
             }
+            if self.voiceOverOverlayModalIsolationTimer == nil {
+                self.voiceOverOverlayModalIsolationTimer = SwiftSignalKit.Timer(timeout: 0.25, repeat: true, completion: { [weak self] in
+                    guard let self else {
+                        return
+                    }
+                    guard UIAccessibility.isVoiceOverRunning, self.voiceOverOverlayView != nil else {
+                        return
+                    }
+                    if let navigationController = self.controller?.effectiveNavigationController {
+                        self.updateVoiceOverOverlayAccessibilityIsolation(viewControllers: navigationController.viewControllers)
+                    } else {
+                        self.updateVoiceOverOverlayAccessibilityIsolation(viewControllers: [])
+                    }
+                }, queue: .mainQueue())
+                self.voiceOverOverlayModalIsolationTimer?.start()
+            }
             if let navigationController = self.controller?.effectiveNavigationController {
                 self.updateVoiceOverOverlayAccessibilityIsolation(viewControllers: navigationController.viewControllers)
             } else {
@@ -1403,6 +1488,8 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
             self.voiceOverOverlayVoicePlaybackDisposable = nil
             self.voiceOverOverlayTopControllerDisposable?.dispose()
             self.voiceOverOverlayTopControllerDisposable = nil
+            self.voiceOverOverlayModalIsolationTimer?.invalidate()
+            self.voiceOverOverlayModalIsolationTimer = nil
             self.voiceOverContextMenuAnchorNode?.view.removeFromSuperview()
             self.voiceOverContextMenuAnchorNode = nil
             if !self.voiceOverOverlayConstraints.isEmpty {
