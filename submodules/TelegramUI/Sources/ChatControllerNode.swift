@@ -358,6 +358,12 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
     private var keyboardGestureBeginLocation: CGPoint?
     private var keyboardGestureAccessoryHeight: CGFloat?
 
+    internal static func resolveVoiceOverOverlayWindow(controller: UIViewController, overlay: UIView) -> UIWindow? {
+        // Do not access `controller.view` here: it may trigger `loadView()` and cause re-entrant
+        // initialization while VoiceOver overlay is being set up.
+        return controller.viewIfLoaded?.window ?? overlay.window
+    }
+
     private func updateVoiceOverOverlayAccessibilityIsolation(viewControllers: [UIViewController]) {
         guard let overlay = self.voiceOverOverlayView else {
             return
@@ -377,7 +383,13 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
         
         func topMostViewController(_ root: UIViewController) -> UIViewController {
             var current: UIViewController = root
+            var visited = Set<ObjectIdentifier>()
             while true {
+                let identifier = ObjectIdentifier(current)
+                if visited.contains(identifier) {
+                    break
+                }
+                visited.insert(identifier)
                 if let presented = current.presentedViewController {
                     current = presented
                     continue
@@ -403,8 +415,16 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
         // over the chat (e.g. media gallery), VoiceOver must not stay trapped inside the chat
         // overlay view. Detect such cases by checking the actual top-most view controller.
         var resolvedIsChatOnTop = isChatOnTop
+
+        // When the chat shows overlay controllers using a `PresentationContext` (e.g. media gallery),
+        // it doesn't appear in `presentedViewController` or `viewControllers`. Hide the overlay so
+        // VoiceOver can interact with the presented UI.
+        if resolvedIsChatOnTop, !controller.galleryPresentationContext.controllers.isEmpty {
+            resolvedIsChatOnTop = false
+        }
+
         if resolvedIsChatOnTop {
-            if let window = controller.view.window ?? overlay.window, let root = window.rootViewController {
+            if let window = Self.resolveVoiceOverOverlayWindow(controller: controller, overlay: overlay), let root = window.rootViewController {
                 let topController = topMostViewController(root)
                 if topController !== controller {
                     resolvedIsChatOnTop = false
