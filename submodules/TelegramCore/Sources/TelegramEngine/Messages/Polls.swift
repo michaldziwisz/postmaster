@@ -344,7 +344,7 @@ private final class PollResultsOptionContext {
             if strongSelf.canLoadMore {
                 strongSelf.count = max(updatedCount, strongSelf.results.count)
             } else {
-                strongSelf.count = strongSelf.results.count
+                strongSelf.count = max(updatedCount, strongSelf.results.count)
             }
             strongSelf.updateState()
         }))

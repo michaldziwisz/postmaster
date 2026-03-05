@@ -178,15 +178,21 @@ final class VoiceOverPollResultsController: ViewController, UITableViewDataSourc
     private func recomputeStats(resultsState: PollResultsState?) {
         var counts: [Data: Int32] = [:]
         
-        if let resultsState {
-            for option in self.poll.options {
-                if let optionState = resultsState.options[option.opaqueIdentifier] {
-                    counts[option.opaqueIdentifier] = Int32(optionState.count)
-                }
-            }
-        } else if let voters = self.poll.results.voters {
+        if let voters = self.poll.results.voters {
             for voter in voters {
                 counts[voter.opaqueIdentifier] = voter.count
+            }
+        }
+
+        if let resultsState {
+            for option in self.poll.options {
+                guard let optionState = resultsState.options[option.opaqueIdentifier] else {
+                    continue
+                }
+                let updatedCount = Int32(optionState.count)
+                if updatedCount > 0 || counts[option.opaqueIdentifier] == nil {
+                    counts[option.opaqueIdentifier] = updatedCount
+                }
             }
         }
         
