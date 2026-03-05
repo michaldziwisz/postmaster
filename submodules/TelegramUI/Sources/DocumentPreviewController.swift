@@ -29,6 +29,7 @@ final class CompactDocumentPreviewController: QLPreviewController, QLPreviewCont
     private let postbox: Postbox
     private let file: TelegramMediaFile
     private let canShare: Bool
+    private let strings: PresentationStrings
     
     private var item: DocumentPreviewItem?
     
@@ -38,11 +39,14 @@ final class CompactDocumentPreviewController: QLPreviewController, QLPreviewCont
         self.postbox = postbox
         self.file = file
         self.canShare = canShare
+        self.strings = strings
         
         super.init(nibName: nil, bundle: nil)
         
         self.delegate = self
         self.dataSource = self
+
+        self.navigationItem.leftBarButtonItem = UIBarButtonItem(title: strings.Common_Done, style: .done, target: self, action: #selector(self.cancelPressed))
         
         if let path = self.postbox.mediaBox.completedResourcePath(self.file.resource) {
             var updatedPath = path
@@ -68,6 +72,11 @@ final class CompactDocumentPreviewController: QLPreviewController, QLPreviewCont
     
     @objc private func cancelPressed() {
         self.presentingViewController?.dismiss(animated: true, completion: nil)
+    }
+
+    override func accessibilityPerformEscape() -> Bool {
+        self.cancelPressed()
+        return true
     }
     
     func numberOfPreviewItems(in controller: QLPreviewController) -> Int {
@@ -138,14 +147,14 @@ final class CompactDocumentPreviewController: QLPreviewController, QLPreviewCont
                 }
             }
         } else {
-            self.navigationItem.rightBarButtonItems = [UIBarButtonItem()]
-            self.navigationItem.setRightBarButton(UIBarButtonItem(), animated: false)
+            self.navigationItem.rightBarButtonItem = nil
+            self.navigationItem.rightBarButtonItems = nil
             
             self.navigationController?.toolbar.isHidden = true
             
             for navigationBar in self.navigationBars {
-                navigationBar.topItem?.rightBarButtonItem = UIBarButtonItem()
-                navigationBar.topItem?.rightBarButtonItems = [UIBarButtonItem()]
+                navigationBar.topItem?.rightBarButtonItem = nil
+                navigationBar.topItem?.rightBarButtonItems = nil
             }
             
             for toolbar in self.toolbars {

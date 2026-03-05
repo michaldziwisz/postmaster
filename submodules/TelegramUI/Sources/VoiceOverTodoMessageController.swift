@@ -68,8 +68,6 @@ final class VoiceOverTodoMessageController: ViewController, UITableViewDataSourc
         let titleText = todo.text.trimmingCharacters(in: .whitespacesAndNewlines)
         self.title = titleText.isEmpty ? self.presentationData.strings.Chat_Todo_Message_Title : titleText
         
-        self.navigationItem.leftBarButtonItem = UIBarButtonItem(title: self.presentationData.strings.Common_Cancel, style: .plain, target: self, action: #selector(self.cancelPressed))
-        
         self.presentationDataDisposable = (context.sharedContext.presentationData
         |> deliverOnMainQueue).startStrict(next: { [weak self] presentationData in
             guard let self else {
@@ -80,7 +78,7 @@ final class VoiceOverTodoMessageController: ViewController, UITableViewDataSourc
             self.statusBar.statusBarStyle = presentationData.theme.rootController.statusBarStyle.style
             let titleText = self.todo.text.trimmingCharacters(in: .whitespacesAndNewlines)
             self.title = titleText.isEmpty ? presentationData.strings.Chat_Todo_Message_Title : titleText
-            self.navigationItem.leftBarButtonItem?.title = presentationData.strings.Common_Cancel
+            self.updateLeftBarButtonItem()
             self.tableView.reloadData()
         })
         
@@ -150,16 +148,36 @@ final class VoiceOverTodoMessageController: ViewController, UITableViewDataSourc
             UIAccessibility.post(notification: .screenChanged, argument: self.tableView)
         }
     }
+
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        
+        self.updateLeftBarButtonItem()
+    }
     
     // MARK: - Actions
     
     @objc private func cancelPressed() {
-        self.dismiss()
+        if let navigationController = self.navigationController, navigationController.viewControllers.first !== self {
+            navigationController.popViewController(animated: true)
+        } else {
+            self.dismiss()
+        }
     }
     
     override func accessibilityPerformEscape() -> Bool {
         self.cancelPressed()
         return true
+    }
+
+    private func updateLeftBarButtonItem() {
+        if let navigationController = self.navigationController, navigationController.viewControllers.first !== self {
+            self.navigationItem.leftBarButtonItem = nil
+        } else if self.navigationItem.leftBarButtonItem == nil {
+            self.navigationItem.leftBarButtonItem = UIBarButtonItem(title: self.presentationData.strings.Common_Cancel, style: .plain, target: self, action: #selector(self.cancelPressed))
+        } else {
+            self.navigationItem.leftBarButtonItem?.title = self.presentationData.strings.Common_Cancel
+        }
     }
     
     @objc private func taskSwitchChanged(_ sender: UISwitch) {
@@ -229,4 +247,3 @@ final class VoiceOverTodoMessageController: ViewController, UITableViewDataSourc
         return cell
     }
 }
-

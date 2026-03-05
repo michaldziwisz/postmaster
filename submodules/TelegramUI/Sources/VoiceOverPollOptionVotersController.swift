@@ -54,7 +54,6 @@ final class VoiceOverPollOptionVotersController: ViewController, UITableViewData
         self.statusBar.statusBarStyle = self.presentationData.theme.rootController.statusBarStyle.style
         
         self.title = self.optionText.trimmingCharacters(in: .whitespacesAndNewlines)
-        self.navigationItem.leftBarButtonItem = UIBarButtonItem(title: self.presentationData.strings.Common_Back, style: .plain, target: self, action: #selector(self.closePressed))
         
         self.presentationDataDisposable = (context.sharedContext.presentationData
         |> deliverOnMainQueue).startStrict(next: { [weak self] presentationData in
@@ -64,7 +63,7 @@ final class VoiceOverPollOptionVotersController: ViewController, UITableViewData
             self.presentationData = presentationData
             self.navigationBar?.updatePresentationData(NavigationBarPresentationData(presentationTheme: presentationData.theme, presentationStrings: presentationData.strings), transition: .immediate)
             self.statusBar.statusBarStyle = presentationData.theme.rootController.statusBarStyle.style
-            self.navigationItem.leftBarButtonItem?.title = presentationData.strings.Common_Back
+            self.updateLeftBarButtonItem()
             self.tableView.reloadData()
         })
         
@@ -148,12 +147,32 @@ final class VoiceOverPollOptionVotersController: ViewController, UITableViewData
     // MARK: - Actions
     
     @objc private func closePressed() {
-        self.dismiss()
+        if let navigationController = self.navigationController, navigationController.viewControllers.first !== self {
+            navigationController.popViewController(animated: true)
+        } else {
+            self.dismiss()
+        }
     }
     
     override func accessibilityPerformEscape() -> Bool {
         self.closePressed()
         return true
+    }
+
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        
+        self.updateLeftBarButtonItem()
+    }
+
+    private func updateLeftBarButtonItem() {
+        if let navigationController = self.navigationController, navigationController.viewControllers.first !== self {
+            self.navigationItem.leftBarButtonItem = nil
+        } else if self.navigationItem.leftBarButtonItem == nil {
+            self.navigationItem.leftBarButtonItem = UIBarButtonItem(title: self.presentationData.strings.Common_Back, style: .plain, target: self, action: #selector(self.closePressed))
+        } else {
+            self.navigationItem.leftBarButtonItem?.title = self.presentationData.strings.Common_Back
+        }
     }
     
     private func titleForLoadMoreRow(optionState: PollResultsOptionState) -> (title: String, isEnabled: Bool) {

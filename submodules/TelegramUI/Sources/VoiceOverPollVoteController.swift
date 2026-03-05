@@ -87,7 +87,6 @@ final class VoiceOverPollVoteController: ViewController, UITableViewDataSource, 
         self.statusBar.statusBarStyle = self.presentationData.theme.rootController.statusBarStyle.style
         
         self.title = self.presentationData.strings.AttachmentMenu_Poll
-        self.navigationItem.leftBarButtonItem = UIBarButtonItem(title: self.presentationData.strings.Common_Cancel, style: .plain, target: self, action: #selector(self.cancelPressed))
         
         let actionTitle = self.actionTitle
         self.navigationItem.rightBarButtonItem = UIBarButtonItem(title: actionTitle, style: .done, target: self, action: #selector(self.actionPressed))
@@ -103,7 +102,7 @@ final class VoiceOverPollVoteController: ViewController, UITableViewDataSource, 
             self.statusBar.statusBarStyle = presentationData.theme.rootController.statusBarStyle.style
             
             self.title = presentationData.strings.AttachmentMenu_Poll
-            self.navigationItem.leftBarButtonItem?.title = presentationData.strings.Common_Cancel
+            self.updateLeftBarButtonItem()
             self.navigationItem.rightBarButtonItem?.title = self.actionTitle
             self.updateActionEnabled()
             self.tableView.reloadData()
@@ -191,11 +190,31 @@ final class VoiceOverPollVoteController: ViewController, UITableViewDataSource, 
             UIAccessibility.post(notification: .screenChanged, argument: self.tableView)
         }
     }
+
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        
+        self.updateLeftBarButtonItem()
+    }
+
+    private func updateLeftBarButtonItem() {
+        if let navigationController = self.navigationController, navigationController.viewControllers.first !== self {
+            self.navigationItem.leftBarButtonItem = nil
+        } else if self.navigationItem.leftBarButtonItem == nil {
+            self.navigationItem.leftBarButtonItem = UIBarButtonItem(title: self.presentationData.strings.Common_Cancel, style: .plain, target: self, action: #selector(self.cancelPressed))
+        } else {
+            self.navigationItem.leftBarButtonItem?.title = self.presentationData.strings.Common_Cancel
+        }
+    }
     
     // MARK: - Actions
     
     @objc private func cancelPressed() {
-        self.dismiss()
+        if let navigationController = self.navigationController, navigationController.viewControllers.first !== self {
+            navigationController.popViewController(animated: true)
+        } else {
+            self.dismiss()
+        }
     }
     
     @objc private func actionPressed() {
@@ -205,16 +224,14 @@ final class VoiceOverPollVoteController: ViewController, UITableViewDataSource, 
             }
             let selected = Array(self.selectedOptionOpaqueIdentifiers)
             self.requestSelectOptions(self.messageId, selected)
-            self.dismiss()
+            self.cancelPressed()
         } else {
             self.openResults(self.messageId)
-            self.dismiss()
         }
     }
 
     private func openResultsPressed() {
         self.openResults(self.messageId)
-        self.dismiss()
     }
     
     override func accessibilityPerformEscape() -> Bool {

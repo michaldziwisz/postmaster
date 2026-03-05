@@ -400,6 +400,24 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
         if resolvedIsChatOnTop, !controller.galleryPresentationContext.controllers.isEmpty {
             resolvedIsChatOnTop = false
         }
+
+        // Some controllers (e.g. media gallery presented in the root window) are not reflected in
+        // `viewControllers` or `galleryPresentationContext`. Use the active window host's view
+        // controller enumeration to determine if the chat is truly the top-most controller.
+        if resolvedIsChatOnTop, let window = ChatControllerNode.resolveVoiceOverOverlayWindow(controller: controller, overlay: overlay), let windowHost = window as? WindowHost {
+            var didEncounterChatController = false
+            var hasVisibleControllerAboveChat = false
+            windowHost.forEachController { candidate in
+                if (candidate as AnyObject) === (controller as AnyObject) {
+                    didEncounterChatController = true
+                } else if didEncounterChatController, candidate.isViewLoaded, candidate.view.window != nil {
+                    hasVisibleControllerAboveChat = true
+                }
+            }
+            if hasVisibleControllerAboveChat {
+                resolvedIsChatOnTop = false
+            }
+        }
         
         overlay.accessibilityViewIsModal = resolvedIsChatOnTop
         overlay.accessibilityElementsHidden = !resolvedIsChatOnTop
@@ -1233,12 +1251,10 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                                 }
                                 
                                 let controller = VoiceOverPollResultsController(context: self.context, messageId: messageId, poll: resolvedPoll)
-                                controller.navigationPresentation = .modal
                                 self.controller?.push(controller)
                             })
                         }
                     )
-                    controller.navigationPresentation = .modal
                     self.controller?.push(controller)
                 }
                 overlay.actions.openTodoMessage = { [weak self] message in
@@ -1260,7 +1276,6 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                             self?.controllerInteraction.displayTodoToggleUnavailable(messageId)
                         }
                     )
-                    controller.navigationPresentation = .modal
                     self.controller?.push(controller)
                 }
                 overlay.actions.toggleVoiceMessagePlayback = { [weak self] message in

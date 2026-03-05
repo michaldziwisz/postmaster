@@ -65,7 +65,6 @@ final class VoiceOverPollResultsController: ViewController, UITableViewDataSourc
         self.statusBar.statusBarStyle = self.presentationData.theme.rootController.statusBarStyle.style
         
         self.title = self.presentationData.strings.PollResults_Title
-        self.navigationItem.leftBarButtonItem = UIBarButtonItem(title: self.presentationData.strings.Common_Close, style: .plain, target: self, action: #selector(self.closePressed))
         
         self.recomputeStats()
         
@@ -78,7 +77,7 @@ final class VoiceOverPollResultsController: ViewController, UITableViewDataSourc
             self.navigationBar?.updatePresentationData(NavigationBarPresentationData(presentationTheme: presentationData.theme, presentationStrings: presentationData.strings), transition: .immediate)
             self.statusBar.statusBarStyle = presentationData.theme.rootController.statusBarStyle.style
             self.title = presentationData.strings.PollResults_Title
-            self.navigationItem.leftBarButtonItem?.title = presentationData.strings.Common_Close
+            self.updateLeftBarButtonItem()
             self.tableView.reloadData()
         })
         
@@ -151,12 +150,32 @@ final class VoiceOverPollResultsController: ViewController, UITableViewDataSourc
     // MARK: - Actions
     
     @objc private func closePressed() {
-        self.dismiss()
+        if let navigationController = self.navigationController, navigationController.viewControllers.first !== self {
+            navigationController.popViewController(animated: true)
+        } else {
+            self.dismiss()
+        }
     }
     
     override func accessibilityPerformEscape() -> Bool {
         self.closePressed()
         return true
+    }
+
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        
+        self.updateLeftBarButtonItem()
+    }
+
+    private func updateLeftBarButtonItem() {
+        if let navigationController = self.navigationController, navigationController.viewControllers.first !== self {
+            self.navigationItem.leftBarButtonItem = nil
+        } else if self.navigationItem.leftBarButtonItem == nil {
+            self.navigationItem.leftBarButtonItem = UIBarButtonItem(title: self.presentationData.strings.Common_Close, style: .plain, target: self, action: #selector(self.closePressed))
+        } else {
+            self.navigationItem.leftBarButtonItem?.title = self.presentationData.strings.Common_Close
+        }
     }
     
     private func recomputeStats() {
@@ -367,7 +386,6 @@ final class VoiceOverPollResultsController: ViewController, UITableViewDataSourc
             optionOpaqueIdentifier: option.opaqueIdentifier,
             optionText: option.text
         )
-        controller.navigationPresentation = .modal
         self.push(controller)
     }
 }
