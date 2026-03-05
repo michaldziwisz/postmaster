@@ -70,9 +70,10 @@ final class VoiceOverComposeTodoController: ViewController, UITableViewDataSourc
         self.initialData = initialData
         self.completion = completion
         
-        self.tableView = UITableView(frame: .zero, style: .insetGrouped)
-        self.tableNode = ASDisplayNode(viewBlock: { [unowned self] in
-            return self.tableView
+        let tableView = UITableView(frame: .zero, style: .insetGrouped)
+        self.tableView = tableView
+        self.tableNode = ASDisplayNode(viewBlock: {
+            return tableView
         }, didLoad: nil)
         
         super.init(navigationBarPresentationData: NavigationBarPresentationData(presentationTheme: self.presentationData.theme, presentationStrings: self.presentationData.strings))
