@@ -381,55 +381,24 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
             isChatOnTop = viewControllers.last === controller
         }
         
-        func topMostViewController(_ root: UIViewController) -> UIViewController {
-            var current: UIViewController = root
-            var visited = Set<ObjectIdentifier>()
-            while true {
-                let identifier = ObjectIdentifier(current)
-                if visited.contains(identifier) {
-                    break
-                }
-                visited.insert(identifier)
-                if let presented = current.presentedViewController {
-                    current = presented
-                    continue
-                }
-                if let navigationController = current as? UINavigationController, let visible = navigationController.visibleViewController {
-                    current = visible
-                    continue
-                }
-                if let tabBarController = current as? UITabBarController, let selected = tabBarController.selectedViewController {
-                    current = selected
-                    continue
-                }
-                if let splitController = current as? UISplitViewController, let last = splitController.viewControllers.last {
-                    current = last
-                    continue
-                }
-                break
-            }
-            return current
-        }
-        
-        // Pushed controllers update `viewControllers`, but modals do not. When a modal is presented
-        // over the chat (e.g. media gallery), VoiceOver must not stay trapped inside the chat
-        // overlay view. Detect such cases by checking the actual top-most view controller.
         var resolvedIsChatOnTop = isChatOnTop
+
+        // Pushed controllers update `viewControllers`, but modals do not. If the chat (or its
+        // navigation controller) is presenting a modal, VoiceOver must not stay trapped inside
+        // the chat overlay view.
+        if resolvedIsChatOnTop {
+            if controller.presentedViewController != nil {
+                resolvedIsChatOnTop = false
+            } else if let navigationController = controller.navigationController, navigationController.presentedViewController != nil {
+                resolvedIsChatOnTop = false
+            }
+        }
 
         // When the chat shows overlay controllers using a `PresentationContext` (e.g. media gallery),
         // it doesn't appear in `presentedViewController` or `viewControllers`. Hide the overlay so
         // VoiceOver can interact with the presented UI.
         if resolvedIsChatOnTop, !controller.galleryPresentationContext.controllers.isEmpty {
             resolvedIsChatOnTop = false
-        }
-
-        if resolvedIsChatOnTop {
-            if let window = Self.resolveVoiceOverOverlayWindow(controller: controller, overlay: overlay), let root = window.rootViewController {
-                let topController = topMostViewController(root)
-                if topController !== controller {
-                    resolvedIsChatOnTop = false
-                }
-            }
         }
         
         overlay.accessibilityViewIsModal = resolvedIsChatOnTop
