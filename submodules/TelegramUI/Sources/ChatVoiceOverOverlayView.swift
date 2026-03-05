@@ -3552,7 +3552,7 @@ public final class ChatVoiceOverOverlayView: UIView {
                 let totalVoters = poll.results.totalVoters ?? 0
                 let votesText: String
                 if totalVoters > 0 {
-                    votesText = state.strings.VoiceOver_Chat_PollVotes(Int32(totalVoters)).string
+                    votesText = state.strings.VoiceOver_Chat_PollVotes(Int32(totalVoters))
                 } else {
                     votesText = state.strings.VoiceOver_Chat_PollNoVotes
                 }
