@@ -148,18 +148,6 @@ final class VoiceOverPollResultsController: ViewController, UITableViewDataSourc
         self.tableView.scrollIndicatorInsets = insets
     }
     
-    override func viewDidAppear(_ animated: Bool) {
-        super.viewDidAppear(animated)
-        
-        guard UIAccessibility.isVoiceOverRunning else {
-            return
-        }
-        DispatchQueue.main.async { [weak self] in
-            guard let self else { return }
-            UIAccessibility.post(notification: .screenChanged, argument: self.tableView)
-        }
-    }
-    
     // MARK: - Actions
     
     @objc private func closePressed() {

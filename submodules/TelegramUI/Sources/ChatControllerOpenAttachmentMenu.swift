@@ -1,5 +1,7 @@
 import Foundation
 import UIKit
+import ContactsUI
+import CoreLocation
 import Display
 import SwiftSignalKit
 import Postbox
@@ -43,6 +45,9 @@ import AttachmentFileController
 
 private var voiceOverSystemPhotoPickerDelegateKey: UInt8 = 0
 private var voiceOverSystemDocumentPickerDelegateKey: UInt8 = 0
+private var voiceOverSystemCameraPickerDelegateKey: UInt8 = 0
+private var voiceOverSystemContactPickerDelegateKey: UInt8 = 0
+private var voiceOverSystemLocationManagerDelegateKey: UInt8 = 0
 
 extension ChatControllerImpl {
     enum AttachMenuSubject {
@@ -305,18 +310,19 @@ extension ChatControllerImpl {
                 return
             }
 
-            if UIAccessibility.isVoiceOverRunning, case .default = subject {
-                strongSelf.presentVoiceOverSystemAttachmentMenu(
-                    saveEditedPhotos: dataSettings.storeEditedPhotos,
-                    bannedSendPhotos: bannedSendPhotos,
-                    bannedSendVideos: bannedSendVideos,
-                    bannedSendFiles: bannedSendFiles,
-                    canSendPolls: canSendPolls,
-                    canSendTodos: canSendTodos,
-                    enableMultiselection: enableMultiselection
-                )
-                return
-            }
+	            if UIAccessibility.isVoiceOverRunning, case .default = subject {
+	                strongSelf.presentVoiceOverSystemAttachmentMenu(
+	                    saveEditedPhotos: dataSettings.storeEditedPhotos,
+	                    bannedSendPhotos: bannedSendPhotos,
+	                    bannedSendVideos: bannedSendVideos,
+	                    bannedSendFiles: bannedSendFiles,
+	                    canSendPolls: canSendPolls,
+	                    canSendTodos: canSendTodos,
+	                    canSendLocationAndContact: banSendText == nil,
+	                    enableMultiselection: enableMultiselection
+	                )
+	                return
+	            }
             
             let inputText = strongSelf.presentationInterfaceState.interfaceState.effectiveInputState.inputText
             
@@ -834,28 +840,35 @@ extension ChatControllerImpl {
         })
     }
 
-    private func presentVoiceOverSystemAttachmentMenu(
-        saveEditedPhotos: Bool,
-        bannedSendPhotos: (Int32, Bool)?,
-        bannedSendVideos: (Int32, Bool)?,
-        bannedSendFiles: (Int32, Bool)?,
-        canSendPolls: Bool,
-        canSendTodos: Bool,
-        enableMultiselection: Bool
-    ) {
-        let presentationData = self.presentationData
-        
-        var selectionLimit = enableMultiselection ? 100 : 1
-        if let peer = self.presentationInterfaceState.renderedPeer?.peer, let channel = peer as? TelegramChannel, channel.isRestrictedBySlowmode {
-            selectionLimit = min(selectionLimit, 10)
-        }
-        
-        let alertController = UIAlertController(title: nil, message: nil, preferredStyle: .actionSheet)
-        
-        if bannedSendPhotos == nil || bannedSendVideos == nil {
-            if #available(iOS 14.0, *) {
-                alertController.addAction(UIAlertAction(title: presentationData.strings.Attachment_Gallery, style: .default, handler: { [weak self] _ in
-                    self?.presentVoiceOverSystemPhotoPicker(
+	    private func presentVoiceOverSystemAttachmentMenu(
+	        saveEditedPhotos: Bool,
+	        bannedSendPhotos: (Int32, Bool)?,
+	        bannedSendVideos: (Int32, Bool)?,
+	        bannedSendFiles: (Int32, Bool)?,
+	        canSendPolls: Bool,
+	        canSendTodos: Bool,
+	        canSendLocationAndContact: Bool,
+	        enableMultiselection: Bool
+	    ) {
+	        let presentationData = self.presentationData
+	        
+	        var selectionLimit = enableMultiselection ? 100 : 1
+	        if let peer = self.presentationInterfaceState.renderedPeer?.peer, let channel = peer as? TelegramChannel, channel.isRestrictedBySlowmode {
+	            selectionLimit = min(selectionLimit, 10)
+	        }
+	        
+	        let alertController = UIAlertController(title: nil, message: nil, preferredStyle: .actionSheet)
+	        
+	        if UIImagePickerController.isSourceTypeAvailable(.camera), bannedSendPhotos == nil {
+	            alertController.addAction(UIAlertAction(title: presentationData.strings.Attachment_Camera, style: .default, handler: { [weak self] _ in
+	                self?.presentVoiceOverSystemCameraPicker(bannedSendPhotos: bannedSendPhotos)
+	            }))
+	        }
+	        
+	        if bannedSendPhotos == nil || bannedSendVideos == nil {
+	            if #available(iOS 14.0, *) {
+	                alertController.addAction(UIAlertAction(title: presentationData.strings.Attachment_Gallery, style: .default, handler: { [weak self] _ in
+	                    self?.presentVoiceOverSystemPhotoPicker(
                         selectionLimit: selectionLimit,
                         saveEditedPhotos: saveEditedPhotos,
                         bannedSendPhotos: bannedSendPhotos,
@@ -871,16 +884,26 @@ extension ChatControllerImpl {
             }
         }
         
-        if bannedSendFiles == nil {
-            alertController.addAction(UIAlertAction(title: presentationData.strings.Attachment_File, style: .default, handler: { [weak self] _ in
-                self?.presentVoiceOverSystemFilePicker()
-            }))
-        }
-        
-        if canSendPolls {
-            alertController.addAction(UIAlertAction(title: presentationData.strings.AttachmentMenu_Poll, style: .default, handler: { [weak self] _ in
-                if let controller = self?.configurePollCreation() {
-                    self?.effectiveNavigationController?.pushViewController(controller)
+	        if bannedSendFiles == nil {
+	            alertController.addAction(UIAlertAction(title: presentationData.strings.Attachment_File, style: .default, handler: { [weak self] _ in
+	                self?.presentVoiceOverSystemFilePicker()
+	            }))
+	        }
+	        
+	        if canSendLocationAndContact {
+	            alertController.addAction(UIAlertAction(title: presentationData.strings.Attachment_Location, style: .default, handler: { [weak self] _ in
+	                self?.presentVoiceOverSystemLocationMenu()
+	            }))
+	            
+	            alertController.addAction(UIAlertAction(title: presentationData.strings.Attachment_Contact, style: .default, handler: { [weak self] _ in
+	                self?.presentVoiceOverSystemContactPicker()
+	            }))
+	        }
+	        
+	        if canSendPolls {
+	            alertController.addAction(UIAlertAction(title: presentationData.strings.AttachmentMenu_Poll, style: .default, handler: { [weak self] _ in
+	                if let controller = self?.configurePollCreation() {
+	                    self?.effectiveNavigationController?.pushViewController(controller)
                 }
             }))
         }
@@ -1031,10 +1054,10 @@ extension ChatControllerImpl {
         presenter.present(picker, animated: true, completion: nil)
     }
 
-    private func handleVoiceOverSystemFilePickerResults(_ urls: [URL], editingMessage: Bool) {
-        guard !urls.isEmpty else {
-            return
-        }
+	    private func handleVoiceOverSystemFilePickerResults(_ urls: [URL], editingMessage: Bool) {
+	        guard !urls.isEmpty else {
+	            return
+	        }
 
         let _ = (self.context.engine.data.get(
             TelegramEngine.EngineData.Item.Peer.Peer(id: self.context.account.peerId),
@@ -1152,13 +1175,287 @@ extension ChatControllerImpl {
                     })
                 }
             }))
-        })
-    }
+	        })
+	    }
+	    
+	    private func presentVoiceOverSystemCameraPicker(bannedSendPhotos: (Int32, Bool)?) {
+	        guard bannedSendPhotos == nil else {
+	            return
+	        }
+	        guard UIImagePickerController.isSourceTypeAvailable(.camera) else {
+	            self.presentVoiceOverSystemNativeAlert(title: nil, message: self.presentationData.strings.Login_UnknownError)
+	            return
+	        }
+	        
+	        let picker = UIImagePickerController()
+	        picker.sourceType = .camera
+	        picker.allowsEditing = false
+	        picker.mediaTypes = ["public.image"]
+	        picker.cameraCaptureMode = .photo
+	        
+	        let delegate = VoiceOverSystemCameraPickerDelegate(completion: { [weak self] image in
+	            self?.handleVoiceOverSystemCameraCapture(image)
+	        })
+	        picker.delegate = delegate
+	        picker.presentationController?.delegate = delegate
+	        objc_setAssociatedObject(picker, &voiceOverSystemCameraPickerDelegateKey, delegate, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
+	        
+	        if let popoverController = picker.popoverPresentationController {
+	            if let sourceView = self.chatDisplayNode.getAttachmentButton() {
+	                popoverController.sourceView = sourceView
+	                popoverController.sourceRect = sourceView.bounds
+	            } else {
+	                popoverController.sourceView = self.view
+	                popoverController.sourceRect = CGRect(x: self.view.bounds.midX, y: self.view.bounds.maxY - 1.0, width: 1.0, height: 1.0)
+	            }
+	        }
+	        
+	        let basePresenter: UIViewController = {
+	            if let rootController = self.view.window?.rootViewController {
+	                return rootController
+	            }
+	            if let rootController = self.context.sharedContext.mainWindow?.viewController as? UIViewController {
+	                return rootController
+	            }
+	            return self
+	        }()
+	        let presenter = self.topMostViewControllerForPresentation(from: basePresenter)
+	        presenter.present(picker, animated: true, completion: nil)
+	    }
+	    
+	    private func handleVoiceOverSystemCameraCapture(_ image: UIImage?) {
+	        guard let image else {
+	            return
+	        }
+	        
+	        var randomId: Int64 = 0
+	        arc4random_buf(&randomId, 8)
+	        
+	        let maxSize = CGSize(width: 1280.0, height: 1280.0)
+	        let fittedSize = image.size.aspectFittedOrSmaller(maxSize)
+	        let scaledImage = TGScaleImageToPixelSize(image, fittedSize) ?? image
+	        
+	        guard let data = scaledImage.jpegData(compressionQuality: 0.75) else {
+	            return
+	        }
+	        
+	        let tempFilePath = NSTemporaryDirectory() + "\(randomId).jpeg"
+	        do {
+	            try data.write(to: URL(fileURLWithPath: tempFilePath), options: [.atomic])
+	        } catch {
+	            self.presentVoiceOverSystemNativeAlert(title: nil, message: self.presentationData.strings.Login_UnknownError)
+	            return
+	        }
+	        
+	        let resource = LocalFileReferenceMediaResource(localFilePath: tempFilePath, randomId: randomId)
+	        let representation = TelegramMediaImageRepresentation(dimensions: PixelDimensions(scaledImage.size), resource: resource, progressiveSizes: [], immediateThumbnailData: nil, hasVideo: false, isPersonal: false)
+	        let media = TelegramMediaImage(imageId: MediaId(namespace: Namespaces.Media.LocalImage, id: randomId), representations: [representation], immediateThumbnailData: nil, reference: nil, partialReference: nil, flags: [])
+	        
+	        let replyMessageSubject = self.presentationInterfaceState.interfaceState.replyMessageSubject
+	        let message: EnqueueMessage = .message(text: "", attributes: [], inlineStickers: [:], mediaReference: .standalone(media: media), threadId: self.chatLocation.threadId, replyToMessageId: replyMessageSubject?.subjectModel, replyToStoryId: nil, localGroupingKey: nil, correlationId: nil, bubbleUpEmojiOrStickersets: [])
+	        
+	        self.chatDisplayNode.setupSendActionOnViewUpdate({ [weak self] in
+	            guard let self else {
+	                return
+	            }
+	            self.chatDisplayNode.collapseInput()
+	            self.updateChatPresentationInterfaceState(animated: true, interactive: false, {
+	                $0.updatedInterfaceState { $0.withUpdatedReplyMessageSubject(nil).withUpdatedSendMessageEffect(nil).withUpdatedPostSuggestionState(nil) }
+	            })
+	        }, nil)
+	        
+	        self.presentPaidMessageAlertIfNeeded(completion: { [weak self] postpone in
+	            guard let self else {
+	                return
+	            }
+	            self.sendMessages([message], postpone: postpone)
+	        })
+	    }
+	    
+	    private func presentVoiceOverSystemContactPicker() {
+	        let picker = CNContactPickerViewController()
+	        picker.displayedPropertyKeys = [CNContactPhoneNumbersKey]
+	        
+	        let delegate = VoiceOverSystemContactPickerDelegate(completion: { [weak self] contact, phoneNumber in
+	            self?.handleVoiceOverSystemContactPickerResult(contact: contact, phoneNumber: phoneNumber)
+	        })
+	        picker.delegate = delegate
+	        picker.presentationController?.delegate = delegate
+	        objc_setAssociatedObject(picker, &voiceOverSystemContactPickerDelegateKey, delegate, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
+	        
+	        if let popoverController = picker.popoverPresentationController {
+	            if let sourceView = self.chatDisplayNode.getAttachmentButton() {
+	                popoverController.sourceView = sourceView
+	                popoverController.sourceRect = sourceView.bounds
+	            } else {
+	                popoverController.sourceView = self.view
+	                popoverController.sourceRect = CGRect(x: self.view.bounds.midX, y: self.view.bounds.maxY - 1.0, width: 1.0, height: 1.0)
+	            }
+	        }
+	        
+	        let basePresenter: UIViewController = {
+	            if let rootController = self.view.window?.rootViewController {
+	                return rootController
+	            }
+	            if let rootController = self.context.sharedContext.mainWindow?.viewController as? UIViewController {
+	                return rootController
+	            }
+	            return self
+	        }()
+	        let presenter = self.topMostViewControllerForPresentation(from: basePresenter)
+	        presenter.present(picker, animated: true, completion: nil)
+	    }
+	    
+	    private func handleVoiceOverSystemContactPickerResult(contact: CNContact?, phoneNumber: String?) {
+	        guard let contact else {
+	            return
+	        }
+	        
+	        let resolvedPhoneNumber: String? = {
+	            if let phoneNumber, !phoneNumber.isEmpty {
+	                return phoneNumber
+	            }
+	            if let firstNumber = contact.phoneNumbers.first?.value.stringValue, !firstNumber.isEmpty {
+	                return firstNumber
+	            }
+	            return nil
+	        }()
+	        
+	        guard let resolvedPhoneNumber else {
+	            self.presentVoiceOverSystemNativeAlert(title: nil, message: self.presentationData.strings.Login_UnknownError)
+	            return
+	        }
+	        
+	        let normalizedPhoneNumber = self.normalizeSystemContactPhoneNumber(resolvedPhoneNumber)
+	        let media = TelegramMediaContact(firstName: contact.givenName, lastName: contact.familyName, phoneNumber: normalizedPhoneNumber, peerId: nil, vCardData: nil)
+	        
+	        let replyMessageSubject = self.presentationInterfaceState.interfaceState.replyMessageSubject
+	        let message: EnqueueMessage = .message(text: "", attributes: [], inlineStickers: [:], mediaReference: .standalone(media: media), threadId: self.chatLocation.threadId, replyToMessageId: replyMessageSubject?.subjectModel, replyToStoryId: nil, localGroupingKey: nil, correlationId: nil, bubbleUpEmojiOrStickersets: [])
+	        
+	        self.chatDisplayNode.setupSendActionOnViewUpdate({ [weak self] in
+	            guard let self else {
+	                return
+	            }
+	            self.chatDisplayNode.collapseInput()
+	            self.updateChatPresentationInterfaceState(animated: true, interactive: false, {
+	                $0.updatedInterfaceState { $0.withUpdatedReplyMessageSubject(nil).withUpdatedSendMessageEffect(nil).withUpdatedPostSuggestionState(nil) }
+	            })
+	        }, nil)
+	        
+	        self.presentPaidMessageAlertIfNeeded(completion: { [weak self] postpone in
+	            guard let self else {
+	                return
+	            }
+	            self.sendMessages([message], postpone: postpone)
+	        })
+	    }
+	    
+	    private func normalizeSystemContactPhoneNumber(_ phoneNumber: String) -> String {
+	        let allowed = CharacterSet(charactersIn: "+0123456789")
+	        var result = ""
+	        result.reserveCapacity(phoneNumber.count)
+	        for scalar in phoneNumber.unicodeScalars {
+	            guard allowed.contains(scalar) else {
+	                continue
+	            }
+	            result.append(Character(scalar))
+	        }
+	        return result
+	    }
+	    
+	    private func presentVoiceOverSystemLocationMenu() {
+	        let presentationData = self.presentationData
+	        let alertController = UIAlertController(title: presentationData.strings.Attachment_Location, message: nil, preferredStyle: .actionSheet)
+	        
+	        alertController.addAction(UIAlertAction(title: presentationData.strings.Map_SendMyCurrentLocation, style: .default, handler: { [weak self] _ in
+	            self?.requestVoiceOverSystemCurrentLocationAndSend()
+	        }))
+	        alertController.addAction(UIAlertAction(title: presentationData.strings.Common_Cancel, style: .cancel))
+	        
+	        if let popoverController = alertController.popoverPresentationController {
+	            if let sourceView = self.chatDisplayNode.getAttachmentButton() {
+	                popoverController.sourceView = sourceView
+	                popoverController.sourceRect = sourceView.bounds
+	            } else {
+	                popoverController.sourceView = self.view
+	                popoverController.sourceRect = CGRect(x: self.view.bounds.midX, y: self.view.bounds.maxY - 1.0, width: 1.0, height: 1.0)
+	            }
+	        }
+	        
+	        if let mainWindow = self.context.sharedContext.mainWindow {
+	            mainWindow.presentNative(alertController)
+	        } else {
+	            self.present(alertController, animated: true)
+	        }
+	    }
+	    
+	    private func requestVoiceOverSystemCurrentLocationAndSend() {
+	        let delegate = VoiceOverSystemLocationManagerDelegate(completion: { [weak self] result in
+	            guard let self else {
+	                return
+	            }
+	            
+	            objc_setAssociatedObject(self, &voiceOverSystemLocationManagerDelegateKey, nil, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
+	            
+	            switch result {
+	            case let .success(location):
+	                self.sendVoiceOverSystemLocation(location)
+	            case .accessDenied:
+	                self.presentVoiceOverSystemNativeAlert(title: nil, message: self.presentationData.strings.AccessDenied_LocationDenied)
+	            case .failure:
+	                self.presentVoiceOverSystemNativeAlert(title: nil, message: self.presentationData.strings.Login_UnknownError)
+	            }
+	        })
+	        objc_setAssociatedObject(self, &voiceOverSystemLocationManagerDelegateKey, delegate, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
+	        delegate.start()
+	    }
+	    
+	    private func sendVoiceOverSystemLocation(_ location: CLLocation) {
+	        let accuracyRadius: Double? = location.horizontalAccuracy >= 0.0 ? location.horizontalAccuracy : nil
+	        let media = TelegramMediaMap(latitude: location.coordinate.latitude, longitude: location.coordinate.longitude, heading: nil, accuracyRadius: accuracyRadius, venue: nil)
+	        
+	        let replyMessageSubject = self.presentationInterfaceState.interfaceState.replyMessageSubject
+	        let message: EnqueueMessage = .message(text: "", attributes: [], inlineStickers: [:], mediaReference: .standalone(media: media), threadId: self.chatLocation.threadId, replyToMessageId: replyMessageSubject?.subjectModel, replyToStoryId: nil, localGroupingKey: nil, correlationId: nil, bubbleUpEmojiOrStickersets: [])
+	        
+	        self.chatDisplayNode.setupSendActionOnViewUpdate({ [weak self] in
+	            guard let self else {
+	                return
+	            }
+	            self.chatDisplayNode.collapseInput()
+	            self.updateChatPresentationInterfaceState(animated: true, interactive: false, {
+	                $0.updatedInterfaceState { $0.withUpdatedReplyMessageSubject(nil).withUpdatedSendMessageEffect(nil).withUpdatedPostSuggestionState(nil) }
+	            })
+	        }, nil)
+	        
+	        self.presentPaidMessageAlertIfNeeded(completion: { [weak self] postpone in
+	            guard let self else {
+	                return
+	            }
+	            self.sendMessages([message], postpone: postpone)
+	        })
+	    }
+	    
+	    private func presentVoiceOverSystemNativeAlert(title: String?, message: String) {
+	        let alertController = UIAlertController(title: title, message: message, preferredStyle: .alert)
+	        alertController.addAction(UIAlertAction(title: self.presentationData.strings.Common_OK, style: .default))
+	        
+	        let basePresenter: UIViewController = {
+	            if let rootController = self.view.window?.rootViewController {
+	                return rootController
+	            }
+	            if let rootController = self.context.sharedContext.mainWindow?.viewController as? UIViewController {
+	                return rootController
+	            }
+	            return self
+	        }()
+	        let presenter = self.topMostViewControllerForPresentation(from: basePresenter)
+	        presenter.present(alertController, animated: true)
+	    }
 
-    private func topMostViewControllerForPresentation(from controller: UIViewController) -> UIViewController {
-        var current: UIViewController = controller
-        while true {
-            if let presented = current.presentedViewController, !presented.isBeingDismissed {
+	    private func topMostViewControllerForPresentation(from controller: UIViewController) -> UIViewController {
+	        var current: UIViewController = controller
+	        while true {
+	            if let presented = current.presentedViewController, !presented.isBeingDismissed {
                 current = presented
                 continue
             }
@@ -1202,9 +1499,9 @@ extension ChatControllerImpl {
         }
     }
 
-    private final class VoiceOverSystemDocumentPickerDelegate: NSObject, UIDocumentPickerDelegate, UIAdaptivePresentationControllerDelegate {
-        private let completion: ([URL]) -> Void
-        private var didComplete = false
+	    private final class VoiceOverSystemDocumentPickerDelegate: NSObject, UIDocumentPickerDelegate, UIAdaptivePresentationControllerDelegate {
+	        private let completion: ([URL]) -> Void
+	        private var didComplete = false
 
         init(completion: @escaping ([URL]) -> Void) {
             self.completion = completion
@@ -1226,18 +1523,170 @@ extension ChatControllerImpl {
             self.complete([])
         }
 
-        private func complete(_ urls: [URL]) {
-            guard !self.didComplete else {
-                return
-            }
-            self.didComplete = true
-            self.completion(urls)
-        }
-    }
-    
-    func presentEditingAttachmentMenu(editMediaOptions: MessageMediaEditingOptions?, editMediaReference: AnyMediaReference?) {
-        let _ = (self.context.sharedContext.accountManager.transaction { transaction -> GeneratedMediaStoreSettings in
-            let entry = transaction.getSharedData(ApplicationSpecificSharedDataKeys.generatedMediaStoreSettings)?.get(GeneratedMediaStoreSettings.self)
+	        private func complete(_ urls: [URL]) {
+	            guard !self.didComplete else {
+	                return
+	            }
+	            self.didComplete = true
+	            self.completion(urls)
+	        }
+	    }
+	    
+	    private final class VoiceOverSystemCameraPickerDelegate: NSObject, UIImagePickerControllerDelegate, UINavigationControllerDelegate, UIAdaptivePresentationControllerDelegate {
+	        private let completion: (UIImage?) -> Void
+	        private var didComplete = false
+	        
+	        init(completion: @escaping (UIImage?) -> Void) {
+	            self.completion = completion
+	        }
+	        
+	        func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
+	            picker.dismiss(animated: true, completion: { [weak self] in
+	                self?.complete(nil)
+	            })
+	        }
+	        
+	        func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]) {
+	            let image = info[.originalImage] as? UIImage
+	            picker.dismiss(animated: true, completion: { [weak self] in
+	                self?.complete(image)
+	            })
+	        }
+	        
+	        func presentationControllerDidDismiss(_ presentationController: UIPresentationController) {
+	            self.complete(nil)
+	        }
+	        
+	        private func complete(_ image: UIImage?) {
+	            guard !self.didComplete else {
+	                return
+	            }
+	            self.didComplete = true
+	            self.completion(image)
+	        }
+	    }
+	    
+	    private final class VoiceOverSystemContactPickerDelegate: NSObject, CNContactPickerDelegate, UIAdaptivePresentationControllerDelegate {
+	        private let completion: (CNContact?, String?) -> Void
+	        private var didComplete = false
+	        
+	        init(completion: @escaping (CNContact?, String?) -> Void) {
+	            self.completion = completion
+	        }
+	        
+	        func contactPickerDidCancel(_ picker: CNContactPickerViewController) {
+	            self.complete(contact: nil, phoneNumber: nil)
+	        }
+	        
+	        func contactPicker(_ picker: CNContactPickerViewController, didSelect contact: CNContact) {
+	            self.complete(contact: contact, phoneNumber: nil)
+	        }
+	        
+	        func contactPicker(_ picker: CNContactPickerViewController, didSelect contactProperty: CNContactProperty) {
+	            let phoneNumber = (contactProperty.value as? CNPhoneNumber)?.stringValue
+	            self.complete(contact: contactProperty.contact, phoneNumber: phoneNumber)
+	        }
+	        
+	        func presentationControllerDidDismiss(_ presentationController: UIPresentationController) {
+	            self.complete(contact: nil, phoneNumber: nil)
+	        }
+	        
+	        private func complete(contact: CNContact?, phoneNumber: String?) {
+	            guard !self.didComplete else {
+	                return
+	            }
+	            self.didComplete = true
+	            self.completion(contact, phoneNumber)
+	        }
+	    }
+	    
+	    private final class VoiceOverSystemLocationManagerDelegate: NSObject, CLLocationManagerDelegate {
+	        enum Result {
+	            case success(CLLocation)
+	            case accessDenied
+	            case failure
+	        }
+	        
+	        private let completion: (Result) -> Void
+	        private var didComplete = false
+	        private let locationManager: CLLocationManager
+	        
+	        init(completion: @escaping (Result) -> Void) {
+	            self.completion = completion
+	            self.locationManager = CLLocationManager()
+	            super.init()
+	            
+	            self.locationManager.delegate = self
+	            self.locationManager.desiredAccuracy = kCLLocationAccuracyNearestTenMeters
+	        }
+	        
+	        func start() {
+	            let status: CLAuthorizationStatus
+	            if #available(iOS 14.0, *) {
+	                status = self.locationManager.authorizationStatus
+	            } else {
+	                status = CLLocationManager.authorizationStatus()
+	            }
+	            
+	            switch status {
+	            case .notDetermined:
+	                self.locationManager.requestWhenInUseAuthorization()
+	            case .restricted, .denied:
+	                self.complete(.accessDenied)
+	            case .authorizedAlways, .authorizedWhenInUse:
+	                self.locationManager.requestLocation()
+	            @unknown default:
+	                self.complete(.failure)
+	            }
+	        }
+	        
+	        @available(iOS 14.0, *)
+	        func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+	            self.handleAuthorizationStatus(manager.authorizationStatus)
+	        }
+	        
+	        func locationManager(_ manager: CLLocationManager, didChangeAuthorization status: CLAuthorizationStatus) {
+	            self.handleAuthorizationStatus(status)
+	        }
+	        
+	        private func handleAuthorizationStatus(_ status: CLAuthorizationStatus) {
+	            switch status {
+	            case .notDetermined:
+	                break
+	            case .restricted, .denied:
+	                self.complete(.accessDenied)
+	            case .authorizedAlways, .authorizedWhenInUse:
+	                self.locationManager.requestLocation()
+	            @unknown default:
+	                self.complete(.failure)
+	            }
+	        }
+	        
+	        func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+	            guard let location = locations.last else {
+	                self.complete(.failure)
+	                return
+	            }
+	            self.complete(.success(location))
+	        }
+	        
+	        func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
+	            self.complete(.failure)
+	        }
+	        
+	        private func complete(_ result: Result) {
+	            guard !self.didComplete else {
+	                return
+	            }
+	            self.didComplete = true
+	            self.locationManager.delegate = nil
+	            self.completion(result)
+	        }
+	    }
+	    
+	    func presentEditingAttachmentMenu(editMediaOptions: MessageMediaEditingOptions?, editMediaReference: AnyMediaReference?) {
+	        let _ = (self.context.sharedContext.accountManager.transaction { transaction -> GeneratedMediaStoreSettings in
+	            let entry = transaction.getSharedData(ApplicationSpecificSharedDataKeys.generatedMediaStoreSettings)?.get(GeneratedMediaStoreSettings.self)
             return entry ?? GeneratedMediaStoreSettings.defaultSettings
         }
         |> deliverOnMainQueue).startStandalone(next: { [weak self] settings in
