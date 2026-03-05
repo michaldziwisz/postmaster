@@ -211,6 +211,11 @@ final class VoiceOverPollVoteController: ViewController, UITableViewDataSource, 
             self.dismiss()
         }
     }
+
+    private func openResultsPressed() {
+        self.requestOpenResults(self.messageId, self.poll.pollId)
+        self.dismiss()
+    }
     
     override func accessibilityPerformEscape() -> Bool {
         self.cancelPressed()
@@ -243,7 +248,7 @@ final class VoiceOverPollVoteController: ViewController, UITableViewDataSource, 
         case .options:
             return self.poll.options.count
         case .action:
-            return 1
+            return self.canVote ? 2 : 1
         }
     }
     
@@ -289,13 +294,23 @@ final class VoiceOverPollVoteController: ViewController, UITableViewDataSource, 
             let cell = UITableViewCell(style: .default, reuseIdentifier: nil)
             cell.selectionStyle = .default
             
-            let title = self.actionTitle
-            let isEnabled = self.isActionEnabled
-            
+            let title: String
+            let isEnabled: Bool
+            if self.canVote && indexPath.row == 1 {
+                title = self.presentationData.strings.MessagePoll_ViewResults
+                isEnabled = true
+            } else {
+                title = self.actionTitle
+                isEnabled = self.isActionEnabled
+                if !isEnabled {
+                    cell.selectionStyle = .none
+                }
+            }
+
             cell.textLabel?.text = title
             cell.textLabel?.textAlignment = .center
             cell.textLabel?.textColor = isEnabled ? self.presentationData.theme.list.itemAccentColor : self.presentationData.theme.list.itemDisabledTextColor
-            
+
             cell.accessibilityLabel = title
             cell.accessibilityTraits = isEnabled ? [.button] : [.button, .notEnabled]
             
@@ -332,8 +347,11 @@ final class VoiceOverPollVoteController: ViewController, UITableViewDataSource, 
             tableView.reloadSections(IndexSet(integer: Section.options.rawValue), with: .none)
             self.updateActionEnabled()
         case .action:
-            self.actionPressed()
+            if self.canVote && indexPath.row == 1 {
+                self.openResultsPressed()
+            } else {
+                self.actionPressed()
+            }
         }
     }
 }
-

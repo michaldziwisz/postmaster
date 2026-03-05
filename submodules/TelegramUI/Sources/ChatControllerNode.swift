@@ -375,6 +375,26 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
         }
         overlay.accessibilityViewIsModal = isChatOnTop
         overlay.accessibilityElementsHidden = !isChatOnTop
+        
+        // When the chat is not the top-most controller, we must restore the navigation bar so pushed
+        // controllers (e.g. poll results) have a visible Back/Close button.
+        if let navigationBarView = self.navigationBar?.view {
+            if isChatOnTop {
+                navigationBarView.accessibilityElementsHidden = true
+                navigationBarView.isHidden = true
+                navigationBarView.isUserInteractionEnabled = false
+            } else {
+                navigationBarView.accessibilityElementsHidden = false
+                if let savedState = self.voiceOverOverlaySavedState {
+                    navigationBarView.isHidden = savedState.navigationBarIsHidden
+                    navigationBarView.isUserInteractionEnabled = savedState.navigationBarIsUserInteractionEnabled
+                } else {
+                    navigationBarView.isHidden = false
+                    navigationBarView.isUserInteractionEnabled = true
+                }
+            }
+        }
+        
         if wasHidden, isChatOnTop {
             overlay.voiceOverDidReturnToChat()
         }
