@@ -1,5 +1,6 @@
 import Foundation
 import UIKit
+import AsyncDisplayKit
 import Display
 import SwiftSignalKit
 import TelegramPresentationData
@@ -35,6 +36,7 @@ final class VoiceOverComposeTodoController: ViewController, UITableViewDataSourc
     private let completion: (TelegramMediaTodo) -> Void
     
     private let tableView: UITableView
+    private let tableNode: ASDisplayNode
     
     private var titleText: String = ""
     private var tasks: [TaskModel] = []
@@ -69,6 +71,9 @@ final class VoiceOverComposeTodoController: ViewController, UITableViewDataSourc
         self.completion = completion
         
         self.tableView = UITableView(frame: .zero, style: .insetGrouped)
+        self.tableNode = ASDisplayNode(viewBlock: { [unowned self] in
+            return self.tableView
+        }, didLoad: nil)
         
         super.init(navigationBarPresentationData: NavigationBarPresentationData(presentationTheme: self.presentationData.theme, presentationStrings: self.presentationData.strings))
         
@@ -131,10 +136,10 @@ final class VoiceOverComposeTodoController: ViewController, UITableViewDataSourc
     override func loadView() {
         super.loadView()
         
-        if let navigationBarView = self.navigationBar?.view {
-            self.view.insertSubview(self.tableView, belowSubview: navigationBarView)
+        if let navigationBar = self.navigationBar {
+            self.displayNode.insertSubnode(self.tableNode, belowSubnode: navigationBar)
         } else {
-            self.view.addSubview(self.tableView)
+            self.displayNode.addSubnode(self.tableNode)
         }
         self.view.backgroundColor = self.presentationData.theme.list.plainBackgroundColor
         self.tableView.backgroundColor = self.presentationData.theme.list.plainBackgroundColor
@@ -183,9 +188,9 @@ final class VoiceOverComposeTodoController: ViewController, UITableViewDataSourc
         let frame = CGRect(origin: .zero, size: size)
         
         if let transition {
-            transition.updateFrame(view: self.tableView, frame: frame)
+            transition.updateFrame(node: self.tableNode, frame: frame)
         } else {
-            self.tableView.frame = frame
+            self.tableNode.frame = frame
         }
         
         let insets = UIEdgeInsets(top: navigationHeight, left: 0.0, bottom: safeInsets.bottom, right: 0.0)
