@@ -23,7 +23,7 @@ final class VoiceOverPollVoteController: ViewController, UITableViewDataSource, 
     private let poll: TelegramMediaPoll
     
     private let requestSelectOptions: (MessageId, [Data]) -> Void
-    private let requestOpenResults: (MessageId, MediaId) -> Void
+    private let openResults: (MessageId) -> Void
     
     private let tableView: UITableView
     private let tableNode: ASDisplayNode
@@ -38,14 +38,14 @@ final class VoiceOverPollVoteController: ViewController, UITableViewDataSource, 
         messageId: MessageId,
         poll: TelegramMediaPoll,
         requestSelectOptions: @escaping (MessageId, [Data]) -> Void,
-        requestOpenResults: @escaping (MessageId, MediaId) -> Void
+        openResults: @escaping (MessageId) -> Void
     ) {
         self.context = context
         self.presentationData = context.sharedContext.currentPresentationData.with { $0 }
         self.messageId = messageId
         self.poll = poll
         self.requestSelectOptions = requestSelectOptions
-        self.requestOpenResults = requestOpenResults
+        self.openResults = openResults
         
         let tableView = UITableView(frame: .zero, style: .insetGrouped)
         self.tableView = tableView
@@ -207,13 +207,13 @@ final class VoiceOverPollVoteController: ViewController, UITableViewDataSource, 
             self.requestSelectOptions(self.messageId, selected)
             self.dismiss()
         } else {
-            self.requestOpenResults(self.messageId, self.poll.pollId)
+            self.openResults(self.messageId)
             self.dismiss()
         }
     }
 
     private func openResultsPressed() {
-        self.requestOpenResults(self.messageId, self.poll.pollId)
+        self.openResults(self.messageId)
         self.dismiss()
     }
     
@@ -270,6 +270,14 @@ final class VoiceOverPollVoteController: ViewController, UITableViewDataSource, 
             cell.selectionStyle = .none
             cell.textLabel?.numberOfLines = 0
             cell.textLabel?.text = self.poll.text
+            cell.isAccessibilityElement = true
+            cell.accessibilityLabel = self.poll.text
+            if self.isMultipleChoice {
+                cell.accessibilityValue = self.presentationData.strings.CreatePoll_MultipleChoice
+            } else {
+                cell.accessibilityValue = nil
+            }
+            cell.accessibilityTraits = [.staticText]
             return cell
             
         case .options:
@@ -277,14 +285,42 @@ final class VoiceOverPollVoteController: ViewController, UITableViewDataSource, 
             cell.textLabel?.numberOfLines = 0
             if indexPath.row < self.poll.options.count {
                 let option = self.poll.options[indexPath.row]
+                let isSelected = self.selectedOptionOpaqueIdentifiers.contains(option.opaqueIdentifier)
+
                 cell.textLabel?.text = option.text
-                if self.selectedOptionOpaqueIdentifiers.contains(option.opaqueIdentifier) {
-                    cell.accessoryType = .checkmark
+
+                let iconName: String
+                if self.isMultipleChoice {
+                    iconName = isSelected ? "checkmark.square.fill" : "square"
                 } else {
-                    cell.accessoryType = .none
+                    iconName = isSelected ? "largecircle.fill.circle" : "circle"
                 }
+                cell.imageView?.image = UIImage(systemName: iconName)
+                cell.imageView?.tintColor = isSelected ? self.presentationData.theme.list.itemAccentColor : self.presentationData.theme.list.itemSecondaryTextColor
+                cell.accessoryType = .none
+
+                cell.accessibilityLabel = option.text
+                cell.accessibilityValue = isSelected ? self.presentationData.strings.VoiceOver_Chat_OptionSelected : nil
+
+                var traits: UIAccessibilityTraits
+                if self.canVote {
+                    traits = [.button]
+                } else {
+                    traits = [.staticText]
+                    traits.insert(.notEnabled)
+                }
+                if isSelected {
+                    traits.insert(.selected)
+                }
+                if self.isMultipleChoice {
+                    if #available(iOS 17.0, *) {
+                        traits.insert(.toggleButton)
+                    }
+                }
+                cell.accessibilityTraits = traits
             } else {
                 cell.textLabel?.text = ""
+                cell.imageView?.image = nil
                 cell.accessoryType = .none
             }
             cell.selectionStyle = self.canVote ? .default : .none

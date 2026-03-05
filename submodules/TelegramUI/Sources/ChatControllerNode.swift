@@ -1157,8 +1157,27 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                         requestSelectOptions: { [weak self] messageId, selectedOptions in
                             self?.controllerInteraction.requestSelectMessagePollOptions(messageId, selectedOptions)
                         },
-                        requestOpenResults: { [weak self] messageId, pollId in
-                            self?.controllerInteraction.requestOpenMessagePollResults(messageId, pollId)
+                        openResults: { [weak self] messageId in
+                            guard let self else {
+                                return
+                            }
+                            let fallbackPoll = poll
+                            let _ = (self.context.engine.data.get(TelegramEngine.EngineData.Item.Messages.Message(id: messageId))
+                            |> deliverOnMainQueue).startStandalone(next: { [weak self] message in
+                                guard let self else {
+                                    return
+                                }
+                                let resolvedPoll: TelegramMediaPoll
+                                if let message, let poll = message.media.first(where: { $0 is TelegramMediaPoll }) as? TelegramMediaPoll {
+                                    resolvedPoll = poll
+                                } else {
+                                    resolvedPoll = fallbackPoll
+                                }
+                                
+                                let controller = VoiceOverPollResultsController(context: self.context, messageId: messageId, poll: resolvedPoll)
+                                controller.navigationPresentation = .modal
+                                self.controller?.push(controller)
+                            })
                         }
                     )
                     controller.navigationPresentation = .modal
