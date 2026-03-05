@@ -209,11 +209,19 @@ final class VoiceOverPollOptionVotersController: ViewController, UITableViewData
             
             if let optionState = self.optionState, !optionState.peers.isEmpty, indexPath.row < optionState.peers.count {
                 let peer = optionState.peers[indexPath.row]
-                let title = EnginePeer(peer.peer).displayTitle(strings: self.presentationData.strings, displayOrder: self.presentationData.nameDisplayOrder)
-                cell.textLabel?.text = title
-                cell.accessoryType = .disclosureIndicator
-                cell.accessibilityLabel = title
-                cell.accessibilityTraits = [.button]
+                if let peerValue = peer.peer {
+                    let title = EnginePeer(peerValue).displayTitle(strings: self.presentationData.strings, displayOrder: self.presentationData.nameDisplayOrder)
+                    cell.textLabel?.text = title
+                    cell.accessoryType = .disclosureIndicator
+                    cell.accessibilityLabel = title
+                    cell.accessibilityTraits = [.button]
+                } else {
+                    let title = self.presentationData.strings.User_DeletedAccount
+                    cell.textLabel?.text = title
+                    cell.accessoryType = .none
+                    cell.accessibilityLabel = title
+                    cell.accessibilityTraits = [.staticText]
+                }
             } else {
                 let title: String
                 switch self.poll.kind {
@@ -263,7 +271,10 @@ final class VoiceOverPollOptionVotersController: ViewController, UITableViewData
                 return
             }
             let peer = optionState.peers[indexPath.row]
-            let enginePeer = EnginePeer(peer.peer)
+            guard let peerValue = peer.peer else {
+                return
+            }
+            let enginePeer = EnginePeer(peerValue)
             if let controller = self.context.sharedContext.makePeerInfoController(context: self.context, updatedPresentationData: nil, peer: enginePeer._asPeer(), mode: .generic, avatarInitiallyExpanded: false, fromChat: true, requestsContext: nil) {
                 self.push(controller)
             }
