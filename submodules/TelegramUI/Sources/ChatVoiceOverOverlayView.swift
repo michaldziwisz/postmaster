@@ -754,6 +754,8 @@ public final class ChatVoiceOverOverlayView: UIView {
         public var didEndLoadEarlier: (() -> Void)?
         public var scrollToLatest: (() -> Void)?
         public var activateMessage: ((Message) -> Void)?
+        public var openPollMessage: ((Message) -> Void)?
+        public var openTodoMessage: ((Message) -> Void)?
         public var toggleVoiceMessagePlayback: ((Message) -> Void)?
         public var toggleCurrentVoicePlayback: (() -> Void)?
         public var seekCurrentVoicePlayback: ((Double) -> Void)?
@@ -771,6 +773,8 @@ public final class ChatVoiceOverOverlayView: UIView {
             didEndLoadEarlier: (() -> Void)? = nil,
             scrollToLatest: (() -> Void)? = nil,
             activateMessage: ((Message) -> Void)? = nil,
+            openPollMessage: ((Message) -> Void)? = nil,
+            openTodoMessage: ((Message) -> Void)? = nil,
             toggleVoiceMessagePlayback: ((Message) -> Void)? = nil,
             toggleCurrentVoicePlayback: (() -> Void)? = nil,
             seekCurrentVoicePlayback: ((Double) -> Void)? = nil,
@@ -787,6 +791,8 @@ public final class ChatVoiceOverOverlayView: UIView {
             self.didEndLoadEarlier = didEndLoadEarlier
             self.scrollToLatest = scrollToLatest
             self.activateMessage = activateMessage
+            self.openPollMessage = openPollMessage
+            self.openTodoMessage = openTodoMessage
             self.toggleVoiceMessagePlayback = toggleVoiceMessagePlayback
             self.toggleCurrentVoicePlayback = toggleCurrentVoicePlayback
             self.seekCurrentVoicePlayback = seekCurrentVoicePlayback
@@ -1200,6 +1206,7 @@ public final class ChatVoiceOverOverlayView: UIView {
 
         let isComposerEnabled = self.isComposerEnabled
         self.composerView.isUserInteractionEnabled = isComposerEnabled
+        self.reconcileVoiceOverScrollbarFocusIfNeeded()
         self.updateComposerAccessibilityVisibility()
 
         self.attachButton.isEnabled = isComposerEnabled
@@ -1218,6 +1225,13 @@ public final class ChatVoiceOverOverlayView: UIView {
         self.updateTitle(state: state)
         self.updateVoicePlayerControls()
         self.invalidateAccessibilityElements()
+    }
+    
+    func voiceOverDidReturnToChat() {
+        guard UIAccessibility.isVoiceOverRunning else {
+            return
+        }
+        self.setVoiceOverScrollbarAccessibilityElementActive(false, anchorTableRow: nil)
     }
 
     func updateVoicePlaybackState(_ state: VoicePlaybackState?) {
@@ -2378,7 +2392,11 @@ public final class ChatVoiceOverOverlayView: UIView {
             guard self.isMessageActivatable(message) else {
                 return false
             }
-            if self.isVoiceMessage(message), let action = self.actions.toggleVoiceMessagePlayback {
+            if self.pollMedia(in: message) != nil, let action = self.actions.openPollMessage {
+                action(message)
+            } else if self.todoMedia(in: message) != nil, let action = self.actions.openTodoMessage {
+                action(message)
+            } else if self.isVoiceMessage(message), let action = self.actions.toggleVoiceMessagePlayback {
                 action(message)
             } else {
                 self.actions.activateMessage?(message)
@@ -2387,6 +2405,24 @@ public final class ChatVoiceOverOverlayView: UIView {
         }
     }
 
+    private func pollMedia(in message: Message) -> TelegramMediaPoll? {
+        for media in message.media {
+            if let poll = media as? TelegramMediaPoll {
+                return poll
+            }
+        }
+        return nil
+    }
+    
+    private func todoMedia(in message: Message) -> TelegramMediaTodo? {
+        for media in message.media {
+            if let todo = media as? TelegramMediaTodo {
+                return todo
+            }
+        }
+        return nil
+    }
+    
     private func isVoiceMessage(_ message: Message) -> Bool {
         for media in message.media {
             if let file = media as? TelegramMediaFile, file.isVoice {
@@ -2645,10 +2681,12 @@ public final class ChatVoiceOverOverlayView: UIView {
         self.applyEntries(entries)
     }
     
-    private func applyEntries(_ entries: [ChatHistoryEntry]) {
-        let incomingRows = self.makeRows(from: entries)
-        let newRows = self.mergeRows(existing: self.rows, incoming: incomingRows)
-        let now = CACurrentMediaTime()
+	    private func applyEntries(_ entries: [ChatHistoryEntry]) {
+	        self.reconcileVoiceOverScrollbarFocusIfNeeded()
+
+	        let incomingRows = self.makeRows(from: entries)
+	        let newRows = self.mergeRows(existing: self.rows, incoming: incomingRows)
+	        let now = CACurrentMediaTime()
         
         let previousWasAtBottom = self.isAtBottom()
         self.updateShouldFollowLatestFromFocus()
@@ -3132,10 +3170,10 @@ public final class ChatVoiceOverOverlayView: UIView {
         return focusedView
     }
 
-    private func scheduleVoiceOverFocusRecoveryIfNeeded() {
-        guard UIAccessibility.isVoiceOverRunning else {
-            return
-        }
+	    private func scheduleVoiceOverFocusRecoveryIfNeeded() {
+	        guard UIAccessibility.isVoiceOverRunning else {
+	            return
+	        }
         guard self.voiceOverFocusRecoveryWorkItem == nil else {
             return
         }
@@ -3168,14 +3206,31 @@ public final class ChatVoiceOverOverlayView: UIView {
             }
         }
 
-        self.voiceOverFocusRecoveryWorkItem = workItem
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15, execute: workItem)
-    }
+	        self.voiceOverFocusRecoveryWorkItem = workItem
+	        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15, execute: workItem)
+	    }
 
-    private func voiceOverFallbackFocusIndexPath() -> IndexPath? {
-        let rowCount = max(0, self.tableView.numberOfRows(inSection: 0))
-        guard rowCount > 0 else {
-            return nil
+	    private func reconcileVoiceOverScrollbarFocusIfNeeded() {
+	        guard UIAccessibility.isVoiceOverRunning else {
+	            return
+	        }
+	        guard self.voiceOverScrollbarAccessibilityElementAnchorTableRow != nil else {
+	            return
+	        }
+
+	        if let focusedScrollbar = UIAccessibility.focusedElement(using: .notificationVoiceOver) as? ChatVoiceOverOverlayScrollbarAccessibilityElement,
+	           focusedScrollbar.overlay === self
+	        {
+	            return
+	        }
+
+	        self.setVoiceOverScrollbarAccessibilityElementActive(false, anchorTableRow: nil)
+	    }
+
+	    private func voiceOverFallbackFocusIndexPath() -> IndexPath? {
+	        let rowCount = max(0, self.tableView.numberOfRows(inSection: 0))
+	        guard rowCount > 0 else {
+	            return nil
         }
 
         guard let visibleIndexPaths = self.tableView.indexPathsForVisibleRows?.sorted(), !visibleIndexPaths.isEmpty else {
@@ -3471,7 +3526,113 @@ public final class ChatVoiceOverOverlayView: UIView {
         }
         
         for media in message.media {
-            if let _ = media as? TelegramMediaImage {
+            if let poll = media as? TelegramMediaPoll {
+                traits.insert(.button)
+                
+                let typeText: String = {
+                    if poll.isClosed {
+                        return state.strings.MessagePoll_LabelClosed
+                    }
+                    switch poll.kind {
+                    case .quiz:
+                        if case .anonymous = poll.publicity {
+                            return state.strings.MessagePoll_LabelAnonymousQuiz
+                        } else {
+                            return state.strings.MessagePoll_LabelQuiz
+                        }
+                    case .poll:
+                        if case .anonymous = poll.publicity {
+                            return state.strings.MessagePoll_LabelAnonymous
+                        } else {
+                            return state.strings.MessagePoll_LabelPoll
+                        }
+                    }
+                }()
+                
+                let totalVoters = poll.results.totalVoters ?? 0
+                let votesText: String
+                if totalVoters > 0 {
+                    votesText = state.strings.VoiceOver_Chat_PollVotes(Int32(totalVoters)).string
+                } else {
+                    votesText = state.strings.VoiceOver_Chat_PollNoVotes
+                }
+                
+                let question = poll.text.trimmingCharacters(in: .whitespacesAndNewlines)
+                let optionCountText = state.strings.VoiceOver_Chat_PollOptionCount(Int32(poll.options.count))
+                
+                var baseLabel = ""
+                baseLabel.append(typeText)
+                if !question.isEmpty {
+                    baseLabel.append(". ")
+                    baseLabel.append(question)
+                }
+                baseLabel.append(". ")
+                baseLabel.append(optionCountText)
+                baseLabel.append(". ")
+                baseLabel.append(votesText)
+                if poll.isClosed {
+                    baseLabel.append(". ")
+                    baseLabel.append(state.strings.VoiceOver_Chat_PollFinalResults)
+                }
+                
+                if isIncoming, announceIncomingAuthors, let authorName {
+                    accessibilityLabel = "\(authorName). \(baseLabel)"
+                } else if !isIncoming {
+                    accessibilityLabel = "\(state.strings.DialogList_You). \(baseLabel)"
+                } else {
+                    accessibilityLabel = baseLabel
+                }
+                
+                hint = state.strings.VoiceOver_Chat_OpenHint
+                return (question.isEmpty ? typeText : question, subtitle, accessibilityLabel, hint, traits)
+            } else if let todo = media as? TelegramMediaTodo {
+                traits.insert(.button)
+                
+                let typeText: String = {
+                    if todo.flags.contains(.othersCanComplete) {
+                        return state.strings.Chat_Todo_Message_TitleGroup
+                    } else if let author = message.author, author.id != state.accountPeerId {
+                        return state.strings.Chat_Todo_Message_TitlePersonal(EnginePeer(author).compactDisplayTitle).string
+                    } else {
+                        return state.strings.Chat_Todo_Message_Title
+                    }
+                }()
+                
+                let completionSummary: String = {
+                    let completionsCount = Int32(todo.completions.count)
+                    let format: String
+                    if let author = message.author, author.id != state.accountPeerId, !todo.flags.contains(.othersCanComplete) {
+                        format = state.strings.Chat_Todo_Message_CompletedBy(completionsCount).replacingOccurrences(of: "{name}", with: EnginePeer(author).compactDisplayTitle)
+                    } else {
+                        format = state.strings.Chat_Todo_Message_Completed(completionsCount)
+                    }
+                    return format.replacingOccurrences(of: "{count}", with: "\(todo.items.count)")
+                }()
+                
+                let todoTitle = todo.text.trimmingCharacters(in: .whitespacesAndNewlines)
+                
+                var baseLabel = ""
+                baseLabel.append(typeText)
+                if !todoTitle.isEmpty {
+                    baseLabel.append(". ")
+                    baseLabel.append(todoTitle)
+                }
+                if !completionSummary.isEmpty {
+                    baseLabel.append(". ")
+                    baseLabel.append(completionSummary)
+                }
+                
+                if isIncoming, announceIncomingAuthors, let authorName {
+                    accessibilityLabel = "\(authorName). \(baseLabel)"
+                } else if !isIncoming {
+                    accessibilityLabel = "\(state.strings.DialogList_You). \(baseLabel)"
+                } else {
+                    accessibilityLabel = baseLabel
+                }
+                
+                hint = state.strings.VoiceOver_Chat_OpenHint
+                return (todoTitle.isEmpty ? typeText : todoTitle, subtitle, accessibilityLabel, hint, traits)
+            } else if let _ = media as? TelegramMediaImage {
                 traits.insert(.image)
                 if isIncoming {
                     if announceIncomingAuthors, let authorName {
@@ -3546,6 +3707,12 @@ public final class ChatVoiceOverOverlayView: UIView {
                 return true
             }
             if media is TelegramMediaFile {
+                return true
+            }
+            if media is TelegramMediaPoll {
+                return true
+            }
+            if media is TelegramMediaTodo {
                 return true
             }
         }

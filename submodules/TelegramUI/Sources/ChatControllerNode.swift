@@ -366,6 +366,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
             overlay.accessibilityElementsHidden = false
             return
         }
+        let wasHidden = overlay.accessibilityElementsHidden
         let isChatOnTop: Bool
         if viewControllers.isEmpty {
             isChatOnTop = true
@@ -374,6 +375,9 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
         }
         overlay.accessibilityViewIsModal = isChatOnTop
         overlay.accessibilityElementsHidden = !isChatOnTop
+        if wasHidden, isChatOnTop {
+            overlay.voiceOverDidReturnToChat()
+        }
     }
     
     private var derivedLayoutState: ChatControllerNodeDerivedLayoutState?
@@ -1117,6 +1121,50 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                         return
                     }
                     let _ = self.controllerInteraction.openMessage(message, OpenMessageParams(mode: .default))
+                }
+                overlay.actions.openPollMessage = { [weak self] message in
+                    guard let self else {
+                        return
+                    }
+                    guard let poll = message.media.first(where: { $0 is TelegramMediaPoll }) as? TelegramMediaPoll else {
+                        return
+                    }
+                    
+                    let controller = VoiceOverPollVoteController(
+                        context: self.context,
+                        messageId: message.id,
+                        poll: poll,
+                        requestSelectOptions: { [weak self] messageId, selectedOptions in
+                            self?.controllerInteraction.requestSelectMessagePollOptions(messageId, selectedOptions)
+                        },
+                        requestOpenResults: { [weak self] messageId, pollId in
+                            self?.controllerInteraction.requestOpenMessagePollResults(messageId, pollId)
+                        }
+                    )
+                    controller.navigationPresentation = .modal
+                    self.controller?.push(controller)
+                }
+                overlay.actions.openTodoMessage = { [weak self] message in
+                    guard let self else {
+                        return
+                    }
+                    guard let todo = message.media.first(where: { $0 is TelegramMediaTodo }) as? TelegramMediaTodo else {
+                        return
+                    }
+                    
+                    let controller = VoiceOverTodoMessageController(
+                        context: self.context,
+                        message: message,
+                        todo: todo,
+                        requestToggleItem: { [weak self] messageId, itemId, value in
+                            self?.controllerInteraction.requestToggleTodoMessageItem(messageId, itemId, value)
+                        },
+                        displayUnavailable: { [weak self] messageId in
+                            self?.controllerInteraction.displayTodoToggleUnavailable(messageId)
+                        }
+                    )
+                    controller.navigationPresentation = .modal
+                    self.controller?.push(controller)
                 }
                 overlay.actions.toggleVoiceMessagePlayback = { [weak self] message in
                     guard let self else {
