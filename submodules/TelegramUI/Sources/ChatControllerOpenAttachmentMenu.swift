@@ -657,13 +657,43 @@ extension ChatControllerImpl {
                         }
                     }))
                 case .poll:
-                    if let controller = strongSelf.configurePollCreation() as? AttachmentContainable {
+                    if UIAccessibility.isVoiceOverRunning {
+                        strongSelf.controllerNavigationDisposable.set(nil)
+                        guard let controller = strongSelf.configurePollCreation() else {
+                            completion(nil, nil)
+                            return
+                        }
+                        controller.navigationPresentation = .modal
+                        completion(nil, nil)
+                        if let attachmentController = strongSelf.attachmentController {
+                            attachmentController.dismiss(animated: true, completion: { [weak self] in
+                                self?.effectiveNavigationController?.pushViewController(controller)
+                            })
+                        } else {
+                            strongSelf.effectiveNavigationController?.pushViewController(controller)
+                        }
+                    } else if let controller = strongSelf.configurePollCreation() as? AttachmentContainable {
                         completion(controller, controller.mediaPickerContext)
                         strongSelf.controllerNavigationDisposable.set(nil)
                     }
                 case .todo:
                     if strongSelf.context.isPremium {
-                        if let controller = strongSelf.configureTodoCreation() as? AttachmentContainable {
+                        if UIAccessibility.isVoiceOverRunning {
+                            strongSelf.controllerNavigationDisposable.set(nil)
+                            guard let controller = strongSelf.configureTodoCreation() else {
+                                completion(nil, nil)
+                                return
+                            }
+                            controller.navigationPresentation = .modal
+                            completion(nil, nil)
+                            if let attachmentController = strongSelf.attachmentController {
+                                attachmentController.dismiss(animated: true, completion: { [weak self] in
+                                    self?.effectiveNavigationController?.pushViewController(controller)
+                                })
+                            } else {
+                                strongSelf.effectiveNavigationController?.pushViewController(controller)
+                            }
+                        } else if let controller = strongSelf.configureTodoCreation() as? AttachmentContainable {
                             completion(controller, controller.mediaPickerContext)
                             strongSelf.controllerNavigationDisposable.set(nil)
                         }
