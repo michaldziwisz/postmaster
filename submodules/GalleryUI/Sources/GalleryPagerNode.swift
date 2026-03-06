@@ -94,6 +94,7 @@ public final class GalleryPagerNode: ASDisplayNode, ASScrollViewDelegate, ASGest
     private var sideActionInitialPosition: CGPoint?
     
     private var tapRecognizer: TapLongTapOrDoubleTapGestureRecognizer?
+    private var voiceOverStatusObserver: NSObjectProtocol?
     
     public private(set) var items: [GalleryItem] = []
     private var itemNodes: [GalleryItemNode] = []
@@ -104,6 +105,7 @@ public final class GalleryPagerNode: ASDisplayNode, ASScrollViewDelegate, ASGest
             if oldValue != self.centralItemIndex && !self.ignoreCentralItemIndexUpdate {
                 self.centralItemIndexUpdated(self.centralItemIndex)
             }
+            self.updateVoiceOverAccessibility()
         }
     }
     
@@ -158,6 +160,7 @@ public final class GalleryPagerNode: ASDisplayNode, ASScrollViewDelegate, ASGest
         self.scrollView.scrollsToTop = false
         self.scrollView.delaysContentTouches = false
         self.view.addSubview(self.scrollView)
+        self.scrollView.isAccessibilityElement = false
         
         self.addSubnode(self.leftFadeNode)
         self.addSubnode(self.rightFadeNode)
@@ -172,10 +175,22 @@ public final class GalleryPagerNode: ASDisplayNode, ASScrollViewDelegate, ASGest
     
     deinit {
         self.pagingEnabledDisposable?.dispose()
+        if let voiceOverStatusObserver {
+            NotificationCenter.default.removeObserver(voiceOverStatusObserver)
+        }
     }
     
     public override func didLoad() {
         super.didLoad()
+
+        self.updateVoiceOverAccessibility()
+        self.voiceOverStatusObserver = NotificationCenter.default.addObserver(
+            forName: UIAccessibility.voiceOverStatusDidChangeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.updateVoiceOverAccessibility()
+        }
         
         let recognizer = TapLongTapOrDoubleTapGestureRecognizer(target: self, action: #selector(self.tapLongTapOrDoubleTapGesture(_:)))
         recognizer.delegate = self.wrappedGestureRecognizerDelegate
@@ -374,6 +389,22 @@ public final class GalleryPagerNode: ASDisplayNode, ASScrollViewDelegate, ASGest
             break
         }
     }
+
+    private func updateVoiceOverAccessibility() {
+        guard self.isNodeLoaded else {
+            return
+        }
+        
+        self.view.isAccessibilityElement = false
+        self.scrollView.isAccessibilityElement = false
+        
+        guard UIAccessibility.isVoiceOverRunning, let centralItemNode = self.centralItemNode() else {
+            self.view.accessibilityElements = nil
+            return
+        }
+        
+        self.view.accessibilityElements = [centralItemNode.view as Any]
+    }
     
     public var isScrollEnabled: Bool {
         get {
@@ -420,6 +451,7 @@ public final class GalleryPagerNode: ASDisplayNode, ASScrollViewDelegate, ASGest
         
         self.leftFadeNode.frame = CGRect(x: 0.0, y: 0.0, width: fadeWidth, height: layout.size.height)
         self.rightFadeNode.frame = CGRect(x: layout.size.width - fadeWidth, y: 0.0, width: fadeWidth, height: layout.size.height)
+        self.updateVoiceOverAccessibility()
     }
     
     public func ready() -> Signal<Void, NoError> {

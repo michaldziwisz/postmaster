@@ -172,6 +172,7 @@ open class GalleryControllerNode: ASDisplayNode, ASScrollViewDelegate, ASGesture
         self.scrollView.delegate = self.wrappedScrollViewDelegate
         self.scrollView.scrollsToTop = false
         self.view.addSubview(self.scrollView)
+        self.scrollView.isAccessibilityElement = false
         
         self.scrollView.addSubview(self.pager.view)
 

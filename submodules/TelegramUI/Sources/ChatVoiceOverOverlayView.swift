@@ -1232,6 +1232,22 @@ public final class ChatVoiceOverOverlayView: UIView {
             return
         }
         self.setVoiceOverScrollbarAccessibilityElementActive(false, anchorTableRow: nil)
+        self.scheduleVoiceOverFocusRecoveryIfNeeded()
+
+        let restoreFocus: () -> Void = { [weak self] in
+            guard let self else {
+                return
+            }
+            let targetIndexPath = self.voiceOverFallbackFocusIndexPath()
+            if let targetIndexPath, let element = self.accessibilityElement(at: targetIndexPath) {
+                UIAccessibility.post(notification: .screenChanged, argument: element)
+            } else {
+                UIAccessibility.post(notification: .screenChanged, argument: self.tableView)
+            }
+        }
+
+        DispatchQueue.main.async(execute: restoreFocus)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15, execute: restoreFocus)
     }
 
     func updateVoicePlaybackState(_ state: VoicePlaybackState?) {
