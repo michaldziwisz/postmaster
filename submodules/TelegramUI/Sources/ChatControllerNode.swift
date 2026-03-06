@@ -1196,12 +1196,11 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                     // Proactively release the modal trap before opening.
                     if self.historyNode.messageInCurrentHistoryView(message.id) != nil, let overlay = self.voiceOverOverlayView {
                         overlay.accessibilityViewIsModal = false
-                        overlay.accessibilityElementsHidden = true
                     }
                     
                     let didOpen = self.controllerInteraction.openMessage(message, OpenMessageParams(mode: .default))
-                    
-                    DispatchQueue.main.async { [weak self] in
+
+                    let updateIsolation: () -> Void = { [weak self] in
                         guard let self else {
                             return
                         }
@@ -1211,13 +1210,51 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                             self.updateVoiceOverOverlayAccessibilityIsolation(viewControllers: [])
                         }
                     }
-                    
+
                     if didOpen {
+                        // Delay the first isolation update slightly so that window-level presentations
+                        // (e.g. gallery in `.window(.root)`) have time to register, preventing the overlay
+                        // from re-enabling itself too early.
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                            guard UIAccessibility.isVoiceOverRunning else {
+                            updateIsolation()
+                        }
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                            updateIsolation()
+                        }
+                        
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
+                            guard let self, UIAccessibility.isVoiceOverRunning else {
                                 return
                             }
-                            UIAccessibility.post(notification: .screenChanged, argument: nil)
+                            guard let controller = self.controller, let overlay = self.voiceOverOverlayView else {
+                                UIAccessibility.post(notification: .screenChanged, argument: nil)
+                                return
+                            }
+                            guard let window = ChatControllerNode.resolveVoiceOverOverlayWindow(controller: controller, overlay: overlay), let windowHost = window as? WindowHost else {
+                                UIAccessibility.post(notification: .screenChanged, argument: nil)
+                                return
+                            }
+                            
+                            var didEncounterChatController = false
+                            var topMostVisibleAboveChat: ContainableController?
+                            windowHost.forEachController { candidate in
+                                if (candidate as AnyObject) === (controller as AnyObject) {
+                                    didEncounterChatController = true
+                                    topMostVisibleAboveChat = nil
+                                } else if didEncounterChatController, candidate.isViewLoaded, candidate.view.window != nil, !candidate.view.isHidden, candidate.view.alpha > 0.01 {
+                                    topMostVisibleAboveChat = candidate
+                                }
+                            }
+                            
+                            if let topMostVisibleAboveChat {
+                                UIAccessibility.post(notification: .screenChanged, argument: topMostVisibleAboveChat.view)
+                            } else {
+                                UIAccessibility.post(notification: .screenChanged, argument: nil)
+                            }
+                        }
+                    } else {
+                        DispatchQueue.main.async {
+                            updateIsolation()
                         }
                     }
                 }

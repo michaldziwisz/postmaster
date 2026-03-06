@@ -655,6 +655,7 @@ extension ChatControllerImpl {
                                                     })
                                                 }
                                             }), completed: nil, cancelled: nil)
+                                            contactController.navigationPresentation = .default
                                             strongSelf.effectiveNavigationController?.pushViewController(contactController)
                                         }
                                     }
@@ -669,7 +670,7 @@ extension ChatControllerImpl {
                             completion(nil, nil)
                             return
                         }
-                        controller.navigationPresentation = .modal
+                        controller.navigationPresentation = .default
                         completion(nil, nil)
                         if let attachmentController = strongSelf.attachmentController {
                             attachmentController.dismiss(animated: true, completion: { [weak self] in
@@ -690,7 +691,7 @@ extension ChatControllerImpl {
                                 completion(nil, nil)
                                 return
                             }
-                            controller.navigationPresentation = .modal
+                            controller.navigationPresentation = .default
                             completion(nil, nil)
                             if let attachmentController = strongSelf.attachmentController {
                                 attachmentController.dismiss(animated: true, completion: { [weak self] in
@@ -2704,6 +2705,7 @@ extension ChatControllerImpl {
                                         })
                                     }
                                 }), completed: nil, cancelled: nil)
+                                contactController.navigationPresentation = .default
                                 strongSelf.effectiveNavigationController?.pushViewController(contactController)
                             }
                         }

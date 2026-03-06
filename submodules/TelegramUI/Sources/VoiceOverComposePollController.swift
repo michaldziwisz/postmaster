@@ -80,8 +80,6 @@ final class VoiceOverComposePollController: ViewController, UITableViewDataSourc
         
         self.title = isQuiz ? self.presentationData.strings.CreatePoll_QuizTitle : self.presentationData.strings.CreatePoll_Title
         
-        self.navigationItem.leftBarButtonItem = UIBarButtonItem(title: self.presentationData.strings.Common_Cancel, style: .plain, target: self, action: #selector(self.cancelPressed))
-        
         let doneTitle = self.presentationData.strings.CreatePoll_Create
         self.navigationItem.rightBarButtonItem = UIBarButtonItem(title: doneTitle, style: .done, target: self, action: #selector(self.donePressed))
         self.navigationItem.rightBarButtonItem?.isEnabled = false
@@ -95,7 +93,7 @@ final class VoiceOverComposePollController: ViewController, UITableViewDataSourc
             self.navigationBar?.updatePresentationData(NavigationBarPresentationData(presentationTheme: presentationData.theme, presentationStrings: presentationData.strings), transition: .immediate)
             self.statusBar.statusBarStyle = presentationData.theme.rootController.statusBarStyle.style
             self.title = self.isQuiz ? presentationData.strings.CreatePoll_QuizTitle : presentationData.strings.CreatePoll_Title
-            self.navigationItem.leftBarButtonItem?.title = presentationData.strings.Common_Cancel
+            self.updateLeftBarButtonItem()
             self.navigationItem.rightBarButtonItem?.title = presentationData.strings.CreatePoll_Create
             self.tableView.reloadData()
         })
@@ -173,11 +171,21 @@ final class VoiceOverComposePollController: ViewController, UITableViewDataSourc
             }
         }
     }
+
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        
+        self.updateLeftBarButtonItem()
+    }
     
     // MARK: - Actions
     
     @objc private func cancelPressed() {
-        self.dismiss()
+        if let navigationController = self.navigationController, navigationController.viewControllers.first !== self {
+            navigationController.popViewController(animated: true)
+        } else {
+            self.dismiss()
+        }
     }
     
     @objc private func donePressed() {
@@ -188,12 +196,22 @@ final class VoiceOverComposePollController: ViewController, UITableViewDataSourc
             return
         }
         self.completion(poll)
-        self.dismiss()
+        self.cancelPressed()
     }
     
     override func accessibilityPerformEscape() -> Bool {
         self.cancelPressed()
         return true
+    }
+
+    private func updateLeftBarButtonItem() {
+        if let navigationController = self.navigationController, navigationController.viewControllers.first !== self {
+            self.navigationItem.leftBarButtonItem = nil
+        } else if self.navigationItem.leftBarButtonItem == nil {
+            self.navigationItem.leftBarButtonItem = UIBarButtonItem(title: self.presentationData.strings.Common_Cancel, style: .plain, target: self, action: #selector(self.cancelPressed))
+        } else {
+            self.navigationItem.leftBarButtonItem?.title = self.presentationData.strings.Common_Cancel
+        }
     }
     
     // MARK: - UITableViewDataSource / UITableViewDelegate
