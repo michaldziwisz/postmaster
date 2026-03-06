@@ -41,11 +41,24 @@ public final class GlassControlGroupComponent: Component {
         public let id: AnyHashable
         public let content: Content
         public let action: (() -> Void)?
+        public let accessibilityLabel: String?
+        public let accessibilityHint: String?
+        public let accessibilityTraits: UIAccessibilityTraits
 
-        public init(id: AnyHashable, content: Content, action: (() -> Void)?) {
+        public init(
+            id: AnyHashable,
+            content: Content,
+            action: (() -> Void)?,
+            accessibilityLabel: String? = nil,
+            accessibilityHint: String? = nil,
+            accessibilityTraits: UIAccessibilityTraits = .button
+        ) {
             self.id = id
             self.content = content
             self.action = action
+            self.accessibilityLabel = accessibilityLabel
+            self.accessibilityHint = accessibilityHint
+            self.accessibilityTraits = accessibilityTraits
         }
         
         public static func ==(lhs: Item, rhs: Item) -> Bool {
@@ -56,6 +69,15 @@ public final class GlassControlGroupComponent: Component {
                 return false
             }
             if (lhs.action == nil) != (rhs.action == nil) {
+                return false
+            }
+            if lhs.accessibilityLabel != rhs.accessibilityLabel {
+                return false
+            }
+            if lhs.accessibilityHint != rhs.accessibilityHint {
+                return false
+            }
+            if lhs.accessibilityTraits != rhs.accessibilityTraits {
                 return false
             }
             return true
@@ -249,6 +271,22 @@ public final class GlassControlGroupComponent: Component {
                 let itemFrame = CGRect(origin: CGPoint(x: contentsWidth, y: 0.0), size: itemSize)
                 
                 if let itemComponentView = itemView.view {
+                    let accessibilityLabel: String?
+                    switch item.content {
+                    case let .text(string):
+                        accessibilityLabel = item.accessibilityLabel ?? string
+                    default:
+                        accessibilityLabel = item.accessibilityLabel
+                    }
+                    var accessibilityTraits = item.accessibilityTraits
+                    if item.action == nil {
+                        accessibilityTraits.insert(.notEnabled)
+                    }
+                    itemComponentView.isAccessibilityElement = accessibilityLabel != nil || item.action != nil
+                    itemComponentView.accessibilityLabel = accessibilityLabel
+                    itemComponentView.accessibilityHint = item.accessibilityHint
+                    itemComponentView.accessibilityTraits = accessibilityTraits
+
                     var animateIn = false
                     if itemComponentView.superview == nil {
                         animateIn = true

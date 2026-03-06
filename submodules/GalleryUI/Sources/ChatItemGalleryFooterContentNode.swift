@@ -1401,6 +1401,7 @@ final class ChatItemGalleryFooterContentNode: GalleryFooterContentNode, ASScroll
                 leftControlItems.append(GlassControlGroupComponent.Item(
                     id: AnyHashable("forward"),
                     content: .icon("Chat/Input/Accessory Panels/MessageSelectionForward"),
+                    accessibilityLabel: self.strings.Gallery_VoiceOver_Share,
                     action: { [weak self] in
                         guard let self else {
                             return
@@ -1413,6 +1414,7 @@ final class ChatItemGalleryFooterContentNode: GalleryFooterContentNode, ASScroll
                 centerControlItems.append(GlassControlGroupComponent.Item(
                     id: AnyHashable("pip"),
                     content: .icon("Media Gallery/PictureInPictureButton"),
+                    accessibilityLabel: self.strings.Gallery_VoiceOver_PictureInPicture,
                     action: { [weak self] in
                         guard let self else {
                             return
@@ -1429,6 +1431,7 @@ final class ChatItemGalleryFooterContentNode: GalleryFooterContentNode, ASScroll
                         quality: settingsButtonState.quality,
                         isOpen: false
                     ))),
+                    accessibilityLabel: self.strings.Settings_Title,
                     action: { [weak self] in
                         guard let self, let buttonPanelView = self.buttonPanel.view as? GlassControlPanelComponent.View, let centerItemView = buttonPanelView.centerItemView else {
                             return
@@ -1444,6 +1447,7 @@ final class ChatItemGalleryFooterContentNode: GalleryFooterContentNode, ASScroll
                 centerControlItems.append(GlassControlGroupComponent.Item(
                     id: AnyHashable("edit"),
                     content: .icon("Media Gallery/Draw"),
+                    accessibilityLabel: self.strings.Gallery_VoiceOver_Edit,
                     action: { [weak self] in
                         guard let self else {
                             return
@@ -1456,6 +1460,7 @@ final class ChatItemGalleryFooterContentNode: GalleryFooterContentNode, ASScroll
                 centerControlItems.append(GlassControlGroupComponent.Item(
                     id: AnyHashable("textRecognition"),
                     content: .icon("Media Gallery/LiveTextIcon"),
+                    accessibilityLabel: "Live Text",
                     action: { [weak self] in
                         guard let self else {
                             return
@@ -1468,6 +1473,7 @@ final class ChatItemGalleryFooterContentNode: GalleryFooterContentNode, ASScroll
                 centerControlItems.append(GlassControlGroupComponent.Item(
                     id: AnyHashable("stickers"),
                     content: .icon("Media Gallery/Stickers"),
+                    accessibilityLabel: self.strings.EmojiInput_TabStickers,
                     action: { [weak self] in
                         guard let self else {
                             return
@@ -1480,6 +1486,7 @@ final class ChatItemGalleryFooterContentNode: GalleryFooterContentNode, ASScroll
                 centerControlItems.append(GlassControlGroupComponent.Item(
                     id: AnyHashable("fullscreen"),
                     content: .icon(isLandscape ? "Chat/Context Menu/Collapse" : "Chat/Context Menu/Expand"),
+                    accessibilityLabel: self.strings.Gallery_VoiceOver_Fullscreen,
                     action: { [weak self] in
                         guard let self else {
                             return
@@ -1492,6 +1499,7 @@ final class ChatItemGalleryFooterContentNode: GalleryFooterContentNode, ASScroll
                 rightControlItems.append(GlassControlGroupComponent.Item(
                     id: AnyHashable("delete"),
                     content: .icon("Chat/Input/Accessory Panels/MessageSelectionTrash"),
+                    accessibilityLabel: self.strings.Gallery_VoiceOver_Delete,
                     action: { [weak self] in
                         guard let self else {
                             return
