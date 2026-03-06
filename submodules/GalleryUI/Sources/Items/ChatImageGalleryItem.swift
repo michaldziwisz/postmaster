@@ -255,6 +255,7 @@ final class ChatImageGalleryItemNode: ZoomableContentGalleryItemNode {
     private let pagingEnabledPromise = ValuePromise<Bool>(true)
     
     private var currentSpeechHolder: SpeechSynthesizerHolder?
+    private var voiceOverImageAccessibilityElement: UIAccessibilityElement?
 
     override func voiceOverStatusDidChange() {
         super.voiceOverStatusDidChange()
@@ -333,6 +334,19 @@ final class ChatImageGalleryItemNode: ZoomableContentGalleryItemNode {
         }
 
         self.updateVoiceOverImageAccessibility()
+    }
+    
+    override func didLoad() {
+        super.didLoad()
+        self.updateVoiceOverImageAccessibility()
+    }
+    
+    override func layout() {
+        super.layout()
+        
+        if UIAccessibility.isVoiceOverRunning, let element = self.voiceOverImageAccessibilityElement {
+            element.accessibilityFrameInContainerSpace = self.bounds
+        }
     }
     
     override func isPagingEnabled() -> Signal<Bool, NoError> {
@@ -477,24 +491,38 @@ final class ChatImageGalleryItemNode: ZoomableContentGalleryItemNode {
     }
 
     private func updateVoiceOverImageAccessibility() {
+        guard self.isNodeLoaded else {
+            return
+        }
+        
         let isVoiceOverRunning = UIAccessibility.isVoiceOverRunning
-        self.isAccessibilityElement = isVoiceOverRunning
-
+        
+        self.isAccessibilityElement = false
+        
         if isVoiceOverRunning {
-            self.accessibilityTraits = [.image]
-            self.accessibilityLabel = self.presentationData.strings.VoiceOver_Chat_Photo
+            let element: UIAccessibilityElement
+            if let current = self.voiceOverImageAccessibilityElement {
+                element = current
+            } else {
+                element = UIAccessibilityElement(accessibilityContainer: self.view)
+                self.voiceOverImageAccessibilityElement = element
+            }
+            
+            element.accessibilityTraits = [.image]
+            element.accessibilityLabel = self.presentationData.strings.VoiceOver_Chat_Photo
             if let message = self.message {
                 let caption = message.text.trimmingCharacters(in: .whitespacesAndNewlines)
-                self.accessibilityValue = caption.isEmpty ? nil : caption
+                element.accessibilityValue = caption.isEmpty ? nil : caption
             } else {
-                self.accessibilityValue = nil
+                element.accessibilityValue = nil
             }
-            self.accessibilityHint = nil
+            element.accessibilityHint = nil
+            element.accessibilityFrameInContainerSpace = self.bounds
+            
+            self.view.accessibilityElements = [element]
         } else {
-            self.accessibilityTraits = []
-            self.accessibilityLabel = nil
-            self.accessibilityValue = nil
-            self.accessibilityHint = nil
+            self.view.accessibilityElements = nil
+            self.voiceOverImageAccessibilityElement = nil
         }
     }
     

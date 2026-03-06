@@ -44,6 +44,8 @@ open class GalleryControllerNode: ASDisplayNode, ASScrollViewDelegate, ASGesture
     private var presentationState = GalleryControllerPresentationState()
     
     private var isDismissed = false
+
+    private var voiceOverStatusObserver: NSObjectProtocol?
     
     public var areControlsHidden = false
     public var controlsVisibilityChanged: ((Bool) -> Void)?
@@ -172,6 +174,20 @@ open class GalleryControllerNode: ASDisplayNode, ASScrollViewDelegate, ASGesture
         self.view.addSubview(self.scrollView)
         
         self.scrollView.addSubview(self.pager.view)
+
+        if UIAccessibility.isVoiceOverRunning {
+            self.setControlsHidden(false, animated: false)
+        }
+        self.voiceOverStatusObserver = NotificationCenter.default.addObserver(
+            forName: UIAccessibility.voiceOverStatusDidChangeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            guard let self else { return }
+            if UIAccessibility.isVoiceOverRunning {
+                self.setControlsHidden(false, animated: false)
+            }
+        }
         
         var previousIndex: Int?
         self.pager.centralItemIndexOffsetUpdated = { [weak self] itemsIndexAndProgress in
@@ -380,6 +396,9 @@ open class GalleryControllerNode: ASDisplayNode, ASScrollViewDelegate, ASGesture
     }
     
     open func setControlsHidden(_ hidden: Bool, animated: Bool) {
+        if UIAccessibility.isVoiceOverRunning && hidden {
+            return
+        }
         guard self.areControlsHidden != hidden && (!self.isDismissed || hidden) else {
             return
         }
@@ -654,5 +673,11 @@ open class GalleryControllerNode: ASDisplayNode, ASScrollViewDelegate, ASGesture
             return true
         }
         return false
+    }
+
+    deinit {
+        if let voiceOverStatusObserver {
+            NotificationCenter.default.removeObserver(voiceOverStatusObserver)
+        }
     }
 }

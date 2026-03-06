@@ -814,6 +814,15 @@ private func deviceContactInfoEntries(context: ShareControllerAccountContext, pr
 
 private final class DeviceContactInfoController: ItemListController, MFMessageComposeViewControllerDelegate, UINavigationControllerDelegate {
     private var composer: MFMessageComposeViewController?
+
+    override func accessibilityPerformEscape() -> Bool {
+        if let action = self.navigationItem.leftBarButtonItem?.action {
+            _ = self.perform(action)
+            return true
+        }
+        return super.accessibilityPerformEscape()
+    }
+
     func inviteContact(presentationData: PresentationData, numbers: [String]) {
         if MFMessageComposeViewController.canSendText() {
             let composer = MFMessageComposeViewController()
