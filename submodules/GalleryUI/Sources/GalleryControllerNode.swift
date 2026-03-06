@@ -318,9 +318,19 @@ open class GalleryControllerNode: ASDisplayNode, ASScrollViewDelegate, ASGesture
             return
         }
         
+        let currentItemNode = self.pager.centralItemNode()
+        let suppressSupplementaryControls = currentItemNode is ChatImageGalleryItemNode
+        let shouldHideFooterAccessibility = !UIAccessibility.isVoiceOverRunning || suppressSupplementaryControls || self.footerNode.alpha <= 0.01 || self.footerNode.isHidden
+        self.footerNode.setVoiceOverAccessibilityHidden(shouldHideFooterAccessibility)
+        self.currentThumbnailContainerNode?.view.accessibilityElementsHidden = !UIAccessibility.isVoiceOverRunning || suppressSupplementaryControls
+        
         self.view.isAccessibilityElement = false
+        self.view.accessibilityElementsHidden = false
         self.view.accessibilityViewIsModal = UIAccessibility.isVoiceOverRunning
         self.statusBar?.view.accessibilityElementsHidden = UIAccessibility.isVoiceOverRunning
+        self.scrollView.accessibilityElementsHidden = false
+        self.pager.view.accessibilityElementsHidden = false
+        self.navigationBar?.view.accessibilityElementsHidden = false
         
         guard UIAccessibility.isVoiceOverRunning else {
             self.view.accessibilityElements = nil
@@ -333,7 +343,7 @@ open class GalleryControllerNode: ASDisplayNode, ASScrollViewDelegate, ASGesture
             elements.append(navigationBar.view)
         }
         
-        if let centralItemNode = self.pager.centralItemNode() {
+        if let centralItemNode = currentItemNode {
             if let accessibilityElements = centralItemNode.view.accessibilityElements, !accessibilityElements.isEmpty {
                 elements.append(contentsOf: accessibilityElements)
             } else {
@@ -343,15 +353,31 @@ open class GalleryControllerNode: ASDisplayNode, ASScrollViewDelegate, ASGesture
             elements.append(self.pager.view)
         }
         
-        if self.footerNode.supernode != nil, self.footerNode.alpha > 0.01, !self.footerNode.isHidden, !self.footerNode.view.accessibilityElementsHidden {
+        if !suppressSupplementaryControls, self.footerNode.supernode != nil, self.footerNode.alpha > 0.01, !self.footerNode.isHidden, !self.footerNode.view.accessibilityElementsHidden {
             elements.append(self.footerNode.view)
         }
         
-        if let currentThumbnailContainerNode = self.currentThumbnailContainerNode, currentThumbnailContainerNode.supernode != nil, currentThumbnailContainerNode.alpha > 0.01, !currentThumbnailContainerNode.isHidden, !currentThumbnailContainerNode.view.accessibilityElementsHidden {
+        if !suppressSupplementaryControls, let currentThumbnailContainerNode = self.currentThumbnailContainerNode, currentThumbnailContainerNode.supernode != nil, currentThumbnailContainerNode.alpha > 0.01, !currentThumbnailContainerNode.isHidden, !currentThumbnailContainerNode.view.accessibilityElementsHidden {
             elements.append(currentThumbnailContainerNode.view)
         }
         
         self.view.accessibilityElements = elements
+    }
+
+    func prepareForAccessibilityDismissal() {
+        guard self.isNodeLoaded else {
+            return
+        }
+        
+        self.view.accessibilityViewIsModal = false
+        self.view.accessibilityElements = nil
+        self.view.accessibilityElementsHidden = true
+        self.scrollView.accessibilityElementsHidden = true
+        self.pager.view.accessibilityElementsHidden = true
+        self.navigationBar?.view.accessibilityElementsHidden = true
+        self.footerNode.setVoiceOverAccessibilityHidden(true)
+        self.currentThumbnailContainerNode?.view.accessibilityElementsHidden = true
+        self.statusBar?.view.accessibilityElementsHidden = false
     }
     
     open func containerLayoutUpdated(_ layout: ContainerViewLayout, navigationBarHeight: CGFloat, transition: ContainedViewLayoutTransition) {

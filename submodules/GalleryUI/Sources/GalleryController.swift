@@ -1300,6 +1300,8 @@ public class GalleryController: ViewController, StandalonePresentableController,
     }
     
     func dismiss(forceAway: Bool) {
+        self.galleryNode.prepareForAccessibilityDismissal()
+        
         var animatedOutNode = true
         var animatedOutInterface = false
         
@@ -1795,6 +1797,11 @@ public class GalleryController: ViewController, StandalonePresentableController,
         super.viewDidDisappear(animated)
         
         self.accountInUseDisposable.set(nil)
+    }
+
+    override public func accessibilityPerformEscape() -> Bool {
+        self.donePressed()
+        return true
     }
     
     override public func preferredContentSizeForLayout(_ layout: ContainerViewLayout) -> CGSize? {

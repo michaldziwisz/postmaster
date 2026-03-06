@@ -16,6 +16,7 @@ public final class GalleryFooterNode: ASDisplayNode {
     private var currentLayout: (ContainerViewLayout, CGFloat, CGFloat, Bool)?
     
     private let controllerInteraction: GalleryControllerInteraction
+    private var voiceOverAccessibilityHidden = false
     
     public init(controllerInteraction: GalleryControllerInteraction) {
         self.controllerInteraction = controllerInteraction
@@ -25,7 +26,18 @@ public final class GalleryFooterNode: ASDisplayNode {
         
         super.init()
         
+        self.view.isAccessibilityElement = false
+        self.view.accessibilityElementsHidden = false
+        self.edgeEffectView.accessibilityElementsHidden = true
         self.view.addSubview(self.edgeEffectView)
+    }
+
+    public func setVoiceOverAccessibilityHidden(_ hidden: Bool) {
+        self.voiceOverAccessibilityHidden = hidden
+        self.view.accessibilityElementsHidden = hidden
+        self.currentFooterContentNode?.view.accessibilityElementsHidden = hidden
+        self.currentOverlayContentNode?.view.accessibilityElementsHidden = hidden
+        self.edgeEffectView.accessibilityElementsHidden = true
     }
     
     private var visibilityAlpha: CGFloat = 1.0
@@ -80,6 +92,7 @@ public final class GalleryFooterNode: ASDisplayNode {
             if let footerContentNode = footerContentNode {
                 footerContentNode.setVisibilityAlpha(self.visibilityAlpha, animated: transition.isAnimated)
                 footerContentNode.controllerInteraction = self.controllerInteraction
+                footerContentNode.view.accessibilityElementsHidden = self.voiceOverAccessibilityHidden
                 footerContentNode.requestLayout = { [weak self] transition in
                     if let strongSelf = self, let (currentLayout, navigationBarHeight, currentThumbnailPanelHeight, isHidden) = strongSelf.currentLayout {
                         strongSelf.updateLayout(currentLayout, navigationBarHeight: navigationBarHeight, footerContentNode: strongSelf.currentFooterContentNode, overlayContentNode: strongSelf.currentOverlayContentNode, thumbnailPanelHeight: currentThumbnailPanelHeight, isHidden: isHidden, transition: transition)
@@ -101,6 +114,7 @@ public final class GalleryFooterNode: ASDisplayNode {
             animateOverlayIn = true
             if let overlayContentNode = overlayContentNode {
                 overlayContentNode.setVisibilityAlpha(self.visibilityAlpha)
+                overlayContentNode.view.accessibilityElementsHidden = self.voiceOverAccessibilityHidden
                 self.addSubnode(overlayContentNode)
             }
         }
@@ -192,6 +206,8 @@ public final class GalleryFooterNode: ASDisplayNode {
                 })
             }
         }
+        
+        self.setVoiceOverAccessibilityHidden(self.voiceOverAccessibilityHidden)
     }
     
     override public func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
