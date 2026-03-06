@@ -110,6 +110,9 @@ open class GalleryControllerNode: ASDisplayNode, ASScrollViewDelegate, ASGesture
                 strongSelf.updateOrientation?(orientation)
             }
         }
+        self.pager.voiceOverAccessibilityUpdated = { [weak self] in
+            self?.updateVoiceOverAccessibilityContainer()
+        }
         
         self.pager.dismiss = { [weak self] in
             if let strongSelf = self {
@@ -188,6 +191,7 @@ open class GalleryControllerNode: ASDisplayNode, ASScrollViewDelegate, ASGesture
             if UIAccessibility.isVoiceOverRunning {
                 self.setControlsHidden(false, animated: false)
             }
+            self.updateVoiceOverAccessibilityContainer()
         }
         
         var previousIndex: Int?
@@ -306,6 +310,48 @@ open class GalleryControllerNode: ASDisplayNode, ASScrollViewDelegate, ASGesture
         
         self.view.accessibilityIgnoresInvertColors = true
         self.view.disablesInteractiveTransitionGestureRecognizer = true
+        self.updateVoiceOverAccessibilityContainer()
+    }
+
+    private func updateVoiceOverAccessibilityContainer() {
+        guard self.isNodeLoaded else {
+            return
+        }
+        
+        self.view.isAccessibilityElement = false
+        self.view.accessibilityViewIsModal = UIAccessibility.isVoiceOverRunning
+        self.statusBar?.view.accessibilityElementsHidden = UIAccessibility.isVoiceOverRunning
+        
+        guard UIAccessibility.isVoiceOverRunning else {
+            self.view.accessibilityElements = nil
+            return
+        }
+        
+        var elements: [Any] = []
+        
+        if let navigationBar = self.navigationBar, navigationBar.supernode != nil, navigationBar.alpha > 0.01, !navigationBar.isHidden, !navigationBar.view.accessibilityElementsHidden {
+            elements.append(navigationBar.view)
+        }
+        
+        if let centralItemNode = self.pager.centralItemNode() {
+            if let accessibilityElements = centralItemNode.view.accessibilityElements, !accessibilityElements.isEmpty {
+                elements.append(contentsOf: accessibilityElements)
+            } else {
+                elements.append(centralItemNode.view)
+            }
+        } else {
+            elements.append(self.pager.view)
+        }
+        
+        if self.footerNode.supernode != nil, self.footerNode.alpha > 0.01, !self.footerNode.isHidden, !self.footerNode.view.accessibilityElementsHidden {
+            elements.append(self.footerNode.view)
+        }
+        
+        if let currentThumbnailContainerNode = self.currentThumbnailContainerNode, currentThumbnailContainerNode.supernode != nil, currentThumbnailContainerNode.alpha > 0.01, !currentThumbnailContainerNode.isHidden, !currentThumbnailContainerNode.view.accessibilityElementsHidden {
+            elements.append(currentThumbnailContainerNode.view)
+        }
+        
+        self.view.accessibilityElements = elements
     }
     
     open func containerLayoutUpdated(_ layout: ContainerViewLayout, navigationBarHeight: CGFloat, transition: ContainedViewLayoutTransition) {
@@ -394,6 +440,7 @@ open class GalleryControllerNode: ASDisplayNode, ASScrollViewDelegate, ASGesture
         self.pager.frame = CGRect(origin: CGPoint(x: 0.0, y: layout.size.height), size: layout.size)
 
         self.pager.containerLayoutUpdated(layout, navigationBarHeight: self.areControlsHidden ? 0.0 : navigationBarHeight, transition: transition)
+        self.updateVoiceOverAccessibilityContainer()
     }
     
     open func setControlsHidden(_ hidden: Bool, animated: Bool) {
@@ -428,6 +475,7 @@ open class GalleryControllerNode: ASDisplayNode, ASScrollViewDelegate, ASGesture
                 self.containerLayoutUpdated(layout, navigationBarHeight: navigationBarHeight, transition: .immediate)
             }
         }
+        self.updateVoiceOverAccessibilityContainer()
     }
 
     open func updateThumbnailContainerNodeAlpha(_ transition: ContainedViewLayoutTransition) {

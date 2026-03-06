@@ -119,6 +119,7 @@ public final class GalleryPagerNode: ASDisplayNode, ASScrollViewDelegate, ASGest
     public var controlsVisibility: () -> Bool = { return true }
     public var updateOrientation: (UIInterfaceOrientation) -> Void = { _ in }
     public var dismiss: () -> Void = { }
+    public var voiceOverAccessibilityUpdated: () -> Void = { }
     public var beginCustomDismiss: (GalleryControllerNode.CustomDismissType) -> Void = { _ in }
     public var completeCustomDismiss: (Bool) -> Void = { _ in }
     public var baseNavigationController: () -> NavigationController? = { return nil }
@@ -400,10 +401,12 @@ public final class GalleryPagerNode: ASDisplayNode, ASScrollViewDelegate, ASGest
         
         guard UIAccessibility.isVoiceOverRunning, let centralItemNode = self.centralItemNode() else {
             self.view.accessibilityElements = nil
+            self.voiceOverAccessibilityUpdated()
             return
         }
         
         self.view.accessibilityElements = [centralItemNode.view as Any]
+        self.voiceOverAccessibilityUpdated()
     }
     
     public var isScrollEnabled: Bool {
