@@ -1401,26 +1401,26 @@ final class ChatItemGalleryFooterContentNode: GalleryFooterContentNode, ASScroll
                 leftControlItems.append(GlassControlGroupComponent.Item(
                     id: AnyHashable("forward"),
                     content: .icon("Chat/Input/Accessory Panels/MessageSelectionForward"),
-                    accessibilityLabel: self.strings.Gallery_VoiceOver_Share,
                     action: { [weak self] in
                         guard let self else {
                             return
                         }
                         self.actionButtonPressed()
-                    }
+                    },
+                    accessibilityLabel: self.strings.Gallery_VoiceOver_Share
                 ))
             }
             if buttonsState.displayPictureInPictureButton {
                 centerControlItems.append(GlassControlGroupComponent.Item(
                     id: AnyHashable("pip"),
                     content: .icon("Media Gallery/PictureInPictureButton"),
-                    accessibilityLabel: self.strings.Gallery_VoiceOver_PictureInPicture,
                     action: { [weak self] in
                         guard let self else {
                             return
                         }
                         self.pipButtonPressed()
-                    }
+                    },
+                    accessibilityLabel: self.strings.Gallery_VoiceOver_PictureInPicture
                 ))
             }
             if let settingsButtonState = buttonsState.settingsButtonState {
@@ -1431,7 +1431,6 @@ final class ChatItemGalleryFooterContentNode: GalleryFooterContentNode, ASScroll
                         quality: settingsButtonState.quality,
                         isOpen: false
                     ))),
-                    accessibilityLabel: self.strings.Settings_Title,
                     action: { [weak self] in
                         guard let self, let buttonPanelView = self.buttonPanel.view as? GlassControlPanelComponent.View, let centerItemView = buttonPanelView.centerItemView else {
                             return
@@ -1440,72 +1439,73 @@ final class ChatItemGalleryFooterContentNode: GalleryFooterContentNode, ASScroll
                             return
                         }
                         self.settingsButtonPressed(sourceView: itemView)
-                    }
+                    },
+                    accessibilityLabel: self.strings.Settings_Title
                 ))
             }
             if buttonsState.displayEditButton {
                 centerControlItems.append(GlassControlGroupComponent.Item(
                     id: AnyHashable("edit"),
                     content: .icon("Media Gallery/Draw"),
-                    accessibilityLabel: self.strings.Gallery_VoiceOver_Edit,
                     action: { [weak self] in
                         guard let self else {
                             return
                         }
                         self.editButtonPressed()
-                    }
+                    },
+                    accessibilityLabel: self.strings.Gallery_VoiceOver_Edit
                 ))
             }
             if buttonsState.displayTextRecognitionButton {
                 centerControlItems.append(GlassControlGroupComponent.Item(
                     id: AnyHashable("textRecognition"),
                     content: .icon("Media Gallery/LiveTextIcon"),
-                    accessibilityLabel: "Live Text",
                     action: { [weak self] in
                         guard let self else {
                             return
                         }
                         self.textRecognitionButtonPressed()
-                    }
+                    },
+                    accessibilityLabel: "Live Text"
                 ))
             }
             if buttonsState.displayStickersButton {
                 centerControlItems.append(GlassControlGroupComponent.Item(
                     id: AnyHashable("stickers"),
                     content: .icon("Media Gallery/Stickers"),
-                    accessibilityLabel: self.strings.EmojiInput_TabStickers,
                     action: { [weak self] in
                         guard let self else {
                             return
                         }
                         self.stickersButtonPressed()
-                    }
+                    },
+                    accessibilityLabel: self.strings.EmojiInput_TabStickers
                 ))
             }
             if buttonsState.displayFullscreenButton && !metrics.isTablet {
                 centerControlItems.append(GlassControlGroupComponent.Item(
                     id: AnyHashable("fullscreen"),
                     content: .icon(isLandscape ? "Chat/Context Menu/Collapse" : "Chat/Context Menu/Expand"),
-                    accessibilityLabel: self.strings.Gallery_VoiceOver_Fullscreen,
                     action: { [weak self] in
                         guard let self else {
                             return
                         }
                         self.fullscreenButtonPressed()
-                    }
+                    },
+                    accessibilityLabel: self.strings.Gallery_VoiceOver_Fullscreen
                 ))
             }
             if buttonsState.displayDeleteButton {
                 rightControlItems.append(GlassControlGroupComponent.Item(
                     id: AnyHashable("delete"),
                     content: .icon("Chat/Input/Accessory Panels/MessageSelectionTrash"),
-                    accessibilityLabel: self.strings.Gallery_VoiceOver_Delete,
                     action: { [weak self] in
                         guard let self else {
                             return
                         }
                         self.deleteButtonPressed()
-                    }
+                    },
+                    accessibilityLabel: self.strings.Gallery_VoiceOver_Delete
                 ))
             }
         }
