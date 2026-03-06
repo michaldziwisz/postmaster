@@ -5,6 +5,8 @@ import AsyncDisplayKit
 
 open class ZoomableContentGalleryItemNode: GalleryItemNode, ASScrollViewDelegate {
     public let scrollNode: ASScrollNode
+
+    private var voiceOverStatusObserver: NSObjectProtocol?
     
     private var containerLayout: ContainerViewLayout?
     
@@ -23,6 +25,7 @@ open class ZoomableContentGalleryItemNode: GalleryItemNode, ASScrollViewDelegate
             }
             self.resetScrollViewContents(transition: .immediate)
             self.centerScrollViewContents(transition: .immediate)
+            self.updateVoiceOverAccessibility()
         }
     }
     
@@ -57,6 +60,40 @@ open class ZoomableContentGalleryItemNode: GalleryItemNode, ASScrollViewDelegate
         self.scrollNode.view.addGestureRecognizer(tapRecognizer)
 
         self.addSubnode(self.scrollNode)
+
+        self.updateVoiceOverAccessibility()
+        self.voiceOverStatusObserver = NotificationCenter.default.addObserver(
+            forName: UIAccessibility.voiceOverStatusDidChangeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.updateVoiceOverAccessibility()
+        }
+    }
+
+    deinit {
+        if let voiceOverStatusObserver {
+            NotificationCenter.default.removeObserver(voiceOverStatusObserver)
+        }
+    }
+
+    open func voiceOverStatusDidChange() {
+    }
+
+    private func updateVoiceOverAccessibility() {
+        let isVoiceOverRunning = UIAccessibility.isVoiceOverRunning
+
+        // VoiceOver focusing this zoomable scroll view (and its tiled content) can cause severe performance issues.
+        // Hide it from the accessibility tree and let subclasses expose a lightweight element instead.
+        self.scrollNode.view.isAccessibilityElement = false
+        self.scrollNode.view.accessibilityElementsHidden = isVoiceOverRunning
+
+        if let (_, contentNode) = self.zoomableContent {
+            contentNode.view.isAccessibilityElement = false
+            contentNode.view.accessibilityElementsHidden = isVoiceOverRunning
+        }
+
+        self.voiceOverStatusDidChange()
     }
     
     open func contentTapAction() -> Bool {

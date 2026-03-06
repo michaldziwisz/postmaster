@@ -166,13 +166,11 @@ final class VoiceOverPollOptionVotersController: ViewController, UITableViewData
     }
 
     private func updateLeftBarButtonItem() {
-        if let navigationController = self.navigationController, navigationController.viewControllers.first !== self {
-            self.navigationItem.leftBarButtonItem = nil
-        } else if self.navigationItem.leftBarButtonItem == nil {
-            self.navigationItem.leftBarButtonItem = UIBarButtonItem(title: self.presentationData.strings.Common_Back, style: .plain, target: self, action: #selector(self.closePressed))
-        } else {
-            self.navigationItem.leftBarButtonItem?.title = self.presentationData.strings.Common_Back
-        }
+        self.navigationItem.leftBarButtonItem = UIBarButtonItem(
+            backButtonAppearanceWithTitle: self.presentationData.strings.Common_Back,
+            target: self,
+            action: #selector(self.closePressed)
+        )
     }
     
     private func titleForLoadMoreRow(optionState: PollResultsOptionState) -> (title: String, isEnabled: Bool) {

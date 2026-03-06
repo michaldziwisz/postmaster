@@ -255,6 +255,11 @@ final class ChatImageGalleryItemNode: ZoomableContentGalleryItemNode {
     private let pagingEnabledPromise = ValuePromise<Bool>(true)
     
     private var currentSpeechHolder: SpeechSynthesizerHolder?
+
+    override func voiceOverStatusDidChange() {
+        super.voiceOverStatusDidChange()
+        self.updateVoiceOverImageAccessibility()
+    }
     
     override var baseNavigationController: () -> NavigationController? {
         didSet {
@@ -326,6 +331,8 @@ final class ChatImageGalleryItemNode: ZoomableContentGalleryItemNode {
         self.moreBarButton.contextAction = { [weak self] sourceNode, gesture in
             self?.openMoreMenu(sourceNode: sourceNode, gesture: gesture)
         }
+
+        self.updateVoiceOverImageAccessibility()
     }
     
     override func isPagingEnabled() -> Signal<Bool, NoError> {
@@ -449,6 +456,7 @@ final class ChatImageGalleryItemNode: ZoomableContentGalleryItemNode {
         self.isSecret = isSecret
         self.imageNode.captureProtected = message.id.peerId.namespace == Namespaces.Peer.SecretChat || message.isCopyProtected() || peerIsCopyProtected || isSecret || message.paidContent != nil
         self.updateFooter(animated: false)
+        self.updateVoiceOverImageAccessibility()
         
         var title: String?
         if let _ = message.adAttribute {
@@ -466,6 +474,28 @@ final class ChatImageGalleryItemNode: ZoomableContentGalleryItemNode {
             }
             controller.dismissAndNavigateToMessageContext(message: message)
         } : nil)))
+    }
+
+    private func updateVoiceOverImageAccessibility() {
+        let isVoiceOverRunning = UIAccessibility.isVoiceOverRunning
+        self.isAccessibilityElement = isVoiceOverRunning
+
+        if isVoiceOverRunning {
+            self.accessibilityTraits = [.image]
+            self.accessibilityLabel = self.presentationData.strings.VoiceOver_Chat_Photo
+            if let message = self.message {
+                let caption = message.text.trimmingCharacters(in: .whitespacesAndNewlines)
+                self.accessibilityValue = caption.isEmpty ? nil : caption
+            } else {
+                self.accessibilityValue = nil
+            }
+            self.accessibilityHint = nil
+        } else {
+            self.accessibilityTraits = []
+            self.accessibilityLabel = nil
+            self.accessibilityValue = nil
+            self.accessibilityHint = nil
+        }
     }
     
     private func updateFooter(animated: Bool) {

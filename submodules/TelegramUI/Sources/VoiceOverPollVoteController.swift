@@ -198,13 +198,11 @@ final class VoiceOverPollVoteController: ViewController, UITableViewDataSource, 
     }
 
     private func updateLeftBarButtonItem() {
-        if let navigationController = self.navigationController, navigationController.viewControllers.first !== self {
-            self.navigationItem.leftBarButtonItem = nil
-        } else if self.navigationItem.leftBarButtonItem == nil {
-            self.navigationItem.leftBarButtonItem = UIBarButtonItem(title: self.presentationData.strings.Common_Cancel, style: .plain, target: self, action: #selector(self.cancelPressed))
-        } else {
-            self.navigationItem.leftBarButtonItem?.title = self.presentationData.strings.Common_Cancel
-        }
+        self.navigationItem.leftBarButtonItem = UIBarButtonItem(
+            backButtonAppearanceWithTitle: self.presentationData.strings.Common_Back,
+            target: self,
+            action: #selector(self.cancelPressed)
+        )
     }
     
     // MARK: - Actions

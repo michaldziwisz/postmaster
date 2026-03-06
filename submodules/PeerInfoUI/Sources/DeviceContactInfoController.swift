@@ -1088,7 +1088,9 @@ public func deviceContactInfoController(context: ShareControllerAccountContext, 
         var leftNavigationButton: ItemListNavigationButton?
         switch subject {
             case .vcard:
-                break
+                leftNavigationButton = ItemListNavigationButton(content: .text(presentationData.strings.Common_Back), style: .regular, enabled: true, action: {
+                    dismissImpl?(true)
+                })
             case .filter, .create:
                 leftNavigationButton = ItemListNavigationButton(content: .text(presentationData.strings.Common_Cancel), style: .regular, enabled: true, action: {
                     dismissImpl?(true)
