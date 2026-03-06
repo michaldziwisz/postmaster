@@ -410,8 +410,11 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
             windowHost.forEachController { candidate in
                 if (candidate as AnyObject) === (controller as AnyObject) {
                     didEncounterChatController = true
-                } else if didEncounterChatController, candidate.isViewLoaded, candidate.view.window != nil {
-                    hasVisibleControllerAboveChat = true
+                } else if didEncounterChatController, candidate.isViewLoaded, candidate.view.window != nil, !candidate.view.isHidden, candidate.view.alpha > 0.01 {
+                    let isBlockingOverlay: Bool = candidate.blocksBackgroundWhenInOverlay || candidate.isOpaqueWhenInOverlay || ((candidate as? ViewController)?.acceptsFocusWhenInOverlay ?? false)
+                    if isBlockingOverlay {
+                        hasVisibleControllerAboveChat = true
+                    }
                 }
             }
             if hasVisibleControllerAboveChat {
