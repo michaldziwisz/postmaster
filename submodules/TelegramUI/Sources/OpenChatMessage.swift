@@ -30,6 +30,7 @@ import PeerMessagesMediaPlaylist
 
 private final class VoiceOverContactPreviewController: UINavigationController, CNContactViewControllerDelegate, UIAdaptivePresentationControllerDelegate {
     private let onDismiss: (() -> Void)?
+    private weak var contactController: CNContactViewController?
 
     init(strings: PresentationStrings, contactData: DeviceContactExtendedData, onDismiss: (() -> Void)? = nil) {
         self.onDismiss = onDismiss
@@ -44,6 +45,7 @@ private final class VoiceOverContactPreviewController: UINavigationController, C
         let displayTitle = (title?.isEmpty == false ? title! : strings.Conversation_Contact)
         contactController.title = displayTitle
         contactController.alternateName = strings.Conversation_Contact
+        self.contactController = contactController
 
         super.init(rootViewController: contactController)
 
@@ -67,6 +69,18 @@ private final class VoiceOverContactPreviewController: UINavigationController, C
         self.presentationController?.delegate = self
     }
 
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+
+        self.sanitizeAccessibilityTree()
+    }
+
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+
+        self.sanitizeAccessibilityTree()
+    }
+
     @objc private func backPressed() {
         let onDismiss = self.onDismiss
         self.dismiss(animated: true, completion: onDismiss)
@@ -83,6 +97,27 @@ private final class VoiceOverContactPreviewController: UINavigationController, C
 
     func presentationControllerDidDismiss(_ presentationController: UIPresentationController) {
         self.onDismiss?()
+    }
+
+    private func sanitizeAccessibilityTree() {
+        guard UIAccessibility.isVoiceOverRunning, let contactView = self.contactController?.view else {
+            return
+        }
+        self.sanitizeAccessibilitySubviews(in: contactView)
+    }
+
+    private func sanitizeAccessibilitySubviews(in view: UIView) {
+        if view.isAccessibilityElement {
+            let label = view.accessibilityLabel?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            let value = view.accessibilityValue?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            let hint = view.accessibilityHint?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            if label.isEmpty && value.isEmpty && hint.isEmpty {
+                view.isAccessibilityElement = false
+            }
+        }
+        for subview in view.subviews {
+            self.sanitizeAccessibilitySubviews(in: subview)
+        }
     }
 }
 
