@@ -114,6 +114,11 @@ final class BrowserDocumentContent: UIView, BrowserContent, WKNavigationDelegate
         fatalError("init(coder:) has not been implemented")
     }
     
+    override func accessibilityPerformEscape() -> Bool {
+        self.close()
+        return true
+    }
+
     func updatePresentationData(_ presentationData: PresentationData) {
         self.presentationData = presentationData
         if #available(iOS 15.0, *) {

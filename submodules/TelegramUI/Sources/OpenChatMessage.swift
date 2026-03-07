@@ -244,7 +244,9 @@ func openChatMessageImpl(_ params: OpenChatMessageParams) -> Bool {
                         } else if let fileName = file.fileName as? NSString, BrowserScreen.supportedDocumentExtensions.contains(fileName.pathExtension.lowercased())  {
                             useBrowserScreen = true
                         }
-                        if useBrowserScreen {
+                        if UIAccessibility.isVoiceOverRunning {
+                            presentDocumentPreviewController(rootController: rootController, theme: presentationData.theme, strings: presentationData.strings, postbox: params.context.account.postbox, file: file, canShare: canShare)
+                        } else if useBrowserScreen {
                             if let navigationController = params.navigationController, let minimizedContainer = navigationController.minimizedContainer {
                                 for controller in minimizedContainer.controllers {
                                     if let controller = controller as? BrowserScreen, controller.subject.fileId == file.fileId {

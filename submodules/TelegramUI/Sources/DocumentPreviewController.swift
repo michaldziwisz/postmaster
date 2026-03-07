@@ -46,7 +46,9 @@ final class CompactDocumentPreviewController: QLPreviewController, QLPreviewCont
         self.delegate = self
         self.dataSource = self
 
-        self.navigationItem.leftBarButtonItem = UIBarButtonItem(title: strings.Common_Done, style: .done, target: self, action: #selector(self.cancelPressed))
+        let backButtonItem = UIBarButtonItem(title: strings.Common_Back, style: .plain, target: self, action: #selector(self.cancelPressed))
+        backButtonItem.accessibilityLabel = strings.Common_Back
+        self.navigationItem.leftBarButtonItem = backButtonItem
         
         if let path = self.postbox.mediaBox.completedResourcePath(self.file.resource) {
             var updatedPath = path

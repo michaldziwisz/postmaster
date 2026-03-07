@@ -153,19 +153,19 @@ private final class BrowserScreenComponent: CombinedComponent {
                 } else {
                     navigationLeftItems = [
                         AnyComponentWithIdentity(
-                            id: "close",
+                            id: "back",
                             component: AnyComponent(
                                 Button(
                                     content: AnyComponent(
                                         BundleIconComponent(
-                                            name: "Navigation/Close",
+                                            name: "Navigation/Back",
                                             tintColor: environment.theme.chat.inputPanel.panelControlColor
                                         )
                                     ),
                                     action: {
                                         performAction.invoke(.close)
                                     },
-                                    accessibilityLabel: environment.strings.Common_Close
+                                    accessibilityLabel: environment.strings.Common_Back
                                 ).minSize(CGSize(width: 44.0, height: 44.0))
                             )
                         )
@@ -544,7 +544,9 @@ public class BrowserScreen: ViewController, MinimizableController {
             )
                                                 
             super.init()
-            
+
+            self.view.accessibilityViewIsModal = UIAccessibility.isVoiceOverRunning
+
             self.pushContent(controller.subject, transition: .immediate)
             if let content = self.content.last {
                 content.addToRecentlyVisited()
@@ -556,7 +558,11 @@ public class BrowserScreen: ViewController, MinimizableController {
                 }
                 switch action {
                 case .close:
-                    self.controller?.dismiss()
+                    if self.content.count > 1 {
+                        self.popContent(transition: .spring(duration: 0.4))
+                    } else {
+                        self.controller?.dismiss()
+                    }
                 case .reload:
                     content.reload()
                 case .stop:
@@ -1257,6 +1263,10 @@ public class BrowserScreen: ViewController, MinimizableController {
             return result
         }
         
+        override func accessibilityPerformEscape() -> Bool {
+            return self.controller?.accessibilityPerformEscape() ?? false
+        }
+
         private var scrollingPanelOffsetFraction: CGFloat = 0.0
         private var scrollingPanelOffsetToTopEdge: CGFloat = 0.0
         private var scrollingPanelOffsetToBottomEdge: CGFloat = .greatestFiniteMagnitude

@@ -133,6 +133,11 @@ final class BrowserPdfContent: UIView, BrowserContent, UIScrollViewDelegate, PDF
         fatalError("init(coder:) has not been implemented")
     }
     
+    override func accessibilityPerformEscape() -> Bool {
+        self.close()
+        return true
+    }
+
     deinit {
         NotificationCenter.default.removeObserver(self, name: .PDFViewPageChanged, object: nil)
     }
