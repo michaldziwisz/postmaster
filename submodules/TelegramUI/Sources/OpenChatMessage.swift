@@ -31,10 +31,12 @@ import PeerMessagesMediaPlaylist
 private final class VoiceOverContactPreviewController: UINavigationController, CNContactViewControllerDelegate, UIAdaptivePresentationControllerDelegate {
     private let onDismiss: (() -> Void)?
     private let displayTitle: String
+    private let photoAccessibilityLabel: String
     private weak var contactController: CNContactViewController?
 
     init(strings: PresentationStrings, contactData: DeviceContactExtendedData, onDismiss: (() -> Void)? = nil) {
         self.onDismiss = onDismiss
+        self.photoAccessibilityLabel = strings.Message_Photo
 
         let previewContact = contactData.asMutableCNContact()
         let contactController = CNContactViewController(forUnknownContact: previewContact)
@@ -105,10 +107,13 @@ private final class VoiceOverContactPreviewController: UINavigationController, C
     }
 
     private func sanitizeAccessibilityTree() {
-        guard UIAccessibility.isVoiceOverRunning, let contactView = self.contactController?.view else {
+        guard UIAccessibility.isVoiceOverRunning else {
             return
         }
-        self.sanitizeAccessibilitySubviews(in: contactView)
+        self.sanitizeAccessibilityElements(in: self.view)
+        if let contactView = self.contactController?.view {
+            self.sanitizeAccessibilitySubviews(in: contactView)
+        }
     }
 
     private func sanitizeAccessibilitySubviews(in view: UIView) {
@@ -124,6 +129,24 @@ private final class VoiceOverContactPreviewController: UINavigationController, C
         }
         for subview in view.subviews {
             self.sanitizeAccessibilitySubviews(in: subview)
+        }
+    }
+
+    private func sanitizeAccessibilityElements(in view: UIView) {
+        if let elements = view.accessibilityElements {
+            for case let element as UIAccessibilityElement in elements {
+                let label = element.accessibilityLabel?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                let value = element.accessibilityValue?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                let hint = element.accessibilityHint?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                if self.isHeaderAvatarAccessibilityElement(element, label: label, value: value, hint: hint) {
+                    element.accessibilityLabel = self.photoAccessibilityLabel
+                    element.accessibilityValue = nil
+                    element.accessibilityHint = nil
+                }
+            }
+        }
+        for subview in view.subviews {
+            self.sanitizeAccessibilityElements(in: subview)
         }
     }
 
@@ -143,6 +166,30 @@ private final class VoiceOverContactPreviewController: UINavigationController, C
         let frameInContainer = view.convert(view.bounds, to: self.view)
         if frameInContainer.minY > 260.0 {
             return false
+        }
+
+        return true
+    }
+
+    private func isHeaderAvatarAccessibilityElement(_ element: UIAccessibilityElement, label: String, value: String, hint: String) -> Bool {
+        let normalizedLabel = label.lowercased()
+        let normalizedValue = value.lowercased()
+        let normalizedHint = hint.lowercased()
+        let traits = element.accessibilityTraits
+
+        if traits.contains(.button) || traits.contains(.link) {
+            return false
+        }
+        if !(traits.contains(.image) || normalizedLabel.contains("logo") || normalizedLabel.contains("other") || normalizedValue.contains("logo") || normalizedValue.contains("other") || normalizedHint.contains("logo")) {
+            return false
+        }
+
+        let frame = element.accessibilityFrame
+        if !frame.isNull && !frame.isEmpty {
+            let localFrame = self.view.convert(frame, from: nil)
+            if localFrame.minY > 260.0 {
+                return false
+            }
         }
 
         return true
