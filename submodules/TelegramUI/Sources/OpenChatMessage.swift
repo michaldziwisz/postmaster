@@ -34,11 +34,16 @@ private final class VoiceOverContactPreviewController: UINavigationController, C
     init(strings: PresentationStrings, contactData: DeviceContactExtendedData, onDismiss: (() -> Void)? = nil) {
         self.onDismiss = onDismiss
 
-        let contactController = CNContactViewController(forUnknownContact: contactData.asMutableCNContact())
+        let previewContact = contactData.asMutableCNContact()
+        let contactController = CNContactViewController(forUnknownContact: previewContact)
         contactController.contactStore = CNContactStore()
         contactController.allowsActions = true
         contactController.allowsEditing = false
         contactController.navigationItem.largeTitleDisplayMode = .never
+        let title = CNContactFormatter.string(from: previewContact, style: .fullName)?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let displayTitle = (title?.isEmpty == false ? title! : strings.Conversation_Contact)
+        contactController.title = displayTitle
+        contactController.alternateName = strings.Conversation_Contact
 
         super.init(rootViewController: contactController)
 
