@@ -30,6 +30,7 @@ import PeerMessagesMediaPlaylist
 
 private final class VoiceOverContactPreviewController: UINavigationController, CNContactViewControllerDelegate, UIAdaptivePresentationControllerDelegate {
     private let onDismiss: (() -> Void)?
+    private let displayTitle: String
     private weak var contactController: CNContactViewController?
 
     init(strings: PresentationStrings, contactData: DeviceContactExtendedData, onDismiss: (() -> Void)? = nil) {
@@ -43,6 +44,7 @@ private final class VoiceOverContactPreviewController: UINavigationController, C
         contactController.navigationItem.largeTitleDisplayMode = .never
         let title = CNContactFormatter.string(from: previewContact, style: .fullName)?.trimmingCharacters(in: .whitespacesAndNewlines)
         let displayTitle = (title?.isEmpty == false ? title! : strings.Conversation_Contact)
+        self.displayTitle = displayTitle
         contactController.title = displayTitle
         contactController.alternateName = strings.Conversation_Contact
         self.contactController = contactController
@@ -73,6 +75,9 @@ private final class VoiceOverContactPreviewController: UINavigationController, C
         super.viewDidAppear(animated)
 
         self.sanitizeAccessibilityTree()
+        DispatchQueue.main.async { [weak self] in
+            self?.sanitizeAccessibilityTree()
+        }
     }
 
     override func viewDidLayoutSubviews() {
@@ -113,11 +118,43 @@ private final class VoiceOverContactPreviewController: UINavigationController, C
             let hint = view.accessibilityHint?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             if label.isEmpty && value.isEmpty && hint.isEmpty {
                 view.isAccessibilityElement = false
+            } else if self.isDecorativeHeaderImageCandidate(view: view, label: label, value: value, hint: hint) {
+                view.isAccessibilityElement = false
             }
         }
         for subview in view.subviews {
             self.sanitizeAccessibilitySubviews(in: subview)
         }
+    }
+
+    private func isDecorativeHeaderImageCandidate(view: UIView, label: String, value: String, hint: String) -> Bool {
+        let traits = view.accessibilityTraits
+        let className = String(describing: type(of: view)).lowercased()
+        let normalizedLabel = label.lowercased()
+        let normalizedValue = value.lowercased()
+        let normalizedHint = hint.lowercased()
+        let normalizedTitle = self.displayTitle.lowercased()
+
+        let looksLikeImage = view is UIImageView || traits.contains(.image) || className.contains("image") || className.contains("photo") || className.contains("avatar")
+        if !looksLikeImage {
+            return false
+        }
+
+        let frameInContainer = view.convert(view.bounds, to: self.view)
+        if frameInContainer.minY > 260.0 {
+            return false
+        }
+
+        if normalizedLabel.isEmpty && normalizedValue.isEmpty && normalizedHint.isEmpty {
+            return true
+        }
+
+        let genericLabels: Set<String> = [
+            "contact",
+            "photo",
+            normalizedTitle
+        ]
+        return genericLabels.contains(normalizedLabel) || genericLabels.contains(normalizedValue)
     }
 }
 
