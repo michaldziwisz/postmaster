@@ -134,7 +134,9 @@ public final class ContextReferenceButtonComponent: Component {
             self.buttonView.view.accessibilityLabel = component.accessibilityLabel
             self.buttonView.view.accessibilityValue = component.accessibilityValue
             self.buttonView.view.accessibilityHint = component.accessibilityHint
-            self.buttonView.view.accessibilityTraits = [.button].union(component.accessibilityTraits)
+            var accessibilityTraits: UIAccessibilityTraits = .button
+            accessibilityTraits.formUnion(component.accessibilityTraits)
+            self.buttonView.view.accessibilityTraits = accessibilityTraits
             self.sourceView.view.isAccessibilityElement = false
             self.contextContentView.view.isAccessibilityElement = false
 
