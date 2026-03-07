@@ -127,6 +127,7 @@ final class BrowserToolbarComponent: CombinedComponent {
 
 final class NavigationToolbarContentComponent: CombinedComponent {
     let theme: PresentationTheme
+    let strings: PresentationStrings
     let canGoBack: Bool
     let canGoForward: Bool
     let canOpenIn: Bool
@@ -137,6 +138,7 @@ final class NavigationToolbarContentComponent: CombinedComponent {
     
     init(
         theme: PresentationTheme,
+        strings: PresentationStrings,
         canGoBack: Bool,
         canGoForward: Bool,
         canOpenIn: Bool,
@@ -146,6 +148,7 @@ final class NavigationToolbarContentComponent: CombinedComponent {
         performHoldAction: @escaping (UIView, ContextGesture?, BrowserScreen.Action) -> Void
     ) {
         self.theme = theme
+        self.strings = strings
         self.canGoBack = canGoBack
         self.canGoForward = canGoForward
         self.canOpenIn = canOpenIn
@@ -157,6 +160,9 @@ final class NavigationToolbarContentComponent: CombinedComponent {
     
     static func ==(lhs: NavigationToolbarContentComponent, rhs: NavigationToolbarContentComponent) -> Bool {
         if lhs.theme !== rhs.theme {
+            return false
+        }
+        if lhs.strings !== rhs.strings {
             return false
         }
         if lhs.canGoBack != rhs.canGoBack {
@@ -201,18 +207,19 @@ final class NavigationToolbarContentComponent: CombinedComponent {
             let canShare = context.component.canShare
             let share = share.update(
                 component: Button(
-                    content: AnyComponent(
-                        BundleIconComponent(
-                            name: "Instant View/Share",
-                            tintColor: textColor
-                        )
-                    ),
-                    action: {
-                        if canShare {
-                            performAction.invoke(.share)
-                        }
-                    }
-                ).minSize(buttonSize),
+                        content: AnyComponent(
+                            BundleIconComponent(
+                                name: "Instant View/Share",
+                                tintColor: textColor
+                            )
+                        ),
+                        action: {
+                            if canShare {
+                                performAction.invoke(.share)
+                            }
+                        },
+                        accessibilityLabel: context.component.strings.WebBrowser_Share
+                    ).minSize(buttonSize),
                 availableSize: buttonSize,
                 transition: .easeInOut(duration: 0.2)
             )
@@ -230,7 +237,8 @@ final class NavigationToolbarContentComponent: CombinedComponent {
                         ),
                         action: {
                             performAction.invoke(.updateSearchActive(true))
-                        }
+                        },
+                        accessibilityLabel: context.component.strings.Common_Search
                     ).minSize(buttonSize),
                     availableSize: buttonSize,
                     transition: .easeInOut(duration: 0.2)
@@ -261,7 +269,8 @@ final class NavigationToolbarContentComponent: CombinedComponent {
                         ),
                         action: {
                             performAction.invoke(.openIn)
-                        }
+                        },
+                        accessibilityLabel: context.component.strings.Conversation_LinkDialogOpen
                     ).minSize(buttonSize),
                     availableSize: buttonSize,
                     transition: .easeInOut(duration: 0.2)
@@ -283,6 +292,8 @@ final class NavigationToolbarContentComponent: CombinedComponent {
                             )
                         ),
                         minSize: buttonSize,
+                        accessibilityLabel: context.component.strings.Common_Back,
+                        accessibilityTraits: canGoBack ? [] : [.notEnabled],
                         action: { view, gesture in
                             guard canGoBack else {
                                 return
@@ -312,6 +323,8 @@ final class NavigationToolbarContentComponent: CombinedComponent {
                             )
                         ),
                         minSize: buttonSize,
+                        accessibilityLabel: context.component.strings.Common_Next,
+                        accessibilityTraits: canGoForward ? [] : [.notEnabled],
                         action: { view, gesture in
                             guard canGoForward else {
                                 return
@@ -346,7 +359,8 @@ final class NavigationToolbarContentComponent: CombinedComponent {
                         ),
                         action: {
                             performAction.invoke(.openBookmarks)
-                        }
+                        },
+                        accessibilityLabel: context.component.strings.WebBrowser_Bookmarks_Title
                     ).minSize(buttonSize),
                     availableSize: buttonSize,
                     transition: .easeInOut(duration: 0.2)
@@ -361,18 +375,19 @@ final class NavigationToolbarContentComponent: CombinedComponent {
                     let openIn = openIn.update(
                         component: Button(
                             content: AnyComponent(
-                                BundleIconComponent(
-                                    name: "Instant View/Browser",
-                                    tintColor: textColor
-                                )
-                            ),
-                            action: {
-                                performAction.invoke(.openIn)
-                            }
-                        ).minSize(buttonSize),
-                        availableSize: buttonSize,
-                        transition: .easeInOut(duration: 0.2)
-                    )
+                            BundleIconComponent(
+                                name: "Instant View/Browser",
+                                tintColor: textColor
+                            )
+                        ),
+                        action: {
+                            performAction.invoke(.openIn)
+                        },
+                        accessibilityLabel: context.component.strings.Conversation_FileOpenIn
+                    ).minSize(buttonSize),
+                    availableSize: buttonSize,
+                    transition: .easeInOut(duration: 0.2)
+                )
                     context.add(openIn
                         .position(CGPoint(x: originX, y: availableSize.height / 2.0))
                     )
@@ -445,17 +460,18 @@ final class SearchToolbarContentComponent: CombinedComponent {
             
             let down = down.update(
                 component: Button(
-                    content: AnyComponent(
-                        BundleIconComponent(
-                            name: "Chat/Input/Search/DownButton",
-                            tintColor: textColor
-                        )
-                    ),
-                    isEnabled: context.component.count > 0,
-                    action: {
-                        performAction.invoke(.scrollToNextSearchResult)
-                    }
-                ).minSize(buttonSize),
+                        content: AnyComponent(
+                            BundleIconComponent(
+                                name: "Chat/Input/Search/DownButton",
+                                tintColor: textColor
+                            )
+                        ),
+                        isEnabled: context.component.count > 0,
+                        action: {
+                            performAction.invoke(.scrollToNextSearchResult)
+                        },
+                        accessibilityLabel: context.component.strings.Common_Next
+                    ).minSize(buttonSize),
                 availableSize: buttonSize,
                 transition: .easeInOut(duration: 0.2)
             )
@@ -465,17 +481,18 @@ final class SearchToolbarContentComponent: CombinedComponent {
             
             let up = up.update(
                 component: Button(
-                    content: AnyComponent(
-                        BundleIconComponent(
-                            name: "Chat/Input/Search/UpButton",
-                            tintColor: textColor
-                        )
-                    ),
-                    isEnabled: context.component.count > 0,
-                    action: {
-                        performAction.invoke(.scrollToPreviousSearchResult)
-                    }
-                ).minSize(buttonSize),
+                        content: AnyComponent(
+                            BundleIconComponent(
+                                name: "Chat/Input/Search/UpButton",
+                                tintColor: textColor
+                            )
+                        ),
+                        isEnabled: context.component.count > 0,
+                        action: {
+                            performAction.invoke(.scrollToPreviousSearchResult)
+                        },
+                        accessibilityLabel: context.component.strings.Common_Back
+                    ).minSize(buttonSize),
                 availableSize: buttonSize,
                 transition: .easeInOut(duration: 0.2)
             )

@@ -7,17 +7,29 @@ public final class ContextReferenceButtonComponent: Component {
     let content: AnyComponent<Empty>
     let tag: AnyObject?
     let minSize: CGSize?
+    let accessibilityLabel: String?
+    let accessibilityValue: String?
+    let accessibilityHint: String?
+    let accessibilityTraits: UIAccessibilityTraits
     let action: (UIView, ContextGesture?) -> Void
     
     public init(
         content: AnyComponent<Empty>,
         tag: AnyObject? = nil,
         minSize: CGSize?,
+        accessibilityLabel: String? = nil,
+        accessibilityValue: String? = nil,
+        accessibilityHint: String? = nil,
+        accessibilityTraits: UIAccessibilityTraits = [],
         action: @escaping (UIView, ContextGesture?) -> Void
     ) {
         self.content = content
         self.tag = tag
         self.minSize = minSize
+        self.accessibilityLabel = accessibilityLabel
+        self.accessibilityValue = accessibilityValue
+        self.accessibilityHint = accessibilityHint
+        self.accessibilityTraits = accessibilityTraits
         self.action = action
     }
     
@@ -29,6 +41,18 @@ public final class ContextReferenceButtonComponent: Component {
             return false
         }
         if lhs.minSize != rhs.minSize {
+            return false
+        }
+        if lhs.accessibilityLabel != rhs.accessibilityLabel {
+            return false
+        }
+        if lhs.accessibilityValue != rhs.accessibilityValue {
+            return false
+        }
+        if lhs.accessibilityHint != rhs.accessibilityHint {
+            return false
+        }
+        if lhs.accessibilityTraits != rhs.accessibilityTraits {
             return false
         }
         return true
@@ -106,6 +130,14 @@ public final class ContextReferenceButtonComponent: Component {
                 transition.setFrame(view: componentView, frame: CGRect(origin: CGPoint(x: floor((size.width - componentSize.width) / 2.0), y: floor((size.height - componentSize.height) / 2.0)), size: componentSize))
             }
             
+            self.buttonView.view.isAccessibilityElement = true
+            self.buttonView.view.accessibilityLabel = component.accessibilityLabel
+            self.buttonView.view.accessibilityValue = component.accessibilityValue
+            self.buttonView.view.accessibilityHint = component.accessibilityHint
+            self.buttonView.view.accessibilityTraits = [.button].union(component.accessibilityTraits)
+            self.sourceView.view.isAccessibilityElement = false
+            self.contextContentView.view.isAccessibilityElement = false
+
             transition.setFrame(view: self.buttonView.view, frame: CGRect(origin: .zero, size: size))
             transition.setFrame(view: self.sourceView.view, frame: CGRect(origin: .zero, size: size))
             transition.setFrame(view: self.contextContentView.view, frame: CGRect(origin: .zero, size: size))

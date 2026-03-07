@@ -123,6 +123,8 @@ final class BrowserNavigationBarComponent: Component {
             self.addSubview(self.edgeEffectView)
             
             self.addSubview(self.containerView)
+            self.activateButton.isAccessibilityElement = false
+            self.activateButton.accessibilityElementsHidden = true
             self.activateButton.addTarget(self, action: #selector(self.activatePressed), for: .touchUpInside)
         }
         

@@ -164,7 +164,8 @@ private final class BrowserScreenComponent: CombinedComponent {
                                     ),
                                     action: {
                                         performAction.invoke(.close)
-                                    }
+                                    },
+                                    accessibilityLabel: environment.strings.Common_Close
                                 ).minSize(CGSize(width: 44.0, height: 44.0))
                             )
                         )
@@ -206,9 +207,11 @@ private final class BrowserScreenComponent: CombinedComponent {
                                                 tintColor: environment.theme.chat.inputPanel.panelControlColor.withAlphaComponent(canGoBack ? 1.0 : 0.4)
                                             )
                                         ),
+                                        isEnabled: canGoBack,
                                         action: {
                                             performAction.invoke(.navigateBack)
-                                        }
+                                        },
+                                        accessibilityLabel: environment.strings.Common_Back
                                     ).minSize(CGSize(width: 44.0, height: 44.0))
                                 )
                             )
@@ -225,9 +228,11 @@ private final class BrowserScreenComponent: CombinedComponent {
                                                 tintColor: environment.theme.chat.inputPanel.panelControlColor.withAlphaComponent(canGoForward ? 1.0 : 0.4)
                                             )
                                         ),
+                                        isEnabled: canGoForward,
                                         action: {
                                             performAction.invoke(.navigateForward)
-                                        }
+                                        },
+                                        accessibilityLabel: environment.strings.Common_Next
                                     ).minSize(CGSize(width: 44.0, height: 44.0))
                                 )
                             )
@@ -252,7 +257,8 @@ private final class BrowserScreenComponent: CombinedComponent {
                                     action: {
                                         performAction.invoke(.openSettings)
                                         moreButtonPlayOnce.invoke(Void())
-                                    }
+                                    },
+                                    accessibilityLabel: environment.strings.Common_More
                                 ).minSize(CGSize(width: 44.0, height: 44.0)).tagged(settingsTag)
                             )
                         )
@@ -272,7 +278,8 @@ private final class BrowserScreenComponent: CombinedComponent {
                                         ),
                                         action: {
                                             performAction.invoke(.openBookmarks)
-                                        }
+                                        },
+                                        accessibilityLabel: environment.strings.WebBrowser_Bookmarks_Title
                                     ).minSize(CGSize(width: 44.0, height: 44.0))
                                 )
                             ),
@@ -292,7 +299,8 @@ private final class BrowserScreenComponent: CombinedComponent {
                                             ),
                                             action: {
                                                 performAction.invoke(.share)
-                                            }
+                                            },
+                                            accessibilityLabel: environment.strings.WebBrowser_Share
                                         ).minSize(CGSize(width: 44.0, height: 44.0))
                                     )
                                 ),
@@ -313,7 +321,8 @@ private final class BrowserScreenComponent: CombinedComponent {
                                             ),
                                             action: {
                                                 performAction.invoke(.openIn)
-                                            }
+                                            },
+                                            accessibilityLabel: environment.strings.Conversation_FileOpenIn
                                         ).minSize(CGSize(width: 44.0, height: 44.0))
                                     )
                                 )
@@ -366,6 +375,7 @@ private final class BrowserScreenComponent: CombinedComponent {
                     component: AnyComponent(
                         NavigationToolbarContentComponent(
                             theme: environment.theme,
+                            strings: environment.strings,
                             canGoBack: context.component.contentState?.canGoBack ?? false,
                             canGoForward: context.component.contentState?.canGoForward ?? false,
                             canOpenIn: canOpenIn,
@@ -1602,6 +1612,11 @@ public class BrowserScreen: ViewController, MinimizableController {
         }
     }
     
+    public override func accessibilityPerformEscape() -> Bool {
+        self.dismiss()
+        return true
+    }
+
     public override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
         
