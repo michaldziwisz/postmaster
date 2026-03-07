@@ -84,17 +84,16 @@ final class VoiceOverContactInfoController: UITableViewController, CNContactView
         let cell = tableView.dequeueReusableCell(withIdentifier: identifier) ?? UITableViewCell(style: .subtitle, reuseIdentifier: identifier)
         let row = self.sections[indexPath.section].rows[indexPath.row]
         
-        var configuration = UIListContentConfiguration.subtitleCell()
-        configuration.text = row.title
-        configuration.secondaryText = row.subtitle
-        configuration.secondaryTextProperties.numberOfLines = 0
-        configuration.textProperties.numberOfLines = 0
+        cell.textLabel?.text = row.title
+        cell.textLabel?.numberOfLines = 0
+        cell.detailTextLabel?.text = row.subtitle
+        cell.detailTextLabel?.numberOfLines = 0
         if let iconSystemName = row.iconSystemName {
-            configuration.image = UIImage(systemName: iconSystemName)
+            cell.imageView?.image = UIImage(systemName: iconSystemName)
+            cell.imageView?.tintColor = self.view.tintColor
         } else {
-            configuration.image = nil
+            cell.imageView?.image = nil
         }
-        cell.contentConfiguration = configuration
         
         cell.accessoryType = row.action != nil ? .disclosureIndicator : .none
         cell.selectionStyle = row.action != nil ? .default : .none
@@ -181,7 +180,7 @@ final class VoiceOverContactInfoController: UITableViewController, CNContactView
             }))
         }
         if self.contactData.serializedVCard() != nil {
-            actionRows.append(VoiceOverContactRow(title: self.presentationData.strings.Common_Share, subtitle: self.presentationData.strings.Conversation_Contact, iconSystemName: "square.and.arrow.up", action: { [weak self] in
+            actionRows.append(VoiceOverContactRow(title: "Share Contact", subtitle: self.presentationData.strings.Conversation_Contact, iconSystemName: "square.and.arrow.up", action: { [weak self] in
                 self?.shareContact()
             }))
         }
