@@ -10,6 +10,14 @@ import EdgeEffect
 import ComponentFlow
 import ComponentDisplayAdapters
 
+private final class GalleryActionAccessibilityElement: UIAccessibilityElement {
+    var activate: (() -> Bool)?
+    
+    override func accessibilityActivate() -> Bool {
+        return self.activate?() ?? false
+    }
+}
+
 open class GalleryControllerNode: ASDisplayNode, ASScrollViewDelegate, ASGestureRecognizerDelegate {
     public enum CustomDismissType {
         case `default`
@@ -46,6 +54,7 @@ open class GalleryControllerNode: ASDisplayNode, ASScrollViewDelegate, ASGesture
     private var isDismissed = false
 
     private var voiceOverStatusObserver: NSObjectProtocol?
+    private var backAccessibilityElement: GalleryActionAccessibilityElement?
     
     public var areControlsHidden = false
     public var controlsVisibilityChanged: ((Bool) -> Void)?
@@ -326,7 +335,7 @@ open class GalleryControllerNode: ASDisplayNode, ASScrollViewDelegate, ASGesture
         
         self.view.isAccessibilityElement = false
         self.view.accessibilityElementsHidden = false
-        self.view.accessibilityViewIsModal = UIAccessibility.isVoiceOverRunning
+        self.view.accessibilityViewIsModal = UIAccessibility.isVoiceOverRunning && !suppressSupplementaryControls
         self.statusBar?.view.accessibilityElementsHidden = UIAccessibility.isVoiceOverRunning
         self.scrollView.accessibilityElementsHidden = false
         self.pager.view.accessibilityElementsHidden = false
@@ -339,7 +348,9 @@ open class GalleryControllerNode: ASDisplayNode, ASScrollViewDelegate, ASGesture
         
         var elements: [Any] = []
         
-        if let navigationBar = self.navigationBar, navigationBar.supernode != nil, navigationBar.alpha > 0.01, !navigationBar.isHidden, !navigationBar.view.accessibilityElementsHidden {
+        if suppressSupplementaryControls, let backAccessibilityElement = self.makeBackAccessibilityElement() {
+            elements.append(backAccessibilityElement)
+        } else if let navigationBar = self.navigationBar, navigationBar.supernode != nil, navigationBar.alpha > 0.01, !navigationBar.isHidden, !navigationBar.view.accessibilityElementsHidden {
             elements.append(navigationBar.view)
         }
         
@@ -363,6 +374,42 @@ open class GalleryControllerNode: ASDisplayNode, ASScrollViewDelegate, ASGesture
         
         self.view.accessibilityElements = elements
     }
+    
+    private func makeBackAccessibilityElement() -> GalleryActionAccessibilityElement? {
+        guard
+            let navigationBar = self.navigationBar,
+            navigationBar.supernode != nil,
+            navigationBar.alpha > 0.01,
+            !navigationBar.isHidden,
+            let backButtonView = navigationBar.backButtonNode.view,
+            backButtonView.alpha > 0.01,
+            !backButtonView.isHidden
+        else {
+            self.backAccessibilityElement = nil
+            return nil
+        }
+        
+        let element: GalleryActionAccessibilityElement
+        if let current = self.backAccessibilityElement {
+            element = current
+        } else {
+            element = GalleryActionAccessibilityElement(accessibilityContainer: self.view)
+            self.backAccessibilityElement = element
+        }
+        
+        element.accessibilityTraits = [.button]
+        element.accessibilityLabel = backButtonView.accessibilityLabel ?? navigationBar.item?.leftBarButtonItem?.accessibilityLabel ?? navigationBar.item?.leftBarButtonItem?.title ?? "Back"
+        element.accessibilityHint = nil
+        element.accessibilityFrameInContainerSpace = backButtonView.convert(backButtonView.bounds, to: self.view)
+        element.activate = { [weak self] in
+            guard let controller = self?.galleryController() else {
+                return false
+            }
+            return controller.accessibilityPerformEscape()
+        }
+        
+        return element
+    }
 
     func prepareForAccessibilityDismissal() {
         guard self.isNodeLoaded else {
@@ -372,6 +419,7 @@ open class GalleryControllerNode: ASDisplayNode, ASScrollViewDelegate, ASGesture
         self.view.accessibilityViewIsModal = false
         self.view.accessibilityElements = nil
         self.view.accessibilityElementsHidden = true
+        self.backAccessibilityElement = nil
         self.scrollView.accessibilityElementsHidden = true
         self.pager.view.accessibilityElementsHidden = true
         self.navigationBar?.view.accessibilityElementsHidden = true
