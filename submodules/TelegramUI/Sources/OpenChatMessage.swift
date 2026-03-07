@@ -130,13 +130,13 @@ private final class VoiceOverContactPreviewController: UINavigationController, C
     private func isDecorativeHeaderImageCandidate(view: UIView, label: String, value: String, hint: String) -> Bool {
         let traits = view.accessibilityTraits
         let className = String(describing: type(of: view)).lowercased()
-        let normalizedLabel = label.lowercased()
-        let normalizedValue = value.lowercased()
-        let normalizedHint = hint.lowercased()
-        let normalizedTitle = self.displayTitle.lowercased()
 
         let looksLikeImage = view is UIImageView || traits.contains(.image) || className.contains("image") || className.contains("photo") || className.contains("avatar")
         if !looksLikeImage {
+            return false
+        }
+
+        if traits.contains(.button) || traits.contains(.link) {
             return false
         }
 
@@ -145,16 +145,7 @@ private final class VoiceOverContactPreviewController: UINavigationController, C
             return false
         }
 
-        if normalizedLabel.isEmpty && normalizedValue.isEmpty && normalizedHint.isEmpty {
-            return true
-        }
-
-        let genericLabels: Set<String> = [
-            "contact",
-            "photo",
-            normalizedTitle
-        ]
-        return genericLabels.contains(normalizedLabel) || genericLabels.contains(normalizedValue)
+        return true
     }
 }
 
