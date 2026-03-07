@@ -1,5 +1,4 @@
 import Foundation
-import ContactsUI
 import Display
 import AsyncDisplayKit
 import Postbox
@@ -27,210 +26,6 @@ import StoryContainerScreen
 import WallpaperGalleryScreen
 import BrowserUI
 import PeerMessagesMediaPlaylist
-
-private final class VoiceOverContactPreviewController: UINavigationController, CNContactViewControllerDelegate, UIAdaptivePresentationControllerDelegate {
-    private let onDismiss: (() -> Void)?
-    private let displayTitle: String
-    private let photoAccessibilityLabel: String
-    private weak var contactController: CNContactViewController?
-
-    init(strings: PresentationStrings, contactData: DeviceContactExtendedData, onDismiss: (() -> Void)? = nil) {
-        self.onDismiss = onDismiss
-        self.photoAccessibilityLabel = strings.Message_Photo
-
-        let previewContact = contactData.asMutableCNContact()
-        let contactController = CNContactViewController(forUnknownContact: previewContact)
-        contactController.contactStore = CNContactStore()
-        contactController.allowsActions = true
-        contactController.allowsEditing = false
-        contactController.navigationItem.largeTitleDisplayMode = .never
-        let title = CNContactFormatter.string(from: previewContact, style: .fullName)?.trimmingCharacters(in: .whitespacesAndNewlines)
-        let displayTitle = (title?.isEmpty == false ? title! : strings.Conversation_Contact)
-        self.displayTitle = displayTitle
-        contactController.title = displayTitle
-        contactController.alternateName = strings.Conversation_Contact
-        self.contactController = contactController
-
-        super.init(rootViewController: contactController)
-
-        contactController.delegate = self
-        let backButtonItem = UIBarButtonItem(title: strings.Common_Back, style: .plain, target: self, action: #selector(self.backPressed))
-        backButtonItem.accessibilityLabel = strings.Common_Back
-        contactController.navigationItem.leftBarButtonItem = backButtonItem
-
-        self.modalPresentationStyle = .fullScreen
-        self.isModalInPresentation = false
-    }
-
-    required init?(coder aDecoder: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
-    }
-
-    override func viewDidLoad() {
-        super.viewDidLoad()
-
-        self.view.accessibilityViewIsModal = UIAccessibility.isVoiceOverRunning
-        self.presentationController?.delegate = self
-    }
-
-    override func viewDidAppear(_ animated: Bool) {
-        super.viewDidAppear(animated)
-
-        self.sanitizeAccessibilityTree()
-        DispatchQueue.main.async { [weak self] in
-            self?.sanitizeAccessibilityTree()
-        }
-    }
-
-    override func viewDidLayoutSubviews() {
-        super.viewDidLayoutSubviews()
-
-        self.sanitizeAccessibilityTree()
-    }
-
-    @objc private func backPressed() {
-        let onDismiss = self.onDismiss
-        self.dismiss(animated: true, completion: onDismiss)
-    }
-
-    override func accessibilityPerformEscape() -> Bool {
-        self.backPressed()
-        return true
-    }
-
-    func contactViewController(_ viewController: CNContactViewController, didCompleteWith contact: CNContact?) {
-        self.backPressed()
-    }
-
-    func presentationControllerDidDismiss(_ presentationController: UIPresentationController) {
-        self.onDismiss?()
-    }
-
-    private func sanitizeAccessibilityTree() {
-        guard UIAccessibility.isVoiceOverRunning else {
-            return
-        }
-        self.sanitizeAccessibilityElements(in: self.view)
-        if let contactView = self.contactController?.view {
-            self.sanitizeAccessibilitySubviews(in: contactView)
-        }
-    }
-
-    private func sanitizeAccessibilitySubviews(in view: UIView) {
-        if self.isDecorativeHeaderImageContainer(view) {
-            view.isAccessibilityElement = false
-            view.accessibilityElementsHidden = true
-            return
-        }
-
-        if view.isAccessibilityElement {
-            let label = view.accessibilityLabel?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            let value = view.accessibilityValue?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            let hint = view.accessibilityHint?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            if label.isEmpty && value.isEmpty && hint.isEmpty {
-                view.isAccessibilityElement = false
-            } else if self.isDecorativeHeaderImageCandidate(view: view, label: label, value: value, hint: hint) {
-                view.isAccessibilityElement = false
-            }
-        }
-        for subview in view.subviews {
-            self.sanitizeAccessibilitySubviews(in: subview)
-        }
-    }
-
-    private func sanitizeAccessibilityElements(in view: UIView) {
-        if let elements = view.accessibilityElements {
-            for case let element as UIAccessibilityElement in elements {
-                let label = element.accessibilityLabel?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-                let value = element.accessibilityValue?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-                let hint = element.accessibilityHint?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-                if self.isHeaderAvatarAccessibilityElement(element, label: label, value: value, hint: hint) {
-                    element.accessibilityLabel = self.photoAccessibilityLabel
-                    element.accessibilityValue = nil
-                    element.accessibilityHint = nil
-                }
-            }
-        }
-        for subview in view.subviews {
-            self.sanitizeAccessibilityElements(in: subview)
-        }
-    }
-
-    private func isDecorativeHeaderImageCandidate(view: UIView, label: String, value: String, hint: String) -> Bool {
-        if self.isDecorativeHeaderImageContainer(view) {
-            return true
-        }
-
-        let traits = view.accessibilityTraits
-        let className = String(describing: type(of: view)).lowercased()
-
-        let looksLikeImage = view is UIImageView || traits.contains(.image) || className.contains("image") || className.contains("photo") || className.contains("avatar")
-        if !looksLikeImage {
-            return false
-        }
-
-        if traits.contains(.button) || traits.contains(.link) {
-            return false
-        }
-
-        let frameInContainer = view.convert(view.bounds, to: self.view)
-        if frameInContainer.minY > 260.0 {
-            return false
-        }
-
-        return true
-    }
-
-    private func isDecorativeHeaderImageContainer(_ view: UIView) -> Bool {
-        let className = String(describing: type(of: view)).lowercased()
-        let frameInContainer = view.convert(view.bounds, to: self.view)
-
-        guard frameInContainer.minY <= 260.0 else {
-            return false
-        }
-        if view.accessibilityTraits.contains(.button) || view.accessibilityTraits.contains(.link) {
-            return false
-        }
-
-        let looksLikeAvatar = view is UIImageView || className.contains("image") || className.contains("photo") || className.contains("avatar") || className.contains("monogram")
-        if looksLikeAvatar {
-            return true
-        }
-
-        if !view.subviews.isEmpty && frameInContainer.height >= 100.0 && frameInContainer.width >= 100.0 {
-            let descendantNames = view.subviews.map { String(describing: type(of: $0)).lowercased() }.joined(separator: " ")
-            if descendantNames.contains("image") || descendantNames.contains("photo") || descendantNames.contains("avatar") || descendantNames.contains("monogram") {
-                return true
-            }
-        }
-
-        return false
-    }
-
-    private func isHeaderAvatarAccessibilityElement(_ element: UIAccessibilityElement, label: String, value: String, hint: String) -> Bool {
-        let normalizedLabel = label.lowercased()
-        let normalizedValue = value.lowercased()
-        let normalizedHint = hint.lowercased()
-        let traits = element.accessibilityTraits
-
-        if traits.contains(.button) || traits.contains(.link) {
-            return false
-        }
-        if !(traits.contains(.image) || normalizedLabel.contains("logo") || normalizedLabel.contains("other") || normalizedValue.contains("logo") || normalizedValue.contains("other") || normalizedHint.contains("logo")) {
-            return false
-        }
-
-        let frame = element.accessibilityFrame
-        if !frame.isNull && !frame.isEmpty {
-            let localFrame = self.view.convert(frame, from: nil)
-            if localFrame.minY > 260.0 {
-                return false
-            }
-        }
-
-        return true
-    }
-}
 
 func openChatMessageImpl(_ params: OpenChatMessageParams) -> Bool {
     var story: TelegramMediaStory?
@@ -605,12 +400,16 @@ func openChatMessageImpl(_ params: OpenChatMessageParams) -> Bool {
                         }
                         if UIAccessibility.isVoiceOverRunning, let rootController = params.navigationController?.view.window?.rootViewController {
                             let presentationData = params.context.sharedContext.currentPresentationData.with { $0 }
-                            let controller = VoiceOverContactPreviewController(strings: presentationData.strings, contactData: contactData, onDismiss: {
+                            let controller = VoiceOverContactInfoController(context: params.context, presentationData: presentationData, contactData: contactData, peer: peer, onDismiss: {
                                 if let view = params.navigationController?.topViewController?.view {
                                     UIAccessibility.post(notification: .screenChanged, argument: view)
                                 }
                             })
-                            rootController.present(controller, animated: true)
+                            let navigationController = UINavigationController(rootViewController: controller)
+                            navigationController.modalPresentationStyle = .fullScreen
+                            navigationController.isModalInPresentation = false
+                            navigationController.view.accessibilityViewIsModal = true
+                            rootController.present(navigationController, animated: true)
                         } else {
                             let controller = deviceContactInfoController(context: ShareControllerAppAccountContext(context: params.context), environment: ShareControllerAppEnvironment(sharedContext: params.context.sharedContext), updatedPresentationData: params.updatedPresentationData, subject: .vcard(peer?._asPeer(), nil, contactData), completed: nil, cancelled: nil)
                             controller.navigationPresentation = .default
