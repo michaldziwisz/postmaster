@@ -380,11 +380,13 @@ open class GalleryControllerNode: ASDisplayNode, ASScrollViewDelegate, ASGesture
             let navigationBar = self.navigationBar,
             navigationBar.supernode != nil,
             navigationBar.alpha > 0.01,
-            !navigationBar.isHidden,
-            let backButtonView = navigationBar.backButtonNode.view,
-            backButtonView.alpha > 0.01,
-            !backButtonView.isHidden
+            !navigationBar.isHidden
         else {
+            self.backAccessibilityElement = nil
+            return nil
+        }
+        let backButtonView = navigationBar.backButtonNode.view
+        guard backButtonView.alpha > 0.01, !backButtonView.isHidden else {
             self.backAccessibilityElement = nil
             return nil
         }
