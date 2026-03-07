@@ -117,6 +117,12 @@ private final class VoiceOverContactPreviewController: UINavigationController, C
     }
 
     private func sanitizeAccessibilitySubviews(in view: UIView) {
+        if self.isDecorativeHeaderImageContainer(view) {
+            view.isAccessibilityElement = false
+            view.accessibilityElementsHidden = true
+            return
+        }
+
         if view.isAccessibilityElement {
             let label = view.accessibilityLabel?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             let value = view.accessibilityValue?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
@@ -151,6 +157,10 @@ private final class VoiceOverContactPreviewController: UINavigationController, C
     }
 
     private func isDecorativeHeaderImageCandidate(view: UIView, label: String, value: String, hint: String) -> Bool {
+        if self.isDecorativeHeaderImageContainer(view) {
+            return true
+        }
+
         let traits = view.accessibilityTraits
         let className = String(describing: type(of: view)).lowercased()
 
@@ -169,6 +179,32 @@ private final class VoiceOverContactPreviewController: UINavigationController, C
         }
 
         return true
+    }
+
+    private func isDecorativeHeaderImageContainer(_ view: UIView) -> Bool {
+        let className = String(describing: type(of: view)).lowercased()
+        let frameInContainer = view.convert(view.bounds, to: self.view)
+
+        guard frameInContainer.minY <= 260.0 else {
+            return false
+        }
+        if view.accessibilityTraits.contains(.button) || view.accessibilityTraits.contains(.link) {
+            return false
+        }
+
+        let looksLikeAvatar = view is UIImageView || className.contains("image") || className.contains("photo") || className.contains("avatar") || className.contains("monogram")
+        if looksLikeAvatar {
+            return true
+        }
+
+        if !view.subviews.isEmpty && frameInContainer.height >= 100.0 && frameInContainer.width >= 100.0 {
+            let descendantNames = view.subviews.map { String(describing: type(of: $0)).lowercased() }.joined(separator: " ")
+            if descendantNames.contains("image") || descendantNames.contains("photo") || descendantNames.contains("avatar") || descendantNames.contains("monogram") {
+                return true
+            }
+        }
+
+        return false
     }
 
     private func isHeaderAvatarAccessibilityElement(_ element: UIAccessibilityElement, label: String, value: String, hint: String) -> Bool {
