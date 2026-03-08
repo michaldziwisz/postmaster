@@ -539,33 +539,31 @@ final class ChatItemGalleryFooterContentNode: GalleryFooterContentNode, ASScroll
                     
                     let _ = ApplicationSpecificNotice.incrementTranslationSuggestion(accountManager: self.context.sharedContext.accountManager, timestamp: Int32(Date().timeIntervalSince1970)).start()
                     
-                    let translateController = TranslateScreen(context: self.context, forceTheme: defaultDarkPresentationTheme, text: text.string, canCopy: true, fromLanguage: language, ignoredLanguages: translationSettings.ignoredLanguages)
-                    translateController.pushController = { [weak self] c in
-                        guard let self else {
-                            return
+                    presentTranslateScreen(
+                        context: self.context,
+                        text: text.string,
+                        canCopy: true,
+                        fromLanguage: language,
+                        ignoredLanguages: translationSettings.ignoredLanguages,
+                        pushController: { [weak self] c in
+                            guard let self else {
+                                return
+                            }
+                            self.controllerInteraction?.pushController(c)
+                        },
+                        presentController: { [weak self] c in
+                            guard let self else {
+                                return
+                            }
+                            self.controllerInteraction?.presentController(c, nil)
+                        },
+                        display: { [weak self] c in
+                            guard let self else {
+                                return
+                            }
+                            self.controllerInteraction?.presentController(c, nil)
                         }
-                        self.controllerInteraction?.pushController(c)
-                    }
-                    translateController.presentController = { [weak self] c in
-                        guard let self else {
-                            return
-                        }
-                        self.controllerInteraction?.presentController(c, nil)
-                    }
-                    
-                    //self.actionSheet = translateController
-                    //view.updateIsProgressPaused()
-                    
-                    /*translateController.wasDismissed = { [weak self, weak view] in
-                        guard let self, let view else {
-                            return
-                        }
-                        self.actionSheet = nil
-                        view.updateIsProgressPaused()
-                    }*/
-                    
-                    //component.controller()?.present(translateController, in: .window(.root))
-                    self.controllerInteraction?.presentController(translateController, nil)
+                    )
                 })
             case .quote:
                 break

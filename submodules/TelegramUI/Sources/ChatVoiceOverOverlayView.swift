@@ -728,6 +728,14 @@ private final class ChatVoiceOverOverlayRowAccessibilityElement: UIAccessibility
         }
     }
 
+    override var accessibilityValue: String? {
+        get {
+            return self.overlay?.voiceOverAccessibilityValue(for: self)
+        }
+        set {
+        }
+    }
+
     override var accessibilityTraits: UIAccessibilityTraits {
         get {
             return self.overlay?.voiceOverAccessibilityTraits(for: self) ?? super.accessibilityTraits
@@ -788,6 +796,7 @@ public final class ChatVoiceOverOverlayView: UIView {
         public var presentMessageTextActions: ((Message, [MessageTextActionItem]) -> Void)?
         public var performTextSelectionAction: ((Message, NSAttributedString, TextSelectionAction) -> Void)?
         public var requestAudioTranscription: ((Message) -> Void)?
+        public var viewAudioTranscript: ((Message) -> Void)?
 
         public init(
             back: (() -> Void)? = nil,
@@ -810,7 +819,8 @@ public final class ChatVoiceOverOverlayView: UIView {
             activateMessageTextAction: ((Message, TelegramTextAttributesVoiceOver.Action) -> Void)? = nil,
             presentMessageTextActions: ((Message, [MessageTextActionItem]) -> Void)? = nil,
             performTextSelectionAction: ((Message, NSAttributedString, TextSelectionAction) -> Void)? = nil,
-            requestAudioTranscription: ((Message) -> Void)? = nil
+            requestAudioTranscription: ((Message) -> Void)? = nil,
+            viewAudioTranscript: ((Message) -> Void)? = nil
         ) {
             self.back = back
             self.openProfile = openProfile
@@ -833,6 +843,7 @@ public final class ChatVoiceOverOverlayView: UIView {
             self.presentMessageTextActions = presentMessageTextActions
             self.performTextSelectionAction = performTextSelectionAction
             self.requestAudioTranscription = requestAudioTranscription
+            self.viewAudioTranscript = viewAudioTranscript
         }
     }
 
@@ -2597,6 +2608,16 @@ public final class ChatVoiceOverOverlayView: UIView {
         }
     }
 
+    fileprivate func voiceOverAccessibilityValue(for element: ChatVoiceOverOverlayRowAccessibilityElement) -> String? {
+        guard case .row = element.kind, let row = self.row(for: element) else {
+            return nil
+        }
+        guard case let .message(message) = row.kind else {
+            return nil
+        }
+        return self.transcriptAccessibilityValue(for: message)
+    }
+
     fileprivate func voiceOverAccessibilityTraits(for element: ChatVoiceOverOverlayRowAccessibilityElement) -> UIAccessibilityTraits {
         switch element.kind {
         case .loadEarlier:
@@ -3992,6 +4013,26 @@ public final class ChatVoiceOverOverlayView: UIView {
         return nil
     }
 
+    private func transcriptText(for message: Message) -> String? {
+        guard let transcribedText = transcribedText(message: message) else {
+            return nil
+        }
+        switch transcribedText {
+        case let .success(text, _):
+            let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmedText.isEmpty ? nil : text
+        case .error:
+            return nil
+        }
+    }
+
+    private func transcriptAccessibilityValue(for message: Message) -> String? {
+        guard self.isVoiceMessage(message), let transcriptText = self.transcriptText(for: message) else {
+            return nil
+        }
+        return transcriptText
+    }
+
     private func supportsAudioTranscription(for message: Message) -> Bool {
         for media in message.media {
             if let file = media as? TelegramMediaFile, file.isVoice || file.isInstantVideo {
@@ -4026,19 +4067,21 @@ public final class ChatVoiceOverOverlayView: UIView {
                 performTextSelectionAction(message, selectionContent, .translate)
                 return true
             }))
+        }
 
-            let speakTitle = state.strings.Conversation_ContextMenuSpeak
-            customActions.append(UIAccessibilityCustomAction(name: speakTitle, actionHandler: { [weak self] _ in
+        if let transcriptText = self.transcriptText(for: message), let viewAudioTranscript = self.actions.viewAudioTranscript {
+            let transcriptTitle = "View Transcript"
+            customActions.append(UIAccessibilityCustomAction(name: transcriptTitle, actionHandler: { [weak self] _ in
                 guard let self else {
                     return false
                 }
                 self.noteVoiceOverNavigationActivity()
-                performTextSelectionAction(message, selectionContent, .speak)
+                if !transcriptText.isEmpty {
+                    viewAudioTranscript(message)
+                }
                 return true
             }))
-        }
-
-        if self.supportsAudioTranscription(for: message), let requestAudioTranscription = self.actions.requestAudioTranscription {
+        } else if self.supportsAudioTranscription(for: message), let requestAudioTranscription = self.actions.requestAudioTranscription {
             let transcriptionTitle = state.strings.GroupBoost_AudioTranscription
             customActions.append(UIAccessibilityCustomAction(name: transcriptionTitle, actionHandler: { [weak self] _ in
                 guard let self else {

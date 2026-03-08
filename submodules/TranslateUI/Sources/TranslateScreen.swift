@@ -1434,6 +1434,37 @@ public func presentTranslateScreen(
     wasDismissed: (() -> Void)? = nil,
     display: (ViewController) -> Void
 ) {
+    if UIAccessibility.isVoiceOverRunning {
+        var baseLanguageCode = context.sharedContext.currentPresentationData.with { $0 }.strings.baseLanguageCode
+        let rawSuffix = "-raw"
+        if baseLanguageCode.hasSuffix(rawSuffix) {
+            baseLanguageCode = String(baseLanguageCode.dropLast(rawSuffix.count))
+        }
+
+        let dontTranslateLanguages = effectiveIgnoredTranslationLanguages(context: context, ignoredLanguages: ignoredLanguages)
+        var resolvedToLanguage = toLanguage ?? baseLanguageCode
+        if resolvedToLanguage == fromLanguage {
+            if fromLanguage == "en" {
+                resolvedToLanguage = dontTranslateLanguages.first(where: { $0 != "en" }) ?? "en"
+            } else {
+                resolvedToLanguage = "en"
+            }
+        }
+        resolvedToLanguage = normalizeTranslationLanguage(resolvedToLanguage)
+
+        if presentVoiceOverTranslateScreen(
+            context: context,
+            text: text,
+            canCopy: canCopy,
+            fromLanguage: fromLanguage,
+            toLanguage: resolvedToLanguage,
+            ignoredLanguages: ignoredLanguages,
+            wasDismissed: wasDismissed
+        ) {
+            return
+        }
+    }
+
     let translationConfiguration = TranslationConfiguration.with(appConfiguration: context.currentAppConfiguration.with { $0 })
     var useSystemTranslation = false
     switch translationConfiguration.manual {

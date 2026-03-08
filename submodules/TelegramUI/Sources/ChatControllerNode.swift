@@ -61,6 +61,7 @@ import LegacyChatHeaderPanelComponent
 import ChatSearchNavigationContentNode
 import GroupCallHeaderPanelComponent
 import PresentationDataUtils
+import ChatMessageItemCommon
 
 final class VideoNavigationControllerDropContentItem: NavigationControllerDropContentItem {
     let itemNode: OverlayMediaItemNode
@@ -1449,6 +1450,49 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                             UIAccessibility.post(notification: .announcement, argument: self.chatPresentationInterfaceState.strings.Login_UnknownError)
                         }
                     })
+                }
+                overlay.actions.viewAudioTranscript = { [weak self] message in
+                    guard let self, let controller = self.controller else {
+                        return
+                    }
+                    guard let transcription = transcribedText(message: message) else {
+                        return
+                    }
+                    let transcriptText: String
+                    switch transcription {
+                    case let .success(text, _):
+                        let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                        guard !trimmedText.isEmpty else {
+                            return
+                        }
+                        transcriptText = text
+                    case .error:
+                        return
+                    }
+
+                    let presentationData = self.context.sharedContext.currentPresentationData.with { $0 }
+                    let transcriptController = VoiceOverTranscriptController(
+                        presentationData: presentationData,
+                        transcriptText: transcriptText,
+                        onDismiss: { [weak self] in
+                            guard let self else {
+                                return
+                            }
+                            if let navigationController = self.controller?.effectiveNavigationController {
+                                self.updateVoiceOverOverlayAccessibilityIsolation(viewControllers: navigationController.viewControllers)
+                            } else {
+                                self.updateVoiceOverOverlayAccessibilityIsolation(viewControllers: [])
+                            }
+                        }
+                    )
+                    let navigationController = UINavigationController(rootViewController: transcriptController)
+                    navigationController.modalPresentationStyle = .pageSheet
+                    controller.present(navigationController, animated: true)
+                    if let navigationController = self.controller?.effectiveNavigationController {
+                        self.updateVoiceOverOverlayAccessibilityIsolation(viewControllers: navigationController.viewControllers)
+                    } else {
+                        self.updateVoiceOverOverlayAccessibilityIsolation(viewControllers: [])
+                    }
                 }
                 
                 self.view.addSubview(overlay)

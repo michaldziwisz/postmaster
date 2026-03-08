@@ -1334,15 +1334,23 @@ final class BrowserInstantPageContent: UIView, BrowserContent, UIScrollViewDeleg
                 let (canTranslate, language) = canTranslateText(context: context, text: text, showTranslate: translationSettings.showTranslate, showTranslateIfTopical: false, ignoredLanguages: translationSettings.ignoredLanguages)
                 if canTranslate {
                     actions.append(ContextMenuAction(content: .text(title: strings.Conversation_ContextMenuTranslate, accessibilityLabel: strings.Conversation_ContextMenuTranslate), action: { [weak self] in
-                        let controller = TranslateScreen(context: context, text: text, canCopy: true, fromLanguage: language)
-                        controller.pushController = { [weak self] c in
-                            self?.getNavigationController()?._keepModalDismissProgress = true
-                            self?.push(c)
-                        }
-                        controller.presentController = { [weak self] c in
-                            self?.present(c, nil)
-                        }
-                        self?.present(controller, nil)
+                        presentTranslateScreen(
+                            context: context,
+                            text: text,
+                            canCopy: true,
+                            fromLanguage: language,
+                            ignoredLanguages: translationSettings.ignoredLanguages,
+                            pushController: { [weak self] c in
+                                self?.getNavigationController()?._keepModalDismissProgress = true
+                                self?.push(c)
+                            },
+                            presentController: { [weak self] c in
+                                self?.present(c, nil)
+                            },
+                            display: { [weak self] c in
+                                self?.present(c, nil)
+                            }
+                        )
                     }))
                 }
                 

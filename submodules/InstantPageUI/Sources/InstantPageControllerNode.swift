@@ -1159,15 +1159,23 @@ final class InstantPageControllerNode: ASDisplayNode, ASScrollViewDelegate {
                 let (canTranslate, language) = canTranslateText(context: context, text: text, showTranslate: translationSettings.showTranslate, showTranslateIfTopical: false, ignoredLanguages: translationSettings.ignoredLanguages)
                 if canTranslate {
                     actions.append(ContextMenuAction(content: .text(title: strings.Conversation_ContextMenuTranslate, accessibilityLabel: strings.Conversation_ContextMenuTranslate), action: { [weak self] in
-                        let controller = TranslateScreen(context: context, text: text, canCopy: true, fromLanguage: language, ignoredLanguages: translationSettings.ignoredLanguages)
-                        controller.pushController = { [weak self] c in
-                            (self?.controller?.navigationController as? NavigationController)?._keepModalDismissProgress = true
-                            self?.controller?.push(c)
-                        }
-                        controller.presentController = { [weak self] c in
-                            self?.controller?.present(c, in: .window(.root))
-                        }
-                        self?.present(controller, nil)
+                        presentTranslateScreen(
+                            context: context,
+                            text: text,
+                            canCopy: true,
+                            fromLanguage: language,
+                            ignoredLanguages: translationSettings.ignoredLanguages,
+                            pushController: { [weak self] c in
+                                (self?.controller?.navigationController as? NavigationController)?._keepModalDismissProgress = true
+                                self?.controller?.push(c)
+                            },
+                            presentController: { [weak self] c in
+                                self?.controller?.present(c, in: .window(.root))
+                            },
+                            display: { [weak self] c in
+                                self?.present(c, nil)
+                            }
+                        )
                     }))
                 }
                 
