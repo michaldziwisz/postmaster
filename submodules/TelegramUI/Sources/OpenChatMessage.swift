@@ -169,18 +169,33 @@ func openChatMessageImpl(_ params: OpenChatMessageParams) -> Bool {
                 return true
             case .map:
                 params.dismissInput()
-
-                let controllerParams = LocationViewParams(sendLiveLocation: { location in
-                    let outMessage: EnqueueMessage = .message(text: "", attributes: [], inlineStickers: [:], mediaReference: .standalone(media: location), threadId: nil, replyToMessageId: nil, replyToStoryId: nil, localGroupingKey: nil, correlationId: nil, bubbleUpEmojiOrStickersets: [])
-                    params.enqueueMessage(outMessage)
-                }, stopLiveLocation: { messageId in
-                    params.context.liveLocationManager?.cancelLiveLocation(peerId: messageId?.peerId ?? params.message.id.peerId)
-                }, openUrl: params.openUrl, openPeer: { peer in
-                    params.openPeer(peer._asPeer(), .info(nil))
-                }, showAll: params.modal)
-                let controller = LocationViewController(context: params.context, updatedPresentationData: params.updatedPresentationData, subject: EngineMessage(params.message), params: controllerParams)
-                controller.navigationPresentation = .modal
-                params.navigationController?.pushViewController(controller)
+                if UIAccessibility.isVoiceOverRunning,
+                   let location = params.message.media.first(where: { $0 is TelegramMediaMap }) as? TelegramMediaMap,
+                   let rootController = params.navigationController?.view.window?.rootViewController {
+                    let presentationData = params.context.sharedContext.currentPresentationData.with { $0 }
+                    let controller = VoiceOverLocationInfoController(context: params.context, presentationData: presentationData, location: location, onDismiss: {
+                        if let view = params.navigationController?.topViewController?.view {
+                            UIAccessibility.post(notification: .screenChanged, argument: view)
+                        }
+                    })
+                    let navigationController = UINavigationController(rootViewController: controller)
+                    navigationController.modalPresentationStyle = .fullScreen
+                    navigationController.isModalInPresentation = false
+                    navigationController.view.accessibilityViewIsModal = true
+                    rootController.present(navigationController, animated: true)
+                } else {
+                    let controllerParams = LocationViewParams(sendLiveLocation: { location in
+                        let outMessage: EnqueueMessage = .message(text: "", attributes: [], inlineStickers: [:], mediaReference: .standalone(media: location), threadId: nil, replyToMessageId: nil, replyToStoryId: nil, localGroupingKey: nil, correlationId: nil, bubbleUpEmojiOrStickersets: [])
+                        params.enqueueMessage(outMessage)
+                    }, stopLiveLocation: { messageId in
+                        params.context.liveLocationManager?.cancelLiveLocation(peerId: messageId?.peerId ?? params.message.id.peerId)
+                    }, openUrl: params.openUrl, openPeer: { peer in
+                        params.openPeer(peer._asPeer(), .info(nil))
+                    }, showAll: params.modal)
+                    let controller = LocationViewController(context: params.context, updatedPresentationData: params.updatedPresentationData, subject: EngineMessage(params.message), params: controllerParams)
+                    controller.navigationPresentation = .modal
+                    params.navigationController?.pushViewController(controller)
+                }
                 return true
             case let .stickerPack(reference, previewIconFile):
                 var previewIconFile: TelegramMediaFile? = previewIconFile
