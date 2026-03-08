@@ -283,6 +283,18 @@ private func handleInternetUrl(
                     isTonSite = true
                 }
                 
+                if UIAccessibility.isVoiceOverRunning && !isTonSite {
+                    if let window = navigationController?.view.window {
+                        let controller = SFSafariViewController(url: parsedUrl)
+                        controller.preferredBarTintColor = presentationData.theme.rootController.navigationBar.opaqueBackgroundColor
+                        controller.preferredControlTintColor = presentationData.theme.rootController.navigationBar.accentTextColor
+                        window.rootViewController?.present(controller, animated: true)
+                    } else {
+                        context.sharedContext.applicationBindings.openUrl(parsedUrl.absoluteString)
+                    }
+                    return
+                }
+                
                 if let defaultWebBrowser = settings.defaultWebBrowser, defaultWebBrowser != "inApp" && !isTonSite {
                     let openInOptions = availableOpenInOptions(context: context, item: .url(url: originalUrl))
                     if let option = openInOptions.first(where: { $0.identifier == settings.defaultWebBrowser }) {
