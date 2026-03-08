@@ -397,7 +397,7 @@ func presentVoiceOverTranslateScreen(
     wasDismissed: (() -> Void)? = nil
 ) -> Bool {
     let presentationData = context.sharedContext.currentPresentationData.with { $0 }
-    let mainController = context.sharedContext.mainWindow?.viewController
+    let mainController = context.sharedContext.mainWindow?.viewController as? UIViewController
     guard let presentingController = topPresentingViewController(from: mainController) else {
         return false
     }
