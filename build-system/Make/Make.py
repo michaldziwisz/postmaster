@@ -997,6 +997,12 @@ if __name__ == '__main__':
         help='Build without app extensions (sideload-friendly).'
     )
     buildParser.add_argument(
+        '--disableProvisioningProfiles',
+        action='store_true',
+        default=False,
+        help='Build without provisioning profiles (sideload-friendly).'
+    )
+    buildParser.add_argument(
         '--disablePushNotifications',
         action='store_true',
         default=False,
