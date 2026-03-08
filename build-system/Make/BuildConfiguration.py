@@ -169,6 +169,7 @@ def copy_profiles_from_directory(source_path, destination_path, team_id, bundle_
         '.Widget': 'Widget',
         '.BroadcastUpload': 'BroadcastUpload'
     }
+    copied_profiles = set()
 
     for file_name in os.listdir(source_path):
         file_path = source_path + '/' + file_name
@@ -192,9 +193,19 @@ def copy_profiles_from_directory(source_path, destination_path, team_id, bundle_
             if profile_name.startswith(team_id + '.' + bundle_id):
                 profile_base_name = profile_name[len(team_id + '.' + bundle_id):]
                 if profile_base_name in profile_name_mapping:
-                    shutil.copyfile(file_path, destination_path + '/' + profile_name_mapping[profile_base_name] + '.mobileprovision')
+                    mapped_name = profile_name_mapping[profile_base_name]
+                    shutil.copyfile(file_path, destination_path + '/' + mapped_name + '.mobileprovision')
+                    copied_profiles.add(mapped_name)
                 else:
                     print('Warning: skipping provisioning profile at {} with bundle_id {} (base_name {})'.format(file_path, profile_name, profile_base_name))
+
+    for mapped_name in sorted(set(profile_name_mapping.values())):
+        if mapped_name in copied_profiles:
+            continue
+        fallback_source_path = source_path + '/' + mapped_name + '.mobileprovision'
+        fallback_destination_path = destination_path + '/' + mapped_name + '.mobileprovision'
+        if os.path.exists(fallback_source_path) and not os.path.exists(fallback_destination_path):
+            shutil.copyfile(fallback_source_path, fallback_destination_path)
 
 
 def resolve_aps_environment_from_directory(source_path, team_id, bundle_id):
