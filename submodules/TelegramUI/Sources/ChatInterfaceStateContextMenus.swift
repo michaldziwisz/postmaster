@@ -1094,9 +1094,7 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
                     actions.append(.action(ContextMenuActionItem(text: chatPresentationInterfaceState.strings.GroupBoost_AudioTranscription, icon: { theme in
                         return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Message"), color: theme.actionSheet.primaryTextColor)
                     }, action: { _, f in
-                        let _ = context.engine.messages.transcribeAudio(messageId: message.id)
-                        |> deliverOnMainQueue
-                        .startStandalone(next: { _ in
+                        let _ = context.engine.messages.transcribeAudio(messageId: message.id).startStandalone(next: { _ in
                         })
                         f(.dismissWithoutContent)
                     })))
