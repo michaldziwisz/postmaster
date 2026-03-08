@@ -137,6 +137,8 @@ jobs:
             --input build-system/appstore-configuration.json \
             --output build-system/ci-configuration.json
 
+          python3 scripts/apply_ci_postmaster_patches.py
+
           python3 build-system/Make/ImportCertificates.py --path build-system/fake-codesigning/certs
 
           RUN_TESTS="${{ github.event.inputs.run_tests }}"
