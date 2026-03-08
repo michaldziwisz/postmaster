@@ -8,6 +8,26 @@ import plistlib
 from BuildEnvironment import run_executable_with_output, check_run_system
 from DecryptMatch import decrypt_match_data
 
+
+def load_provisioning_profile(path):
+    with open(path, 'rb') as file:
+        profile_data = file.read()
+
+    if profile_data.startswith(b'<?xml'):
+        return plistlib.loads(profile_data)
+
+    extracted_profile_data = run_executable_with_output('openssl', arguments=[
+        'smime',
+        '-inform',
+        'der',
+        '-verify',
+        '-noverify',
+        '-in',
+        path
+    ], decode=False, stderr_to_stdout=False, check_result=True)
+
+    return plistlib.loads(extracted_profile_data)
+
 class BuildConfiguration:
     def __init__(self,
         bundle_id,
@@ -176,18 +196,7 @@ def copy_profiles_from_directory(source_path, destination_path, team_id, bundle_
         if os.path.isfile(file_path):
             if not file_path.endswith('.mobileprovision'):
                 continue
-
-            profile_data = run_executable_with_output('openssl', arguments=[
-                'smime',
-                '-inform',
-                'der',
-                '-verify',
-                '-noverify',
-                '-in',
-                file_path
-            ], decode=False, stderr_to_stdout=False, check_result=True)
-
-            profile_dict = plistlib.loads(profile_data)
+            profile_dict = load_provisioning_profile(file_path)
             profile_name = profile_dict['Entitlements']['application-identifier']
 
             if profile_name.startswith(team_id + '.' + bundle_id):
@@ -214,18 +223,7 @@ def resolve_aps_environment_from_directory(source_path, team_id, bundle_id):
         if os.path.isfile(file_path):
             if not file_path.endswith('.mobileprovision'):
                 continue
-
-            profile_data = run_executable_with_output('openssl', arguments=[
-                'smime',
-                '-inform',
-                'der',
-                '-verify',
-                '-noverify',
-                '-in',
-                file_path
-            ], decode=False, stderr_to_stdout=False, check_result=True)
-
-            profile_dict = plistlib.loads(profile_data)
+            profile_dict = load_provisioning_profile(file_path)
             profile_name = profile_dict['Entitlements']['application-identifier']
 
             if profile_name.startswith(team_id + '.' + bundle_id):

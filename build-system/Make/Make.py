@@ -654,8 +654,6 @@ def build(bazel, arguments):
     bazel_command_line.set_profile_swift(arguments.profileSwift)
     if getattr(arguments, "disableExtensions", False):
         bazel_command_line.set_disable_extensions()
-    if getattr(arguments, "disableProvisioningProfiles", False):
-        bazel_command_line.set_disable_provisioning_profiles()
 
     bazel_command_line.set_split_swiftmodules(arguments.enableParallelSwiftmoduleGeneration)
 
@@ -995,12 +993,6 @@ if __name__ == '__main__':
         action='store_true',
         default=False,
         help='Build without app extensions (sideload-friendly).'
-    )
-    buildParser.add_argument(
-        '--disableProvisioningProfiles',
-        action='store_true',
-        default=False,
-        help='Build without provisioning profiles (sideload-friendly).'
     )
     buildParser.add_argument(
         '--disablePushNotifications',
