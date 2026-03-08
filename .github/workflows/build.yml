@@ -165,6 +165,7 @@ jobs:
             --codesigningInformationPath=build-system/fake-codesigning \
             --configuration="$BUILD_CONFIGURATION" \
             --disableExtensions \
+            --disableProvisioningProfiles \
             --disablePushNotifications \
             --buildNumber="$BUILD_NUMBER"
 
