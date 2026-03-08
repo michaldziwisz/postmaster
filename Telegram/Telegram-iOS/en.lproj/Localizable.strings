@@ -3772,7 +3772,7 @@ Unused sets are archived when you add more.";
 "SocksProxySetup.PasteFromClipboard" = "Paste From Clipboard";
 
 "Share.AuthTitle" = "Log in to Telegram";
-"Share.AuthDescription" = "Open Telegram and log in to share.";
+"Share.AuthDescription" = "Open Postmaster and log in to share.";
 
 "Notifications.DisplayNamesOnLockScreen" = "Names on lock-screen";
 "Notifications.DisplayNamesOnLockScreenInfoWithLink" = "Display names in notifications when the device is locked. To disable, make sure that \"Show Previews\" is also set to \"When Unlocked\" or \"Never\" in [iOS Settings]";
@@ -6212,7 +6212,7 @@ Sorry for the inconvenience.";
 "Message.ImportedDateFormat" = "%1$@, %2$@ Imported %3$@";
 
 "ChatImportActivity.Title" = "Importing Chat";
-"ChatImportActivity.OpenApp" = "Open Telegram";
+"ChatImportActivity.OpenApp" = "Open Postmaster";
 "ChatImportActivity.Retry" = "Retry";
 "ChatImportActivity.InProgress" = "Please keep this window open\nuntil the import is completed.";
 "ChatImportActivity.ErrorNotAdmin" = "You need to be an admin in the group to import messages.";
@@ -6366,7 +6366,7 @@ Sorry for the inconvenience.";
 "Widget.UpdatedAt" = "Updated {}";
 
 "Intents.ErrorLockedTitle" = "Locked";
-"Intents.ErrorLockedText" = "Open Telegram and enter passcode to edit widget.";
+"Intents.ErrorLockedText" = "Open Postmaster and enter passcode to edit widget.";
 
 "Conversation.GigagroupDescription" = "Only admins can send messages in this group.";
 
@@ -7781,11 +7781,11 @@ Sorry for the inconvenience.";
 "Premium.Avatar" = "Animated Profile Pictures";
 "Premium.AvatarInfo" = "Video avatars animated in chat lists and chats to allow for additional self-expression.";
 
-"Premium.AppIcon" = "Telegram App Icon";
-"Premium.AppIconInfo" = "Choose from a selection of Telegram app icons for your homescreen.";
+"Premium.AppIcon" = "Postmaster App Icon";
+"Premium.AppIconInfo" = "Choose from a selection of Postmaster app icons for your homescreen.";
 
 "Premium.AppIconStandalone" = "Additional App Icons";
-"Premium.AppIconStandaloneInfo" = "Unlock a wider range of app icons by subscribing to **Telegram Premium**.";
+"Premium.AppIconStandaloneInfo" = "Unlock a wider range of app icons by subscribing to **Postmaster Premium**.";
 
 "Premium.SubscribeFor" = "Subscribe for %@ / month";
 "Premium.SubscribeForAnnual" = "Subscribe for %@ / year";

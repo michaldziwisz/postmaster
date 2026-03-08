@@ -178,7 +178,7 @@ def decrypt_match_data(source_path: str, destination_path: str, password: str):
         raise ValueError(f"Decryption process failed: {str(e)}")
 
 def test_decrypt_match_data():
-    profile_name = 'Development_ph.telegra.Telegraph.mobileprovision'
+    profile_name = 'Development_net.dziwisz.postmaster.mobileprovision'
     source_path = os.path.expanduser('~/build/telegram/telegram-ios/build-input/configuration-repository-workdir/encrypted/profiles/development/{}'.format(profile_name))
     destination_path = os.path.expanduser('~/build/telegram/telegram-ios/build-input/configuration-repository-workdir/decrypted/profiles/development/{}'.format(profile_name))
     compare_destination_path = os.path.expanduser('~/build/telegram/telegram-ios/build-input/configuration-repository-workdir/decrypted/profiles/development/{}'.format(profile_name))
