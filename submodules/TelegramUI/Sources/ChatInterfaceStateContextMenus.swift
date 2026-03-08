@@ -943,7 +943,7 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
     return combineLatest(dataSignal, voiceOverReadStatsSignal)
     |> deliverOnMainQueue
     |> map { value, resolvedReadStats -> ContextController.Items in
-        let (data, updatingMessageMedia, infoSummaryData, appConfig, isMessageRead, messageViewsPrivacyTips, availableReactions, translationSettings, loggingSettings, notificationSoundList, accountPeer) = value
+        let (data, updatingMessageMedia, infoSummaryData, appConfig, isMessageRead, _, availableReactions, translationSettings, loggingSettings, notificationSoundList, accountPeer) = value
         let isPremium = accountPeer?.isPremium ?? false
         
         var actions: [ContextMenuItem] = []
