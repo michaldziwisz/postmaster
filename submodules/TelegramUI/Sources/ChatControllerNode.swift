@@ -1455,19 +1455,62 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                     guard let self, let controller = self.controller else {
                         return
                     }
-                    guard let transcription = transcribedText(message: message) else {
-                        return
-                    }
                     let transcriptText: String
-                    switch transcription {
-                    case let .success(text, _):
-                        let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
-                        guard !trimmedText.isEmpty else {
+
+                    let normalizedTranslationLanguage: (String?) -> String? = { language in
+                        guard let language, !language.isEmpty else {
+                            return nil
+                        }
+                        let rawSuffix = "-raw"
+                        if language.hasSuffix(rawSuffix) {
+                            return String(language.dropLast(rawSuffix.count))
+                        }
+                        return language
+                    }
+
+                    if
+                        let translationState = self.chatPresentationInterfaceState.translationState,
+                        translationState.isEnabled,
+                        let targetLanguage = normalizedTranslationLanguage(translationState.toLang),
+                        let translation = message.attributes.first(where: { attribute in
+                            guard let attribute = attribute as? TranslationMessageAttribute else {
+                                return false
+                            }
+                            return normalizedTranslationLanguage(attribute.toLang) == targetLanguage
+                        }) as? TranslationMessageAttribute
+                    {
+                        let trimmedTranslatedText = translation.text.trimmingCharacters(in: .whitespacesAndNewlines)
+                        if !trimmedTranslatedText.isEmpty {
+                            transcriptText = translation.text
+                        } else {
+                            guard let transcription = transcribedText(message: message) else {
+                                return
+                            }
+                            switch transcription {
+                            case let .success(text, _):
+                                let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                                guard !trimmedText.isEmpty else {
+                                    return
+                                }
+                                transcriptText = text
+                            case .error:
+                                return
+                            }
+                        }
+                    } else {
+                        guard let transcription = transcribedText(message: message) else {
                             return
                         }
-                        transcriptText = text
-                    case .error:
-                        return
+                        switch transcription {
+                        case let .success(text, _):
+                            let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                            guard !trimmedText.isEmpty else {
+                                return
+                            }
+                            transcriptText = text
+                        case .error:
+                            return
+                        }
                     }
 
                     let presentationData = self.context.sharedContext.currentPresentationData.with { $0 }
