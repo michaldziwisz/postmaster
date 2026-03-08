@@ -8,7 +8,7 @@ import Display
 import TelegramPresentationData
 import AccountContext
 import SaveToCameraRoll
-import OverlayStatusController
+import PresentationDataUtils
 
 private final class DocumentPreviewItem: NSObject, QLPreviewItem {
     private let url: URL
@@ -53,7 +53,7 @@ private final class DocumentActivityViewController: UIActivityViewController {
     }
 }
 
-final class CompactDocumentPreviewController: QLPreviewController, QLPreviewControllerDelegate, QLPreviewControllerDataSource {
+private final class CompactDocumentPreviewController: QLPreviewController, QLPreviewControllerDelegate, QLPreviewControllerDataSource {
     private let canShare: Bool
     private let strings: PresentationStrings
     
@@ -285,7 +285,7 @@ func presentDocumentPreviewController(rootController: UIViewController, context:
                 if let tempFile = preparedItem.tempFile {
                     TempBox.shared.dispose(tempFile)
                 }
-                let controller = UIAlertController(title: nil, message: getAppBundle().localizedString(forKey: "OpenFile.CannotPreview", value: "This file can't be previewed in the app.", table: nil), preferredStyle: .alert)
+                let controller = UIAlertController(title: nil, message: "This file can't be previewed in the app.", preferredStyle: .alert)
                 controller.addAction(UIAlertAction(title: strings.Common_OK, style: .default))
                 rootController.present(controller, animated: true)
             }
