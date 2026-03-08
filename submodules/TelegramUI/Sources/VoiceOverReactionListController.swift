@@ -1,4 +1,5 @@
 import UIKit
+import Postbox
 import SwiftSignalKit
 import TelegramCore
 import TelegramPresentationData
@@ -400,7 +401,7 @@ final class VoiceOverReactionListController: UITableViewController, UIAdaptivePr
         
         if reactions.count > 1 || ((self.readStats?.peers.isEmpty == false) && !reactions.isEmpty) {
             var filters: [(MessageReaction.Reaction?, String, Int)] = []
-            filters.append((nil, self.presentationData.strings.Common_All, max(self.totalReactionCount(), self.readStats?.peers.count ?? 0)))
+            filters.append((nil, "All", max(self.totalReactionCount(), self.readStats?.peers.count ?? 0)))
             filters.append(contentsOf: reactions)
             return filters
         } else {
@@ -558,7 +559,7 @@ func presentVoiceOverReactionListController(
         onDismiss: onDismiss
     )
     let navigationController = UINavigationController(rootViewController: controller)
-    navigationController.modalPresentationStyle = .fullScreen
+    navigationController.modalPresentationStyle = UIModalPresentationStyle.fullScreen
     navigationController.isModalInPresentation = false
     navigationController.view.accessibilityViewIsModal = true
     

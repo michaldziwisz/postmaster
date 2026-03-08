@@ -1950,7 +1950,7 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
             }
 
             if let autoremoveDeadline = autoremoveDeadline, !isEditing, !isSending {
-                let deleteAction: (ContextControllerProtocol, @escaping (ContextMenuActionResult) -> Void) -> Void = { controller, f in
+                let deleteAction: (ContextControllerProtocol?, @escaping (ContextMenuActionResult) -> Void) -> Void = { controller, f in
                     if isEditing {
                         context.account.pendingUpdateMessageManager.cancel(messageId: message.id)
                         f(.default)
@@ -2260,7 +2260,7 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
             if UIAccessibility.isVoiceOverRunning, let editedText = voiceOverEditedContextMenuText(presentationData: voiceOverPresentationData, message: message) {
                 actions.insert(.action(ContextMenuActionItem(text: editedText, textColor: .disabled, icon: { theme in
                     return generateTintedImage(image: UIImage(bundleImageName: voiceOverReadReportContextIconName(message: message, isEdit: true)), color: theme.actionSheet.primaryTextColor)
-                }, action: nil)), at: 0)
+                }, action: nil as ((ContextControllerProtocol?, @escaping (ContextMenuActionResult) -> Void) -> Void)?)), at: 0)
             } else {
                 actions.insert(.custom(ChatReadReportContextItem(context: context, message: message, hasReadReports: false, isEdit: true, stats: MessageReadStats(reactionCount: 0, peers: [], readTimestamps: [:]), action: nil), false), at: 0)
             }

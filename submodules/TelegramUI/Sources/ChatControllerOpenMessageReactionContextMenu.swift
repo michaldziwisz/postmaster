@@ -190,12 +190,12 @@ extension ChatControllerImpl {
                 if UIAccessibility.isVoiceOverRunning, canViewMessageReactionList(message: message), let rootViewController = self.view.window?.rootViewController {
                     self.chatDisplayNode.messageTransitionNode.dismissMessageReactionContexts()
                     self.canReadHistory.set(false)
-                    presentVoiceOverReactionListController(from: rootViewController, context: self.context, presentationData: self.presentationData, availableReactions: availableReactions, message: message, reaction: value, readStats: nil, onDismiss: { [weak self] in
+                    presentVoiceOverReactionListController(from: rootViewController, context: self.context, presentationData: self.presentationData, availableReactions: availableReactions, message: message, reaction: value, readStats: nil as MessageReadStats?, onDismiss: { [weak self] in
                         self?.canReadHistory.set(true)
                         if let view = self?.view {
                             UIAccessibility.post(notification: .screenChanged, argument: view)
                         }
-                    }, openPeer: { [weak self] peer, hasReaction in
+                    }, openPeer: { [weak self] (peer: EnginePeer, hasReaction: Bool) in
                         guard let self else {
                             return
                         }
