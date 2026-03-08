@@ -9,6 +9,7 @@ import ChatPresentationInterfaceState
 import TelegramStringFormatting
 import ChatHistoryEntry
 import TelegramUIPreferences
+import TextFormat
 
 private final class ChatVoiceOverOverlayTableView: UITableView {
     var onDidPerformAccessibilityScroll: (() -> Void)?
@@ -31,7 +32,7 @@ private final class ChatVoiceOverOverlayTableView: UITableView {
         }
         return point
     }
-    
+
     private func canScrollVertically(_ direction: UIAccessibilityScrollDirection) -> Bool {
         let minOffset = -self.adjustedContentInset.top
         let maxOffset = max(minOffset, self.contentSize.height - self.bounds.height + self.adjustedContentInset.bottom)
@@ -45,7 +46,7 @@ private final class ChatVoiceOverOverlayTableView: UITableView {
             return false
         }
     }
-    
+
     private func performManualPageScroll(direction: UIAccessibilityScrollDirection) -> Bool {
         guard direction == .up || direction == .down else {
             return false
@@ -90,7 +91,7 @@ private final class ChatVoiceOverOverlayTableView: UITableView {
         }
         return true
     }
-    
+
     override func accessibilityScroll(_ direction: UIAccessibilityScrollDirection) -> Bool {
         // UIKit first (best for native VO behavior).
         if super.accessibilityScroll(direction) {
@@ -570,7 +571,7 @@ private final class ChatVoiceOverOverlayAccessibilityContainerView: UIView {
 
 private final class ChatVoiceOverOverlayCell: UITableViewCell {
     var onDidBecomeFocused: (() -> Void)?
-    
+
     override func accessibilityScroll(_ direction: UIAccessibilityScrollDirection) -> Bool {
         var current: UIView? = self
         while let view = current {
@@ -586,7 +587,7 @@ private final class ChatVoiceOverOverlayCell: UITableViewCell {
         super.accessibilityElementDidBecomeFocused()
         self.onDidBecomeFocused?()
     }
-    
+
     override func prepareForReuse() {
         super.prepareForReuse()
         self.onDidBecomeFocused = nil
@@ -595,13 +596,13 @@ private final class ChatVoiceOverOverlayCell: UITableViewCell {
 
 private final class ChatVoiceOverOverlayScrollbarAccessibilityElement: UIAccessibilityElement {
     weak var overlay: ChatVoiceOverOverlayView?
-    
+
     init(container: AnyObject, overlay: ChatVoiceOverOverlayView) {
         self.overlay = overlay
         super.init(accessibilityContainer: container)
         self.isAccessibilityElement = true
     }
-    
+
     override var accessibilityFrameInContainerSpace: CGRect {
         get {
             return self.overlay?.voiceOverScrollbarAccessibilityFrameInContainerSpace() ?? .zero
@@ -609,7 +610,7 @@ private final class ChatVoiceOverOverlayScrollbarAccessibilityElement: UIAccessi
         set {
         }
     }
-    
+
     override var accessibilityFrame: CGRect {
         get {
             return self.overlay?.voiceOverScrollbarAccessibilityFrameInScreenSpace() ?? .zero
@@ -617,7 +618,7 @@ private final class ChatVoiceOverOverlayScrollbarAccessibilityElement: UIAccessi
         set {
         }
     }
-    
+
     override var accessibilityLabel: String? {
         get {
             return self.overlay?.voiceOverScrollbarAccessibilityLabel()
@@ -625,7 +626,7 @@ private final class ChatVoiceOverOverlayScrollbarAccessibilityElement: UIAccessi
         set {
         }
     }
-    
+
     override var accessibilityHint: String? {
         get {
             return self.overlay?.voiceOverScrollbarAccessibilityHint()
@@ -633,7 +634,7 @@ private final class ChatVoiceOverOverlayScrollbarAccessibilityElement: UIAccessi
         set {
         }
     }
-    
+
     override var accessibilityValue: String? {
         get {
             return self.overlay?.voiceOverScrollbarAccessibilityValue()
@@ -641,7 +642,7 @@ private final class ChatVoiceOverOverlayScrollbarAccessibilityElement: UIAccessi
         set {
         }
     }
-    
+
     override var accessibilityTraits: UIAccessibilityTraits {
         get {
             return [.adjustable]
@@ -649,15 +650,15 @@ private final class ChatVoiceOverOverlayScrollbarAccessibilityElement: UIAccessi
         set {
         }
     }
-    
+
     override func accessibilityIncrement() {
         self.overlay?.voiceOverScrollbarAccessibilityIncrement()
     }
-    
+
     override func accessibilityDecrement() {
         self.overlay?.voiceOverScrollbarAccessibilityDecrement()
     }
-    
+
     override func accessibilityElementDidBecomeFocused() {
         super.accessibilityElementDidBecomeFocused()
         self.overlay?.noteVoiceOverNavigationActivity()
@@ -669,17 +670,17 @@ private final class ChatVoiceOverOverlayRowAccessibilityElement: UIAccessibility
         case loadEarlier
         case row(stableId: UInt64)
     }
-    
+
     weak var overlay: ChatVoiceOverOverlayView?
     let kind: Kind
-    
+
     init(container: AnyObject, overlay: ChatVoiceOverOverlayView, kind: Kind) {
         self.overlay = overlay
         self.kind = kind
         super.init(accessibilityContainer: container)
         self.isAccessibilityElement = true
     }
-    
+
     override var accessibilityFrameInContainerSpace: CGRect {
         get {
             return self.overlay?.accessibilityFrameInContainerSpace(for: self) ?? .zero
@@ -695,12 +696,12 @@ private final class ChatVoiceOverOverlayRowAccessibilityElement: UIAccessibility
         set {
         }
     }
-    
+
     override func accessibilityElementDidBecomeFocused() {
         super.accessibilityElementDidBecomeFocused()
         self.overlay?.voiceOverElementDidBecomeFocused(self)
     }
-    
+
     override func accessibilityActivate() -> Bool {
         return self.overlay?.activateVoiceOverElement(self) ?? false
     }
@@ -708,7 +709,7 @@ private final class ChatVoiceOverOverlayRowAccessibilityElement: UIAccessibility
     override func accessibilityScroll(_ direction: UIAccessibilityScrollDirection) -> Bool {
         return self.overlay?.voiceOverAccessibilityScroll(direction) ?? false
     }
-    
+
     override var accessibilityLabel: String? {
         get {
             return self.overlay?.voiceOverAccessibilityLabel(for: self)
@@ -716,7 +717,7 @@ private final class ChatVoiceOverOverlayRowAccessibilityElement: UIAccessibility
         set {
         }
     }
-    
+
     override var accessibilityHint: String? {
         get {
             return self.overlay?.voiceOverAccessibilityHint(for: self)
@@ -724,7 +725,7 @@ private final class ChatVoiceOverOverlayRowAccessibilityElement: UIAccessibility
         set {
         }
     }
-    
+
     override var accessibilityTraits: UIAccessibilityTraits {
         get {
             return self.overlay?.voiceOverAccessibilityTraits(for: self) ?? super.accessibilityTraits
@@ -732,7 +733,7 @@ private final class ChatVoiceOverOverlayRowAccessibilityElement: UIAccessibility
         set {
         }
     }
-    
+
     override var accessibilityCustomActions: [UIAccessibilityCustomAction]? {
         get {
             return self.overlay?.voiceOverAccessibilityCustomActions(for: self)
@@ -743,6 +744,16 @@ private final class ChatVoiceOverOverlayRowAccessibilityElement: UIAccessibility
 }
 
 public final class ChatVoiceOverOverlayView: UIView {
+    public struct MessageTextActionItem: Equatable {
+        public let action: TelegramTextAttributesVoiceOver.Action
+        public let title: String
+
+        public init(action: TelegramTextAttributesVoiceOver.Action, title: String) {
+            self.action = action
+            self.title = title
+        }
+    }
+
     public struct Actions {
         public var back: (() -> Void)?
         public var openProfile: (() -> Void)?
@@ -761,7 +772,9 @@ public final class ChatVoiceOverOverlayView: UIView {
         public var seekCurrentVoicePlayback: ((Double) -> Void)?
         public var setCurrentVoicePlaybackRate: ((Double) -> Void)?
         public var openMessageContextMenu: ((Message, CGRect) -> Void)?
-        
+        public var activateMessageTextAction: ((Message, TelegramTextAttributesVoiceOver.Action) -> Void)?
+        public var presentMessageTextActions: ((Message, [MessageTextActionItem]) -> Void)?
+
         public init(
             back: (() -> Void)? = nil,
             openProfile: (() -> Void)? = nil,
@@ -779,7 +792,9 @@ public final class ChatVoiceOverOverlayView: UIView {
             toggleCurrentVoicePlayback: (() -> Void)? = nil,
             seekCurrentVoicePlayback: ((Double) -> Void)? = nil,
             setCurrentVoicePlaybackRate: ((Double) -> Void)? = nil,
-            openMessageContextMenu: ((Message, CGRect) -> Void)? = nil
+            openMessageContextMenu: ((Message, CGRect) -> Void)? = nil,
+            activateMessageTextAction: ((Message, TelegramTextAttributesVoiceOver.Action) -> Void)? = nil,
+            presentMessageTextActions: ((Message, [MessageTextActionItem]) -> Void)? = nil
         ) {
             self.back = back
             self.openProfile = openProfile
@@ -798,26 +813,28 @@ public final class ChatVoiceOverOverlayView: UIView {
             self.seekCurrentVoicePlayback = seekCurrentVoicePlayback
             self.setCurrentVoicePlaybackRate = setCurrentVoicePlaybackRate
             self.openMessageContextMenu = openMessageContextMenu
+            self.activateMessageTextAction = activateMessageTextAction
+            self.presentMessageTextActions = presentMessageTextActions
         }
     }
-    
+
     private struct Row {
         enum Kind {
             case message(Message)
             case unreadMarker
             case info(String)
         }
-        
+
         var stableId: UInt64
         var index: MessageIndex
         var kind: Kind
     }
-    
+
     private let topBarView = UIView()
     private let backButton = UIButton(type: .system)
     private let titleLabel = UILabel()
     private let profileButton = UIButton(type: .system)
-    
+
     private let tableView = ChatVoiceOverOverlayTableView(frame: .zero, style: .plain)
     private let tableAccessibilityContainerView = ChatVoiceOverOverlayAccessibilityContainerView()
     private let refreshControl = UIRefreshControl()
@@ -825,7 +842,7 @@ public final class ChatVoiceOverOverlayView: UIView {
     fileprivate lazy var voiceOverScrollbarAccessibilityElement: ChatVoiceOverOverlayScrollbarAccessibilityElement = {
         return ChatVoiceOverOverlayScrollbarAccessibilityElement(container: self.tableAccessibilityContainerView, overlay: self)
     }()
-    
+
     private let composerView = UIView()
     private let attachButton = UIButton(type: .system)
     private let inputTextView = UITextView()
@@ -849,7 +866,7 @@ public final class ChatVoiceOverOverlayView: UIView {
     }
 
     private var voicePlaybackState: VoicePlaybackState?
-    
+
     private var composerBottomConstraint: NSLayoutConstraint?
     private var composerHeightConstraint: NSLayoutConstraint?
     private var keyboardObservers: [NSObjectProtocol] = []
@@ -870,19 +887,19 @@ public final class ChatVoiceOverOverlayView: UIView {
     private var canLoadEarlierHistory = false
     private var isLoadingEarlierHistory = false
     private var didReceiveLoadEarlierState = false
-    
+
     private var shouldShowLoadEarlierRow: Bool {
         return self.didReceiveLoadEarlierState || self.canLoadEarlierHistory || self.isLoadEarlierInProgress
     }
-    
+
     private var isLoadEarlierInProgress: Bool {
         return self.isWaitingForLoadEarlier || self.isLoadingEarlierHistory
     }
-    
+
     private var loadEarlierRowOffset: Int {
         return self.shouldShowLoadEarlierRow ? 1 : 0
     }
-    
+
     private var didInitialScrollToBottom = false
     private var pendingEntries: [ChatHistoryEntry]?
     private var pendingEntriesWorkItem: DispatchWorkItem?
@@ -898,7 +915,7 @@ public final class ChatVoiceOverOverlayView: UIView {
         var messageId: MessageId?
         var offset: CGFloat
     }
-    
+
     private enum LoadEarlierInitiationFocus {
         case loadEarlierRow
         case message(ScrollAnchor)
@@ -919,20 +936,21 @@ public final class ChatVoiceOverOverlayView: UIView {
     private var lastVoiceOverNavigationTimestamp: CFTimeInterval = 0.0
     private var voiceOverScrollbarAccessibilityElementAnchorTableRow: Int?
     private var cachedVoiceOverScrollbarAccessibilityElementIndex: Int?
-    
+    private var messageTextActionItemsCache: [MessageId: [MessageTextActionItem]] = [:]
+
     public var actions = Actions()
-    
+
     private static let maxLoadEarlierNoProgressCount: Int = 200
     private static let loadEarlierTimeout: TimeInterval = 12.0
     private static let voiceOverScrollbarPercentStep: Int = 5
-    
+
     private static let voiceMessageDurationFormatter: DateComponentsFormatter = {
         let formatter = DateComponentsFormatter()
         formatter.unitsStyle = .spellOut
         formatter.allowedUnits = [.minute, .second]
         return formatter
     }()
-    
+
     private static let fileSizeFormatter: ByteCountFormatter = {
         let formatter = ByteCountFormatter()
         formatter.allowsNonnumericFormatting = true
@@ -948,24 +966,24 @@ public final class ChatVoiceOverOverlayView: UIView {
         set {
         }
     }
-    
+
     public override init(frame: CGRect) {
         super.init(frame: frame)
-        
+
         self.isAccessibilityElement = false
         self.accessibilityViewIsModal = true
-        
+
         self.topBarView.translatesAutoresizingMaskIntoConstraints = false
         self.addSubview(self.topBarView)
-        
+
         self.backButton.translatesAutoresizingMaskIntoConstraints = false
         self.backButton.addTarget(self, action: #selector(self.backPressed), for: .touchUpInside)
         self.topBarView.addSubview(self.backButton)
-        
+
         self.profileButton.translatesAutoresizingMaskIntoConstraints = false
         self.profileButton.addTarget(self, action: #selector(self.profilePressed), for: .touchUpInside)
         self.topBarView.addSubview(self.profileButton)
-        
+
         self.titleLabel.translatesAutoresizingMaskIntoConstraints = false
         self.titleLabel.numberOfLines = 2
         self.titleLabel.textAlignment = .center
@@ -974,7 +992,7 @@ public final class ChatVoiceOverOverlayView: UIView {
         self.titleLabel.isAccessibilityElement = true
         self.titleLabel.accessibilityTraits = [.header]
         self.topBarView.addSubview(self.titleLabel)
-        
+
         self.tableView.translatesAutoresizingMaskIntoConstraints = false
         self.tableView.overlayForAccessibilityElements = self
         self.tableView.onDidPerformAccessibilityScroll = { [weak self] in
@@ -1012,7 +1030,7 @@ public final class ChatVoiceOverOverlayView: UIView {
         // Don't block touches/scrolling when VoiceOver is not interacting with accessibility.
         self.tableAccessibilityContainerView.isUserInteractionEnabled = false
         self.addSubview(self.tableAccessibilityContainerView)
-        
+
         self.composerView.translatesAutoresizingMaskIntoConstraints = false
         self.addSubview(self.composerView)
 
@@ -1033,11 +1051,11 @@ public final class ChatVoiceOverOverlayView: UIView {
         self.voicePlayerPositionSlider.translatesAutoresizingMaskIntoConstraints = false
         self.voicePlayerPositionSlider.addTarget(self, action: #selector(self.voicePlayerSliderValueChanged), for: .valueChanged)
         self.voicePlayerView.addSubview(self.voicePlayerPositionSlider)
-        
+
         self.attachButton.translatesAutoresizingMaskIntoConstraints = false
         self.attachButton.addTarget(self, action: #selector(self.attachPressed), for: .touchUpInside)
         self.composerView.addSubview(self.attachButton)
-        
+
         self.inputTextView.translatesAutoresizingMaskIntoConstraints = false
         self.inputTextView.delegate = self
         self.inputTextView.font = UIFont.preferredFont(forTextStyle: .body)
@@ -1047,15 +1065,15 @@ public final class ChatVoiceOverOverlayView: UIView {
         self.inputTextView.layer.masksToBounds = true
         self.inputTextView.textContainerInset = UIEdgeInsets(top: 8.0, left: 6.0, bottom: 8.0, right: 6.0)
         self.composerView.addSubview(self.inputTextView)
-        
+
         self.recordButton.translatesAutoresizingMaskIntoConstraints = false
         self.recordButton.addTarget(self, action: #selector(self.recordPressed), for: .touchUpInside)
         self.composerView.addSubview(self.recordButton)
-        
+
         self.sendButton.translatesAutoresizingMaskIntoConstraints = false
         self.sendButton.addTarget(self, action: #selector(self.sendPressed), for: .touchUpInside)
         self.composerView.addSubview(self.sendButton)
-        
+
         let composerBottom = self.composerView.bottomAnchor.constraint(equalTo: self.safeAreaLayoutGuide.bottomAnchor)
         self.composerBottomConstraint = composerBottom
         let composerHeight = self.composerView.heightAnchor.constraint(equalToConstant: 64.0)
@@ -1063,26 +1081,26 @@ public final class ChatVoiceOverOverlayView: UIView {
 
         let voicePlayerHeightConstraint = self.voicePlayerView.heightAnchor.constraint(equalToConstant: 0.0)
         self.voicePlayerHeightConstraint = voicePlayerHeightConstraint
-        
+
         NSLayoutConstraint.activate([
             self.topBarView.topAnchor.constraint(equalTo: self.safeAreaLayoutGuide.topAnchor),
             self.topBarView.leadingAnchor.constraint(equalTo: self.leadingAnchor),
             self.topBarView.trailingAnchor.constraint(equalTo: self.trailingAnchor),
-            
+
             self.backButton.leadingAnchor.constraint(equalTo: self.topBarView.leadingAnchor, constant: 12.0),
             self.backButton.centerYAnchor.constraint(equalTo: self.titleLabel.centerYAnchor),
-            
+
             // Keep the Chat Info button away from the right edge so it doesn't become the
             // "previous element" when navigating from the native VoiceOver scrollbar.
             self.profileButton.leadingAnchor.constraint(equalTo: self.backButton.trailingAnchor, constant: 12.0),
             self.profileButton.centerYAnchor.constraint(equalTo: self.titleLabel.centerYAnchor),
-            
+
             self.titleLabel.topAnchor.constraint(equalTo: self.topBarView.topAnchor, constant: 10.0),
             self.titleLabel.bottomAnchor.constraint(equalTo: self.topBarView.bottomAnchor, constant: -10.0),
             self.titleLabel.leadingAnchor.constraint(greaterThanOrEqualTo: self.profileButton.trailingAnchor, constant: 12.0),
             self.titleLabel.trailingAnchor.constraint(lessThanOrEqualTo: self.topBarView.trailingAnchor, constant: -12.0),
             self.titleLabel.centerXAnchor.constraint(equalTo: self.topBarView.centerXAnchor),
-            
+
             self.composerView.leadingAnchor.constraint(equalTo: self.leadingAnchor),
             self.composerView.trailingAnchor.constraint(equalTo: self.trailingAnchor),
             composerBottom,
@@ -1106,29 +1124,29 @@ public final class ChatVoiceOverOverlayView: UIView {
             self.voicePlayerPositionSlider.leadingAnchor.constraint(equalTo: self.voicePlayerPlayPauseButton.trailingAnchor, constant: 10.0),
             self.voicePlayerPositionSlider.trailingAnchor.constraint(equalTo: self.voicePlayerSpeedButton.leadingAnchor, constant: -10.0),
             self.voicePlayerPositionSlider.centerYAnchor.constraint(equalTo: self.voicePlayerView.centerYAnchor),
-            
+
             self.attachButton.leadingAnchor.constraint(equalTo: self.composerView.leadingAnchor, constant: 12.0),
             self.attachButton.bottomAnchor.constraint(equalTo: self.composerView.bottomAnchor, constant: -10.0),
             self.attachButton.widthAnchor.constraint(equalToConstant: 44.0),
             self.attachButton.heightAnchor.constraint(equalToConstant: 44.0),
-            
+
             self.sendButton.trailingAnchor.constraint(equalTo: self.composerView.trailingAnchor, constant: -12.0),
             self.sendButton.bottomAnchor.constraint(equalTo: self.composerView.bottomAnchor, constant: -10.0),
             self.sendButton.widthAnchor.constraint(equalToConstant: 44.0),
             self.sendButton.heightAnchor.constraint(equalToConstant: 44.0),
-            
+
             self.recordButton.trailingAnchor.constraint(equalTo: self.sendButton.leadingAnchor, constant: -8.0),
             self.recordButton.bottomAnchor.constraint(equalTo: self.composerView.bottomAnchor, constant: -10.0),
             self.recordButton.widthAnchor.constraint(equalToConstant: 44.0),
             self.recordButton.heightAnchor.constraint(equalToConstant: 44.0),
-            
+
             self.inputTextView.leadingAnchor.constraint(equalTo: self.attachButton.trailingAnchor, constant: 8.0),
             self.inputTextView.trailingAnchor.constraint(equalTo: self.recordButton.leadingAnchor, constant: -8.0),
             self.inputTextView.topAnchor.constraint(equalTo: self.composerView.topAnchor, constant: 10.0),
             self.inputTextView.bottomAnchor.constraint(equalTo: self.composerView.bottomAnchor, constant: -10.0),
             self.inputTextView.heightAnchor.constraint(greaterThanOrEqualToConstant: 44.0),
             self.inputTextView.heightAnchor.constraint(lessThanOrEqualToConstant: 120.0),
-            
+
             self.tableView.topAnchor.constraint(equalTo: self.topBarView.bottomAnchor),
             self.tableView.leadingAnchor.constraint(equalTo: self.leadingAnchor),
             self.tableView.trailingAnchor.constraint(equalTo: self.trailingAnchor),
@@ -1139,7 +1157,7 @@ public final class ChatVoiceOverOverlayView: UIView {
             self.tableAccessibilityContainerView.trailingAnchor.constraint(equalTo: self.tableView.trailingAnchor),
             self.tableAccessibilityContainerView.bottomAnchor.constraint(equalTo: self.tableView.bottomAnchor)
         ])
-        
+
         self.composerView.setContentHuggingPriority(.required, for: .vertical)
         self.composerView.setContentCompressionResistancePriority(.required, for: .vertical)
         self.tableView.setContentHuggingPriority(.defaultLow, for: .vertical)
@@ -1148,11 +1166,11 @@ public final class ChatVoiceOverOverlayView: UIView {
         self.setupKeyboardObservers()
         self.setupAccessibilityObservers()
     }
-    
+
     required public init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
-    
+
     deinit {
         let nc = NotificationCenter.default
         for token in self.keyboardObservers {
@@ -1162,7 +1180,7 @@ public final class ChatVoiceOverOverlayView: UIView {
             nc.removeObserver(token)
         }
     }
-    
+
     func updateInterfaceState(_ state: ChatPresentationInterfaceState) {
         self.interfaceState = state
         if state.renderedPeer?.peer != nil {
@@ -1170,36 +1188,36 @@ public final class ChatVoiceOverOverlayView: UIView {
         } else {
             self.isComposerEnabled = true
         }
-        
+
         self.backgroundColor = state.theme.list.plainBackgroundColor
         self.topBarView.backgroundColor = state.theme.rootController.navigationBar.opaqueBackgroundColor
         self.composerView.backgroundColor = state.theme.chat.inputPanel.panelBackgroundColor
         self.voicePlayerView.backgroundColor = state.theme.chat.inputPanel.panelBackgroundColor
         self.tableView.backgroundColor = state.theme.list.plainBackgroundColor
-        
+
         self.inputTextView.backgroundColor = state.theme.list.itemBlocksBackgroundColor
         self.inputTextView.textColor = state.theme.list.itemPrimaryTextColor
         self.inputTextView.tintColor = state.theme.list.itemAccentColor
-        
+
         self.titleLabel.textColor = state.theme.rootController.navigationBar.primaryTextColor
         self.backButton.tintColor = state.theme.rootController.navigationBar.accentTextColor
         self.profileButton.tintColor = state.theme.rootController.navigationBar.accentTextColor
         self.attachButton.tintColor = state.theme.rootController.navigationBar.accentTextColor
         self.recordButton.tintColor = state.theme.rootController.navigationBar.accentTextColor
         self.sendButton.tintColor = state.theme.rootController.navigationBar.accentTextColor
-        
+
         self.backButton.setTitle(state.strings.Common_Back, for: .normal)
         self.backButton.accessibilityLabel = state.strings.Common_Back
-        
+
         self.profileButton.setTitle("ⓘ", for: .normal)
         self.profileButton.accessibilityLabel = state.strings.KeyCommand_ChatInfo
         self.profileButton.accessibilityHint = state.strings.VoiceOver_Chat_OpenHint
         self.profileButton.accessibilityTraits = [.button]
-        
+
         self.attachButton.setTitle("＋", for: .normal)
         self.attachButton.accessibilityLabel = state.strings.VoiceOver_AttachMedia
         self.attachButton.accessibilityTraits = [.button]
-        
+
         self.sendButton.setTitle("➤", for: .normal)
         self.sendButton.accessibilityLabel = state.strings.MediaPicker_Send
         self.sendButton.accessibilityTraits = [.button]
@@ -1217,16 +1235,16 @@ public final class ChatVoiceOverOverlayView: UIView {
         if !isComposerEnabled, self.inputTextView.isFirstResponder {
             self.inputTextView.resignFirstResponder()
         }
-        
+
         self.inputTextView.accessibilityLabel = state.strings.Conversation_InputTextPlaceholder
         self.inputTextView.accessibilityHint = nil
-        
+
         self.updateRecordButton(state: state)
         self.updateTitle(state: state)
         self.updateVoicePlayerControls()
         self.invalidateAccessibilityElements()
     }
-    
+
     func voiceOverDidReturnToChat() {
         guard UIAccessibility.isVoiceOverRunning else {
             return
@@ -1255,18 +1273,18 @@ public final class ChatVoiceOverOverlayView: UIView {
         self.voicePlaybackState = state
         self.updateVoicePlayerControls()
     }
-    
+
     func updateEntries(_ entries: [ChatHistoryEntry]) {
         self.pendingEntries = entries
         self.schedulePendingEntriesApplyIfNeeded()
     }
-    
+
     public func updateLoadEarlierState(canLoadEarlier: Bool, isLoadingEarlier: Bool) {
         let didReceiveChange = !self.didReceiveLoadEarlierState
         if didReceiveChange {
             self.didReceiveLoadEarlierState = true
         }
-        
+
         let didChange = didReceiveChange || (self.canLoadEarlierHistory != canLoadEarlier) || (self.isLoadingEarlierHistory != isLoadingEarlier)
         self.canLoadEarlierHistory = canLoadEarlier
         self.isLoadingEarlierHistory = isLoadingEarlier
@@ -1274,7 +1292,7 @@ public final class ChatVoiceOverOverlayView: UIView {
         guard didChange else {
             return
         }
-        
+
         UIView.performWithoutAnimation {
             if !didReceiveChange, self.shouldShowLoadEarlierRow, self.tableView.numberOfRows(inSection: 0) > 0 {
                 if let cell = self.tableView.cellForRow(at: IndexPath(row: 0, section: 0)) as? ChatVoiceOverOverlayCell {
@@ -1287,7 +1305,7 @@ public final class ChatVoiceOverOverlayView: UIView {
             }
             self.tableView.layoutIfNeeded()
         }
-        
+
         self.invalidateAccessibilityElements()
     }
 
@@ -1298,7 +1316,7 @@ public final class ChatVoiceOverOverlayView: UIView {
         guard self.pendingEntriesWorkItem == nil else {
             return
         }
-        
+
         let delay: TimeInterval
         if self.tableView.isDragging || self.tableView.isDecelerating {
             delay = 0.2
@@ -1318,7 +1336,7 @@ public final class ChatVoiceOverOverlayView: UIView {
                 return
             }
             self.pendingEntriesWorkItem = nil
-            
+
             if self.tableView.isDragging || self.tableView.isDecelerating {
                 self.schedulePendingEntriesApplyIfNeeded()
                 return
@@ -1332,7 +1350,7 @@ public final class ChatVoiceOverOverlayView: UIView {
 
     private func updateTitle(state: ChatPresentationInterfaceState) {
         var title: String?
-        
+
         if let threadData = state.threadData {
             title = threadData.title
         } else if let forumTopicData = state.forumTopicData {
@@ -1344,11 +1362,11 @@ public final class ChatVoiceOverOverlayView: UIView {
                 title = EnginePeer(peer).displayTitle(strings: state.strings, displayOrder: state.nameDisplayOrder)
             }
         }
-        
+
         self.titleLabel.text = title ?? ""
         self.titleLabel.accessibilityLabel = title ?? ""
     }
-    
+
     private func updateRecordButton(state: ChatPresentationInterfaceState) {
         guard self.isComposerEnabled else {
             self.recordButton.setTitle("●", for: .normal)
@@ -1360,7 +1378,7 @@ public final class ChatVoiceOverOverlayView: UIView {
         }
 
         let isRecording = state.inputTextPanelState.mediaRecordingState != nil
-        
+
         if isRecording {
             self.recordButton.setTitle("■", for: .normal)
             self.recordButton.accessibilityLabel = state.strings.VoiceOver_Camera_StopVideoRecording
@@ -1371,7 +1389,7 @@ public final class ChatVoiceOverOverlayView: UIView {
             self.recordButton.accessibilityLabel = state.strings.VoiceOver_Chat_RecordModeVoiceMessage
             self.recordButton.accessibilityHint = state.strings.VoiceOver_Chat_RecordModeVoiceMessageInfo
             self.recordButton.accessibilityTraits = [.button]
-            
+
             if !state.voiceMessagesAvailable {
                 self.recordButton.isEnabled = false
                 self.recordButton.accessibilityTraits.insert(.notEnabled)
@@ -1380,10 +1398,10 @@ public final class ChatVoiceOverOverlayView: UIView {
             }
         }
     }
-    
+
     private func makeRows(from entries: [ChatHistoryEntry]) -> [Row] {
         var result: [Row] = []
-        
+
         let sortedEntries = entries.sorted()
         for entry in sortedEntries {
             switch entry {
@@ -1409,16 +1427,16 @@ public final class ChatVoiceOverOverlayView: UIView {
                 break
             }
         }
-        
+
         return result
     }
-    
+
     // MARK: - UITableViewDataSource
-    
+
     public func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
         return self.rows.count + self.loadEarlierRowOffset
     }
-    
+
     public func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         let cell: UITableViewCell
         if let current = tableView.dequeueReusableCell(withIdentifier: "Cell") as? ChatVoiceOverOverlayCell {
@@ -1437,12 +1455,12 @@ public final class ChatVoiceOverOverlayView: UIView {
         cell.textLabel?.font = UIFont.preferredFont(forTextStyle: .body)
         cell.textLabel?.adjustsFontForContentSizeCategory = true
         cell.textLabel?.isAccessibilityElement = false
-        
+
         cell.detailTextLabel?.numberOfLines = 0
         cell.detailTextLabel?.font = UIFont.preferredFont(forTextStyle: .caption1)
         cell.detailTextLabel?.adjustsFontForContentSizeCategory = true
         cell.detailTextLabel?.isAccessibilityElement = false
-        
+
         cell.selectionStyle = .none
         // The chat rows are exposed as custom `UIAccessibilityElement`s owned by the table view.
         // Keep real table cells out of the accessibility tree to avoid duplicate elements and
@@ -1501,7 +1519,7 @@ public final class ChatVoiceOverOverlayView: UIView {
             return
         }
 
-        
+
         let row = self.rows[rowIndex]
         let resolved = self.resolveRow(row, state: state)
 
@@ -1539,30 +1557,12 @@ public final class ChatVoiceOverOverlayView: UIView {
                 cell.selectionStyle = .default
             }
 
-            var customActions: [UIAccessibilityCustomAction] = []
-            let moreTitle = state.strings.Conversation_ContextMenuMore
-            customActions.append(UIAccessibilityCustomAction(name: moreTitle, actionHandler: { [weak self] _ in
+            cell.accessibilityCustomActions = self.makeMessageAccessibilityCustomActions(message: message, state: state, menuRectProvider: { [weak self] in
                 guard let self else {
-                    return false
+                    return nil
                 }
-                let rect = self.tableView.convert(self.tableView.rectForRow(at: indexPath), to: self)
-                self.actions.openMessageContextMenu?(message, rect)
-                return true
-            }))
-
-            let messageText = message.text.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !messageText.isEmpty {
-                let copyTitle = state.strings.Conversation_ContextMenuCopy
-                customActions.append(UIAccessibilityCustomAction(name: copyTitle, actionHandler: { _ in
-                    UIPasteboard.general.string = messageText
-                    if UIAccessibility.isVoiceOverRunning {
-                        UIAccessibility.post(notification: .announcement, argument: state.strings.Conversation_TextCopied)
-                    }
-                    return true
-                }))
-            }
-
-            cell.accessibilityCustomActions = customActions
+                return self.tableView.convert(self.tableView.rectForRow(at: indexPath), to: self)
+            })
         } else {
             cell.onDidBecomeFocused = { [weak self] in
                 guard let self else {
@@ -1618,7 +1618,7 @@ public final class ChatVoiceOverOverlayView: UIView {
         cell.accessibilityHint = nil
         cell.accessibilityTraits = traits
     }
-    
+
     // MARK: - UITableViewDelegate
 
     public func tableView(_ tableView: UITableView, willSelectRowAt indexPath: IndexPath) -> IndexPath? {
@@ -1628,7 +1628,7 @@ public final class ChatVoiceOverOverlayView: UIView {
             }
             return indexPath
         }
-        
+
         let rowIndex = indexPath.row - self.loadEarlierRowOffset
         guard rowIndex >= 0, rowIndex < self.rows.count else {
             return nil
@@ -1643,23 +1643,23 @@ public final class ChatVoiceOverOverlayView: UIView {
             return nil
         }
     }
-    
+
     public func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
-        
+
         if self.shouldShowLoadEarlierRow, indexPath.row == 0 {
             self.loadEarlierInitiationFocus = .loadEarlierRow
             self.triggerLoadEarlierRequest()
             return
         }
-        
+
         let rowIndex = indexPath.row - self.loadEarlierRowOffset
         guard rowIndex >= 0, rowIndex < self.rows.count else {
             return
         }
         let row = self.rows[rowIndex]
         if case let .message(message) = row.kind {
-            self.actions.activateMessage?(message)
+            _ = self.activateMessageRow(message)
         }
     }
 
@@ -1667,12 +1667,12 @@ public final class ChatVoiceOverOverlayView: UIView {
         if self.shouldShowLoadEarlierRow, indexPath.row == 0 {
             return 64.0
         }
-        
+
         let rowIndex = indexPath.row - self.loadEarlierRowOffset
         guard rowIndex >= 0, rowIndex < self.rows.count else {
             return tableView.estimatedRowHeight
         }
-        
+
         let row = self.rows[rowIndex]
         switch row.kind {
         case let .info(text):
@@ -1689,13 +1689,13 @@ public final class ChatVoiceOverOverlayView: UIView {
             }
         }
     }
-    
+
     public func scrollViewDidScroll(_ scrollView: UIScrollView) {
         if !self.isNearTop() {
             self.loadEarlierNoProgressCount = 0
         }
     }
-    
+
     public func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
         guard scrollView === self.tableView else {
             return
@@ -1706,7 +1706,7 @@ public final class ChatVoiceOverOverlayView: UIView {
             self.maybeEnsureAtLatestIfNeeded()
         }
     }
-    
+
     public func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
         guard scrollView === self.tableView else {
             return
@@ -1715,7 +1715,7 @@ public final class ChatVoiceOverOverlayView: UIView {
         self.applyPendingEntriesIfPossible()
         self.maybeEnsureAtLatestIfNeeded()
     }
-    
+
     public func scrollViewDidEndScrollingAnimation(_ scrollView: UIScrollView) {
         guard scrollView === self.tableView else {
             return
@@ -1724,32 +1724,32 @@ public final class ChatVoiceOverOverlayView: UIView {
         self.applyPendingEntriesIfPossible()
         self.maybeEnsureAtLatestIfNeeded()
     }
-    
+
     // MARK: - UITextViewDelegate
-    
+
     public func textViewDidBeginEditing(_ textView: UITextView) {
         if UIAccessibility.isVoiceOverRunning {
             UIAccessibility.post(notification: .layoutChanged, argument: textView)
         }
     }
-    
+
     // MARK: - Actions
-    
+
     @objc private func backPressed() {
         self.actions.back?()
     }
-    
+
     @objc private func profilePressed() {
         self.actions.openProfile?()
     }
-    
+
     @objc private func attachPressed() {
         guard self.isComposerEnabled else {
             return
         }
         self.actions.openAttachments?()
     }
-    
+
     @objc private func recordPressed() {
         guard self.isComposerEnabled else {
             return
@@ -1763,7 +1763,7 @@ public final class ChatVoiceOverOverlayView: UIView {
             self.actions.beginVoiceRecording?()
         }
     }
-    
+
     @objc private func sendPressed() {
         guard self.isComposerEnabled else {
             return
@@ -1775,7 +1775,7 @@ public final class ChatVoiceOverOverlayView: UIView {
         self.actions.sendText?(text)
         self.inputTextView.text = ""
     }
-    
+
     @objc private func refreshTriggered() {
         guard self.refreshControl.isRefreshing else {
             return
@@ -1793,7 +1793,7 @@ public final class ChatVoiceOverOverlayView: UIView {
         }
         return false
     }
-    
+
     // MARK: - Helpers
 
     fileprivate func noteVoiceOverNavigationActivity() {
@@ -2405,19 +2405,7 @@ public final class ChatVoiceOverOverlayView: UIView {
             guard case let .message(message) = row.kind else {
                 return false
             }
-            guard self.isMessageActivatable(message) else {
-                return false
-            }
-            if self.pollMedia(in: message) != nil, let action = self.actions.openPollMessage {
-                action(message)
-            } else if self.todoMedia(in: message) != nil, let action = self.actions.openTodoMessage {
-                action(message)
-            } else if self.isVoiceMessage(message), let action = self.actions.toggleVoiceMessagePlayback {
-                action(message)
-            } else {
-                self.actions.activateMessage?(message)
-            }
-            return true
+            return self.activateMessageRow(message)
         }
     }
 
@@ -2429,7 +2417,7 @@ public final class ChatVoiceOverOverlayView: UIView {
         }
         return nil
     }
-    
+
     private func todoMedia(in message: Message) -> TelegramMediaTodo? {
         for media in message.media {
             if let todo = media as? TelegramMediaTodo {
@@ -2438,7 +2426,7 @@ public final class ChatVoiceOverOverlayView: UIView {
         }
         return nil
     }
-    
+
     private func isVoiceMessage(_ message: Message) -> Bool {
         for media in message.media {
             if let file = media as? TelegramMediaFile, file.isVoice {
@@ -2642,37 +2630,16 @@ public final class ChatVoiceOverOverlayView: UIView {
             guard case let .message(message) = row.kind else {
                 return nil
             }
-
-            var customActions: [UIAccessibilityCustomAction] = []
-            let moreTitle = state.strings.Conversation_ContextMenuMore
-            customActions.append(UIAccessibilityCustomAction(name: moreTitle, actionHandler: { [weak self] _ in
-                guard let self else {
-                    return false
+            let customActions = self.makeMessageAccessibilityCustomActions(message: message, state: state, menuRectProvider: { [weak self] in
+                guard let self, let indexPath = self.indexPath(for: element) else {
+                    return nil
                 }
-                guard let indexPath = self.indexPath(for: element) else {
-                    return false
-                }
-                let rect = self.tableView.convert(self.tableView.rectForRow(at: indexPath), to: self)
-                self.actions.openMessageContextMenu?(message, rect)
-                return true
-            }))
-
-            let messageText = message.text.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !messageText.isEmpty {
-                let copyTitle = state.strings.Conversation_ContextMenuCopy
-                customActions.append(UIAccessibilityCustomAction(name: copyTitle, actionHandler: { _ in
-                    UIPasteboard.general.string = messageText
-                    if UIAccessibility.isVoiceOverRunning {
-                        UIAccessibility.post(notification: .announcement, argument: state.strings.Conversation_TextCopied)
-                    }
-                    return true
-                }))
-            }
-
+                return self.tableView.convert(self.tableView.rectForRow(at: indexPath), to: self)
+            })
             return customActions.isEmpty ? nil : customActions
         }
     }
-    
+
     private func isVoiceOverNavigationInProgress(graceInterval: CFTimeInterval = 0.8) -> Bool {
         guard UIAccessibility.isVoiceOverRunning else {
             return false
@@ -2683,7 +2650,7 @@ public final class ChatVoiceOverOverlayView: UIView {
         }
         return self.focusedTableViewIndexPath() != nil
     }
-    
+
     private func applyPendingEntriesIfPossible(force: Bool = false) {
         guard let entries = self.pendingEntries else {
             return
@@ -2696,14 +2663,15 @@ public final class ChatVoiceOverOverlayView: UIView {
         self.pendingEntries = nil
         self.applyEntries(entries)
     }
-    
+
 	    private func applyEntries(_ entries: [ChatHistoryEntry]) {
 	        self.reconcileVoiceOverScrollbarFocusIfNeeded()
 
 	        let incomingRows = self.makeRows(from: entries)
 	        let newRows = self.mergeRows(existing: self.rows, incoming: incomingRows)
+            self.messageTextActionItemsCache.removeAll(keepingCapacity: true)
 	        let now = CACurrentMediaTime()
-        
+
         let previousWasAtBottom = self.isAtBottom()
         self.updateShouldFollowLatestFromFocus()
         let shouldPinToLatest = previousWasAtBottom && self.shouldFollowLatest
@@ -2792,12 +2760,12 @@ public final class ChatVoiceOverOverlayView: UIView {
         self.rows = newRows
         self.updateRowIndexByStableId()
         self.invalidateAccessibilityElements()
-        
+
         var didReloadTable = true
         if canApplyPrependInsertion {
             didReloadTable = false
             self.forceScrollToBottomOnNextApply = false
-            
+
             let insertedIndexPaths = (0 ..< insertedCount).map { IndexPath(row: tableRowOffset + $0, section: 0) }
             UIView.performWithoutAnimation {
                 self.tableView.beginUpdates()
@@ -2805,7 +2773,7 @@ public final class ChatVoiceOverOverlayView: UIView {
                 self.tableView.endUpdates()
                 self.tableView.layoutIfNeeded()
             }
-            
+
             if let preservedTopVisibleIndexPathBeforeUpdate, let preservedTopVisibleOffsetBeforeUpdate {
                 let targetIndexPath = IndexPath(row: preservedTopVisibleIndexPathBeforeUpdate.row + insertedCount, section: 0)
                 if targetIndexPath.row < self.tableView.numberOfRows(inSection: 0) {
@@ -2844,7 +2812,7 @@ public final class ChatVoiceOverOverlayView: UIView {
                 self.tableView.layoutIfNeeded()
             }
         }
-        
+
         if didReloadTable {
             if self.rows.isEmpty || !self.didInitialScrollToBottom {
                 if !self.didInitialScrollToBottom {
@@ -2913,12 +2881,12 @@ public final class ChatVoiceOverOverlayView: UIView {
         } else {
             didLoadEarlierProgress = false
         }
-        
+
         if UIAccessibility.isVoiceOverRunning, !shouldSuppressVoiceOverFocusRestoration {
             if didReloadTable {
                 let shouldRestoreFocusToMessages = focusedMessageAnchorBeforeUpdate != nil
                 let shouldRestoreFocusToLoadEarlierRow = (focusedMessageAnchorBeforeUpdate == nil) && (focusedCellIndexPathBeforeUpdate?.row == 0) && self.shouldShowLoadEarlierRow
-                
+
                 let shouldForceRestoreFocusForLoadEarlier = previousWasLoadEarlierInProgress
                 let focusTargetIndexPath: IndexPath? = {
                     if shouldRestoreFocusToMessages, let focusedMessageAnchorBeforeUpdate, let index = self.indexOfRow(for: focusedMessageAnchorBeforeUpdate) {
@@ -2956,7 +2924,7 @@ public final class ChatVoiceOverOverlayView: UIView {
                     }
                     return nil
                 }()
-                    
+
                 if let focusTargetIndexPath {
                     DispatchQueue.main.async { [weak self] in
                         guard let self else {
@@ -3011,7 +2979,7 @@ public final class ChatVoiceOverOverlayView: UIView {
                 }
                 return nil
             }()
-            
+
             if let focusRebindIndexPath {
                 DispatchQueue.main.async { [weak self] in
                     guard let self else {
@@ -3020,7 +2988,7 @@ public final class ChatVoiceOverOverlayView: UIView {
                     guard UIAccessibility.isVoiceOverRunning else {
                         return
                     }
-                    
+
                     // Avoid stealing focus if VoiceOver is still inside the chat overlay.
                     let focusedNow = UIAccessibility.focusedElement(using: .notificationVoiceOver)
                     if let focusedRow = focusedNow as? ChatVoiceOverOverlayRowAccessibilityElement, focusedRow.overlay === self {
@@ -3029,7 +2997,7 @@ public final class ChatVoiceOverOverlayView: UIView {
                     if let focusedView = focusedNow as? UIView, focusedView.isDescendant(of: self) {
                         return
                     }
-                    
+
                     if let element = self.accessibilityElement(at: focusRebindIndexPath) {
                         UIAccessibility.post(notification: .layoutChanged, argument: element)
                     } else {
@@ -3040,7 +3008,7 @@ public final class ChatVoiceOverOverlayView: UIView {
         }
 
         self.scheduleVoiceOverFocusRecoveryIfNeeded()
-        
+
         if didLoadEarlierProgress {
             self.loadEarlierInitiationFocus = nil
         }
@@ -3089,7 +3057,7 @@ public final class ChatVoiceOverOverlayView: UIView {
         guard let focusedView = UIAccessibility.focusedElement(using: .notificationVoiceOver) as? UIView else {
             return nil
         }
-        
+
         var current: UIView? = focusedView
         while let view = current {
             if let cell = view as? UITableViewCell, cell.isDescendant(of: self.tableView) {
@@ -3276,7 +3244,7 @@ public final class ChatVoiceOverOverlayView: UIView {
         }
         return best
     }
-    
+
     private func mergeRows(existing: [Row], incoming: [Row]) -> [Row] {
         guard !existing.isEmpty else {
             return incoming
@@ -3284,7 +3252,7 @@ public final class ChatVoiceOverOverlayView: UIView {
         guard !incoming.isEmpty else {
             return existing
         }
-        
+
         var byStableId: [UInt64: Row] = [:]
         byStableId.reserveCapacity(existing.count + incoming.count)
         for row in existing {
@@ -3293,7 +3261,7 @@ public final class ChatVoiceOverOverlayView: UIView {
         for row in incoming {
             byStableId[row.stableId] = row
         }
-        
+
         var result = Array(byStableId.values)
         result.sort { lhs, rhs in
             if lhs.index != rhs.index {
@@ -3303,7 +3271,7 @@ public final class ChatVoiceOverOverlayView: UIView {
         }
         return result
     }
-    
+
     private func triggerLoadEarlierRequest() {
         guard self.loadEarlierNoProgressCount < Self.maxLoadEarlierNoProgressCount else {
             return
@@ -3320,7 +3288,7 @@ public final class ChatVoiceOverOverlayView: UIView {
             }
             return
         }
-        
+
         if UIAccessibility.isVoiceOverRunning, self.loadEarlierInitiationFocus == nil {
             if self.shouldShowLoadEarlierRow, self.focusedTableViewIndexPath()?.row == 0 {
                 self.loadEarlierInitiationFocus = .loadEarlierRow
@@ -3345,7 +3313,7 @@ public final class ChatVoiceOverOverlayView: UIView {
         self.lastLoadEarlierRequestTimestamp = CACurrentMediaTime()
         self.reloadLoadEarlierRow()
         self.actions.requestLoadEarlier?()
-        
+
         DispatchQueue.main.asyncAfter(deadline: .now() + Self.loadEarlierTimeout) { [weak self] in
             guard let self else {
                 return
@@ -3377,7 +3345,7 @@ public final class ChatVoiceOverOverlayView: UIView {
             self.tableView.layoutIfNeeded()
         }
     }
-    
+
     private func maybeEnsureAtLatestIfNeeded() {
         guard !self.isLoadEarlierInProgress else {
             return
@@ -3419,7 +3387,7 @@ public final class ChatVoiceOverOverlayView: UIView {
 
     private func currentScrollAnchor() -> ScrollAnchor? {
         let rowOffset = self.loadEarlierRowOffset
-        
+
         func makeAnchor(for indexPath: IndexPath) -> ScrollAnchor? {
             let anchorRowIndex = indexPath.row - rowOffset
             guard anchorRowIndex >= 0, anchorRowIndex < self.rows.count else {
@@ -3437,7 +3405,7 @@ public final class ChatVoiceOverOverlayView: UIView {
             let offset = rect.minY - self.tableView.contentOffset.y
             return ScrollAnchor(stableId: stableId, messageId: messageId, offset: offset)
         }
-        
+
         if UIAccessibility.isVoiceOverRunning, let focusedIndexPath = self.focusedTableViewIndexPath(), focusedIndexPath.row >= rowOffset {
             let rowIndex = focusedIndexPath.row - rowOffset
             if rowIndex >= 0, rowIndex < self.rows.count, case .message = self.rows[rowIndex].kind {
@@ -3446,11 +3414,11 @@ public final class ChatVoiceOverOverlayView: UIView {
                 }
             }
         }
-        
+
         guard let visibleIndexPaths = self.tableView.indexPathsForVisibleRows?.sorted() else {
             return nil
         }
-        
+
         for indexPath in visibleIndexPaths {
             guard indexPath.row >= rowOffset else {
                 continue
@@ -3465,14 +3433,14 @@ public final class ChatVoiceOverOverlayView: UIView {
                 }
             }
         }
-        
+
         if let indexPath = visibleIndexPaths.first(where: { $0.row >= rowOffset && ($0.row - rowOffset) >= 0 && ($0.row - rowOffset) < self.rows.count }) {
             return makeAnchor(for: indexPath)
         }
-        
+
         return nil
     }
-    
+
     private func resolveRow(_ row: Row, state: ChatPresentationInterfaceState) -> (title: String, subtitle: String?, accessibilityLabel: String, hint: String?, traits: UIAccessibilityTraits) {
         switch row.kind {
         case let .message(message):
@@ -3485,10 +3453,11 @@ public final class ChatVoiceOverOverlayView: UIView {
             return (title, nil, title, nil, [.staticText])
         }
     }
-    
+
     private func resolveMessageRow(message: Message, state: ChatPresentationInterfaceState) -> (title: String, subtitle: String?, accessibilityLabel: String, hint: String?, traits: UIAccessibilityTraits) {
         let isIncoming = message.effectivelyIncoming(state.accountPeerId)
-        
+        let textActionItems = self.messageTextActionItems(for: message)
+
         var announceIncomingAuthors = false
         if let chatPeer = message.peers[message.id.peerId] {
             if chatPeer is TelegramGroup {
@@ -3497,7 +3466,7 @@ public final class ChatVoiceOverOverlayView: UIView {
                 announceIncomingAuthors = true
             }
         }
-        
+
         let authorName: String? = message.author.flatMap(EnginePeer.init)?.displayTitle(strings: state.strings, displayOrder: state.nameDisplayOrder)
         let subtitle: String?
         if isIncoming {
@@ -3505,7 +3474,7 @@ public final class ChatVoiceOverOverlayView: UIView {
         } else {
             subtitle = state.strings.DialogList_You
         }
-        
+
         var title = descriptionStringForMessage(
             contentSettings: ContentSettings.default,
             message: EngineMessage(message),
@@ -3517,7 +3486,7 @@ public final class ChatVoiceOverOverlayView: UIView {
         var accessibilityLabel = ""
         var hint: String?
         var traits: UIAccessibilityTraits = [.staticText]
-        
+
         if title.isEmpty {
             if let service = plainServiceMessageString(strings: state.strings, nameDisplayOrder: state.nameDisplayOrder, dateTimeFormat: state.dateTimeFormat, message: EngineMessage(message), accountPeerId: state.accountPeerId, forChatList: false, forForumOverview: false)?.text {
                 let trimmed = service.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -3540,11 +3509,11 @@ public final class ChatVoiceOverOverlayView: UIView {
                 title = state.strings.VoiceOver_Chat_Message
             }
         }
-        
+
         for media in message.media {
             if let poll = media as? TelegramMediaPoll {
                 traits.insert(.button)
-                
+
                 let typeText: String = {
                     if poll.isClosed {
                         return state.strings.MessagePoll_LabelClosed
@@ -3564,7 +3533,7 @@ public final class ChatVoiceOverOverlayView: UIView {
                         }
                     }
                 }()
-                
+
                 let totalVoters = poll.results.totalVoters ?? 0
                 let votesText: String
                 if totalVoters > 0 {
@@ -3572,10 +3541,10 @@ public final class ChatVoiceOverOverlayView: UIView {
                 } else {
                     votesText = state.strings.VoiceOver_Chat_PollNoVotes
                 }
-                
+
                 let question = poll.text.trimmingCharacters(in: .whitespacesAndNewlines)
                 let optionCountText = state.strings.VoiceOver_Chat_PollOptionCount(Int32(poll.options.count))
-                
+
                 var baseLabel = ""
                 baseLabel.append(typeText)
                 if !question.isEmpty {
@@ -3590,7 +3559,7 @@ public final class ChatVoiceOverOverlayView: UIView {
                     baseLabel.append(". ")
                     baseLabel.append(state.strings.VoiceOver_Chat_PollFinalResults)
                 }
-                
+
                 if isIncoming, announceIncomingAuthors, let authorName {
                     accessibilityLabel = "\(authorName). \(baseLabel)"
                 } else if !isIncoming {
@@ -3598,12 +3567,12 @@ public final class ChatVoiceOverOverlayView: UIView {
                 } else {
                     accessibilityLabel = baseLabel
                 }
-                
+
                 hint = state.strings.VoiceOver_Chat_OpenHint
                 return (question.isEmpty ? typeText : question, subtitle, accessibilityLabel, hint, traits)
             } else if let todo = media as? TelegramMediaTodo {
                 traits.insert(.button)
-                
+
                 let typeText: String = {
                     if todo.flags.contains(.othersCanComplete) {
                         return state.strings.Chat_Todo_Message_TitleGroup
@@ -3613,7 +3582,7 @@ public final class ChatVoiceOverOverlayView: UIView {
                         return state.strings.Chat_Todo_Message_Title
                     }
                 }()
-                
+
                 let completionSummary: String = {
                     let completionsCount = Int32(todo.completions.count)
                     let format: String
@@ -3624,9 +3593,9 @@ public final class ChatVoiceOverOverlayView: UIView {
                     }
                     return format.replacingOccurrences(of: "{count}", with: "\(todo.items.count)")
                 }()
-                
+
                 let todoTitle = todo.text.trimmingCharacters(in: .whitespacesAndNewlines)
-                
+
                 var baseLabel = ""
                 baseLabel.append(typeText)
                 if !todoTitle.isEmpty {
@@ -3637,7 +3606,7 @@ public final class ChatVoiceOverOverlayView: UIView {
                     baseLabel.append(". ")
                     baseLabel.append(completionSummary)
                 }
-                
+
                 if isIncoming, announceIncomingAuthors, let authorName {
                     accessibilityLabel = "\(authorName). \(baseLabel)"
                 } else if !isIncoming {
@@ -3645,12 +3614,12 @@ public final class ChatVoiceOverOverlayView: UIView {
                 } else {
                     accessibilityLabel = baseLabel
                 }
-                
+
                 hint = state.strings.VoiceOver_Chat_OpenHint
                 return (todoTitle.isEmpty ? typeText : todoTitle, subtitle, accessibilityLabel, hint, traits)
             } else if let contact = media as? TelegramMediaContact {
                 traits.insert(.button)
-                
+
                 let typeText: String
                 if isIncoming {
                     if announceIncomingAuthors, let authorName {
@@ -3661,7 +3630,7 @@ public final class ChatVoiceOverOverlayView: UIView {
                 } else {
                     typeText = state.strings.VoiceOver_Chat_YourContact
                 }
-                
+
                 var displayName = ""
                 if !contact.firstName.isEmpty {
                     displayName.append(contact.firstName)
@@ -3675,7 +3644,7 @@ public final class ChatVoiceOverOverlayView: UIView {
                 if displayName.isEmpty {
                     displayName = state.strings.VoiceOver_Chat_Contact
                 }
-                
+
                 var baseLabel = ""
                 baseLabel.append(typeText)
                 baseLabel.append(". ")
@@ -3686,18 +3655,18 @@ public final class ChatVoiceOverOverlayView: UIView {
                     baseLabel.append(": ")
                     baseLabel.append(contact.phoneNumber)
                 }
-                
+
                 accessibilityLabel = baseLabel
                 hint = state.strings.VoiceOver_Chat_OpenHint
                 return (displayName, subtitle, accessibilityLabel, hint, traits)
             } else if let map = media as? TelegramMediaMap {
                 traits.insert(.button)
-                
+
                 let typeText = state.strings.Attachment_Location
-                
+
                 var baseLabel = ""
                 baseLabel.append(typeText)
-                
+
                 if let venue = map.venue {
                     if !venue.title.isEmpty {
                         baseLabel.append(". ")
@@ -3718,12 +3687,12 @@ public final class ChatVoiceOverOverlayView: UIView {
                         baseLabel.append(parts.joined(separator: ", "))
                     }
                 }
-                
+
                 if !message.text.isEmpty {
                     baseLabel.append(". ")
                     baseLabel.append(state.strings.VoiceOver_Chat_Caption(message.text).string)
                 }
-                
+
                 if isIncoming, announceIncomingAuthors, let authorName {
                     accessibilityLabel = "\(authorName). \(baseLabel)"
                 } else if !isIncoming {
@@ -3731,7 +3700,7 @@ public final class ChatVoiceOverOverlayView: UIView {
                 } else {
                     accessibilityLabel = baseLabel
                 }
-                
+
                 hint = state.strings.VoiceOver_Chat_OpenHint
                 return (typeText, subtitle, accessibilityLabel, hint, traits)
             } else if let _ = media as? TelegramMediaImage {
@@ -3791,7 +3760,7 @@ public final class ChatVoiceOverOverlayView: UIView {
                 }
             }
         }
-        
+
         if isIncoming, announceIncomingAuthors, let authorName {
             accessibilityLabel = "\(authorName). \(title)"
         } else if !isIncoming {
@@ -3799,8 +3768,12 @@ public final class ChatVoiceOverOverlayView: UIView {
         } else {
             accessibilityLabel = title
         }
-        
-        return (title, subtitle, accessibilityLabel, nil, traits)
+        if !textActionItems.isEmpty {
+            traits.insert(.button)
+            hint = state.strings.VoiceOver_Chat_OpenHint
+        }
+
+        return (title, subtitle, accessibilityLabel, hint, traits)
     }
 
     private func isMessageActivatable(_ message: Message) -> Bool {
@@ -3824,9 +3797,198 @@ public final class ChatVoiceOverOverlayView: UIView {
                 return true
             }
         }
+        return !self.messageTextActionItems(for: message).isEmpty
+    }
+
+    private func activateMessageRow(_ message: Message) -> Bool {
+        guard self.isMessageActivatable(message) else {
+            return false
+        }
+        if self.pollMedia(in: message) != nil, let action = self.actions.openPollMessage {
+            action(message)
+            return true
+        }
+        if self.todoMedia(in: message) != nil, let action = self.actions.openTodoMessage {
+            action(message)
+            return true
+        }
+        if self.isVoiceMessage(message), let action = self.actions.toggleVoiceMessagePlayback {
+            action(message)
+            return true
+        }
+        if self.usesDefaultMessageActivation(message) {
+            self.actions.activateMessage?(message)
+            return true
+        }
+
+        let textActionItems = self.messageTextActionItems(for: message)
+        if textActionItems.count == 1, let action = self.actions.activateMessageTextAction {
+            action(message, textActionItems[0].action)
+            return true
+        }
+        if textActionItems.count > 1, let action = self.actions.presentMessageTextActions {
+            action(message, textActionItems)
+            return true
+        }
+
+        self.actions.activateMessage?(message)
+        return true
+    }
+
+    private func usesDefaultMessageActivation(_ message: Message) -> Bool {
+        for media in message.media {
+            if media is TelegramMediaImage {
+                return true
+            }
+            if let file = media as? TelegramMediaFile, !file.isVoice {
+                return true
+            }
+            if media is TelegramMediaContact {
+                return true
+            }
+            if media is TelegramMediaMap {
+                return true
+            }
+        }
         return false
     }
-    
+
+    private func messageTextActionItems(for message: Message) -> [MessageTextActionItem] {
+        if let cached = self.messageTextActionItemsCache[message.id] {
+            return cached
+        }
+        let items = self.buildMessageTextActionItems(for: message)
+        self.messageTextActionItemsCache[message.id] = items
+        return items
+    }
+
+    private func buildMessageTextActionItems(for message: Message) -> [MessageTextActionItem] {
+        let rawText = message.text
+        guard !rawText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return []
+        }
+
+        var entities = message.textEntitiesAttribute?.entities ?? []
+        if entities.isEmpty {
+            entities = generateTextEntities(rawText, enabledTypes: [.all, .timecode])
+        }
+        guard !entities.isEmpty else {
+            return []
+        }
+
+        let baseFont = UIFont.preferredFont(forTextStyle: .body)
+        let italicDescriptor = baseFont.fontDescriptor.withSymbolicTraits(.traitItalic) ?? baseFont.fontDescriptor
+        let boldItalicDescriptor = baseFont.fontDescriptor.withSymbolicTraits([.traitBold, .traitItalic]) ?? baseFont.fontDescriptor
+        let fixedFont = UIFont(name: "Menlo-Regular", size: baseFont.pointSize) ?? baseFont
+        let attributedText = stringWithAppliedEntities(
+            rawText,
+            entities: entities,
+            baseColor: .black,
+            linkColor: .blue,
+            baseFont: baseFont,
+            linkFont: baseFont,
+            boldFont: UIFont.boldSystemFont(ofSize: baseFont.pointSize),
+            italicFont: UIFont(descriptor: italicDescriptor, size: baseFont.pointSize),
+            boldItalicFont: UIFont(descriptor: boldItalicDescriptor, size: baseFont.pointSize),
+            fixedFont: fixedFont,
+            blockQuoteFont: baseFont,
+            underlineLinks: false,
+            message: message
+        )
+
+        let resolvedItems = TelegramTextAttributesVoiceOver.items(in: attributedText)
+        guard !resolvedItems.isEmpty else {
+            return []
+        }
+
+        var uniqueItems: [(item: MessageTextActionItem, range: NSRange)] = []
+        for item in resolvedItems {
+            let title = self.messageTextActionTitle(for: item)
+            guard !title.isEmpty else {
+                continue
+            }
+            if uniqueItems.contains(where: { $0.range == item.range && $0.item.action == item.action }) {
+                continue
+            }
+            uniqueItems.append((MessageTextActionItem(action: item.action, title: title), item.range))
+        }
+
+        var duplicateCounts: [String: Int] = [:]
+        for item in uniqueItems {
+            duplicateCounts[item.item.title, default: 0] += 1
+        }
+        var seenDuplicateIndices: [String: Int] = [:]
+
+        return uniqueItems.map { entry in
+            guard duplicateCounts[entry.item.title, default: 0] > 1 else {
+                return entry.item
+            }
+            let nextIndex = seenDuplicateIndices[entry.item.title, default: 0] + 1
+            seenDuplicateIndices[entry.item.title] = nextIndex
+            return MessageTextActionItem(action: entry.item.action, title: "\(entry.item.title) (\(nextIndex))")
+        }
+    }
+
+    private func messageTextActionTitle(for item: TelegramTextAttributesVoiceOver.Item) -> String {
+        let trimmedText = item.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmedText.isEmpty {
+            return trimmedText
+        }
+        switch item.action {
+        case let .url(url, _):
+            return url
+        case let .peerMention(_, mention):
+            return mention
+        case let .textMention(name):
+            return name
+        case let .botCommand(command):
+            return command
+        case let .hashtag(_, hashtag):
+            return hashtag
+        case let .timecode(_, text):
+            return text
+        }
+    }
+
+    private func makeMessageAccessibilityCustomActions(message: Message, state: ChatPresentationInterfaceState, menuRectProvider: @escaping () -> CGRect?) -> [UIAccessibilityCustomAction] {
+        var customActions: [UIAccessibilityCustomAction] = []
+
+        let textActionItems = self.messageTextActionItems(for: message)
+        for item in textActionItems {
+            customActions.append(UIAccessibilityCustomAction(name: item.title, actionHandler: { [weak self] _ in
+                guard let self else {
+                    return false
+                }
+                self.noteVoiceOverNavigationActivity()
+                self.actions.activateMessageTextAction?(message, item.action)
+                return true
+            }))
+        }
+
+        let moreTitle = state.strings.Conversation_ContextMenuMore
+        customActions.append(UIAccessibilityCustomAction(name: moreTitle, actionHandler: { [weak self] _ in
+            guard let self, let rect = menuRectProvider() else {
+                return false
+            }
+            self.actions.openMessageContextMenu?(message, rect)
+            return true
+        }))
+
+        let messageText = message.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !messageText.isEmpty {
+            let copyTitle = state.strings.Conversation_ContextMenuCopy
+            customActions.append(UIAccessibilityCustomAction(name: copyTitle, actionHandler: { _ in
+                UIPasteboard.general.string = messageText
+                if UIAccessibility.isVoiceOverRunning {
+                    UIAccessibility.post(notification: .announcement, argument: state.strings.Conversation_TextCopied)
+                }
+                return true
+            }))
+        }
+
+        return customActions
+    }
+
     private func isNearBottom() -> Bool {
         let visibleHeight = self.tableView.bounds.height
         if visibleHeight <= 0.0 {
@@ -3837,7 +3999,7 @@ public final class ChatVoiceOverOverlayView: UIView {
         let threshold: CGFloat = 180.0
         return y + visibleHeight + threshold >= contentHeight
     }
-    
+
     private func isNearTop() -> Bool {
         let minOffset = -self.tableView.adjustedContentInset.top
         let threshold: CGFloat = 120.0
@@ -3856,7 +4018,7 @@ public final class ChatVoiceOverOverlayView: UIView {
         let minOffset = -self.tableView.adjustedContentInset.top
         self.tableView.setContentOffset(CGPoint(x: 0.0, y: minOffset), animated: animated)
     }
-    
+
     private func focusLastMessageIfPossible() {
         guard UIAccessibility.isVoiceOverRunning else {
             return
@@ -3884,7 +4046,7 @@ public final class ChatVoiceOverOverlayView: UIView {
             }
         }
     }
-    
+
     private func setupKeyboardObservers() {
         let nc = NotificationCenter.default
         let token = nc.addObserver(forName: UIResponder.keyboardWillChangeFrameNotification, object: nil, queue: .main) { [weak self] notification in
@@ -3979,7 +4141,7 @@ public final class ChatVoiceOverOverlayView: UIView {
         self.composerView.accessibilityElementsHidden = !self.isComposerEnabled || (self.voiceOverScrollbarAccessibilityElementAnchorTableRow != nil)
         self.voicePlayerView.accessibilityElementsHidden = (self.voiceOverScrollbarAccessibilityElementAnchorTableRow != nil)
     }
-    
+
     private func handleKeyboard(notification: Notification) {
         guard let userInfo = notification.userInfo else {
             return
@@ -3987,17 +4149,17 @@ public final class ChatVoiceOverOverlayView: UIView {
         guard let endFrameValue = userInfo[UIResponder.keyboardFrameEndUserInfoKey] as? NSValue else {
             return
         }
-        
+
         let endFrameInScreen = endFrameValue.cgRectValue
         let endFrame = self.convert(endFrameInScreen, from: nil)
         let overlap = max(0.0, self.bounds.maxY - endFrame.minY - self.safeAreaInsets.bottom)
-        
+
         let duration = (userInfo[UIResponder.keyboardAnimationDurationUserInfoKey] as? NSNumber)?.doubleValue ?? 0.25
         let curveRaw = (userInfo[UIResponder.keyboardAnimationCurveUserInfoKey] as? NSNumber)?.intValue ?? UIView.AnimationCurve.easeInOut.rawValue
         let curve = UIView.AnimationOptions(rawValue: UInt(curveRaw << 16))
-        
+
         self.composerBottomConstraint?.constant = -overlap
-        
+
         UIView.animate(withDuration: duration, delay: 0.0, options: [curve, .beginFromCurrentState]) {
             self.layoutIfNeeded()
         }

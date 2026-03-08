@@ -1164,6 +1164,34 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                 overlay.actions.openProfile = { [weak self] in
                     self?.interfaceInteraction?.openPeerInfo()
                 }
+                let performVoiceOverTextAction: (Message, TelegramTextAttributesVoiceOver.Action) -> Void = { [weak self] message, action in
+                    guard let self else {
+                        return
+                    }
+                    if let overlay = self.voiceOverOverlayView {
+                        overlay.accessibilityViewIsModal = false
+                    }
+                    switch action {
+                    case let .url(url, concealed):
+                        self.controller?.openUrl(url, concealed: concealed, message: message)
+                    case let .peerMention(peerId, _):
+                        let _ = (self.context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: peerId))
+                        |> deliverOnMainQueue).startStandalone(next: { [weak self] peer in
+                            guard let self, let peer else {
+                                return
+                            }
+                            self.controllerInteraction.openPeer(peer, .chat(textInputState: nil, subject: nil, peekData: nil), nil, .default)
+                        })
+                    case let .textMention(name):
+                        self.controller?.openPeerMention(name, sourceMessageId: message.id)
+                    case let .botCommand(command):
+                        self.controllerInteraction.sendBotCommand(message.id, command)
+                    case let .hashtag(peerName, hashtag):
+                        self.controller?.openHashtag(hashtag, peerName: peerName)
+                    case let .timecode(timecode, _):
+                        self.controllerInteraction.seekToTimecode(message, timecode, true)
+                    }
+                }
                 overlay.actions.openAttachments = { [weak self] in
                     self?.controller?.presentAttachmentMenu(subject: .default)
                 }
@@ -1368,6 +1396,34 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                     }
                     anchorNode.view.frame = sourceRect
                     self.controllerInteraction.openMessageContextMenu(message, false, anchorNode, anchorNode.bounds, nil, nil)
+                }
+                overlay.actions.activateMessageTextAction = { message, action in
+                    performVoiceOverTextAction(message, action)
+                }
+                overlay.actions.presentMessageTextActions = { [weak self] message, items in
+                    guard let self, let controller = self.controller else {
+                        return
+                    }
+                    if let overlay = self.voiceOverOverlayView {
+                        overlay.accessibilityViewIsModal = false
+                    }
+                    let alertController = UIAlertController(title: nil, message: nil, preferredStyle: .actionSheet)
+                    for item in items {
+                        alertController.addAction(UIAlertAction(title: item.title, style: .default, handler: { _ in
+                            performVoiceOverTextAction(message, item.action)
+                        }))
+                    }
+                    alertController.addAction(UIAlertAction(title: self.chatPresentationInterfaceState.strings.Common_Cancel, style: .cancel, handler: nil))
+                    if let popover = alertController.popoverPresentationController {
+                        popover.sourceView = controller.view
+                        popover.sourceRect = CGRect(x: controller.view.bounds.midX, y: controller.view.bounds.maxY - 1.0, width: 1.0, height: 1.0)
+                    }
+                    controller.present(alertController, animated: true)
+                    if let navigationController = self.controller?.effectiveNavigationController {
+                        self.updateVoiceOverOverlayAccessibilityIsolation(viewControllers: navigationController.viewControllers)
+                    } else {
+                        self.updateVoiceOverOverlayAccessibilityIsolation(viewControllers: [])
+                    }
                 }
                 
                 self.view.addSubview(overlay)
