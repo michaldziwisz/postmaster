@@ -1425,6 +1425,31 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                         self.updateVoiceOverOverlayAccessibilityIsolation(viewControllers: [])
                     }
                 }
+                overlay.actions.performTextSelectionAction = { [weak self] message, text, action in
+                    guard let self else {
+                        return
+                    }
+                    let canCopy = !(self.chatPresentationInterfaceState.copyProtectionEnabled || message.isCopyProtected())
+                    self.controllerInteraction.performTextSelectionAction(message, canCopy, text, action)
+                }
+                overlay.actions.requestAudioTranscription = { [weak self] message in
+                    guard let self else {
+                        return
+                    }
+                    UIAccessibility.post(notification: .announcement, argument: self.chatPresentationInterfaceState.strings.Channel_NotificationLoading)
+                    let _ = (self.context.engine.messages.transcribeAudio(messageId: message.id)
+                    |> deliverOnMainQueue).startStandalone(next: { [weak self] result in
+                        guard let self else {
+                            return
+                        }
+                        switch result {
+                        case .success:
+                            UIAccessibility.post(notification: .announcement, argument: self.chatPresentationInterfaceState.strings.GroupBoost_AudioTranscription)
+                        case .error:
+                            UIAccessibility.post(notification: .announcement, argument: self.chatPresentationInterfaceState.strings.Login_UnknownError)
+                        }
+                    })
+                }
                 
                 self.view.addSubview(overlay)
                 self.voiceOverOverlayConstraints = [

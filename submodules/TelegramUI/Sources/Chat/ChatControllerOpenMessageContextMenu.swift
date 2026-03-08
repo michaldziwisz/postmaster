@@ -46,9 +46,11 @@ extension ChatControllerImpl {
                 return
             }
             
+            let resolvedMessageNode = (node as? ChatMessageItemView) ?? self.chatDisplayNode.historyNode.messageItemView(for: message.id)
+            
             let _ = combineLatest(queue: .mainQueue(),
                 self.context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: self.context.account.peerId)),
-                contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState: self.presentationInterfaceState, context: self.context, messages: updatedMessages, controllerInteraction: self.controllerInteraction, selectAll: selectAll, interfaceInteraction: self.interfaceInteraction, messageNode: node as? ChatMessageItemView),
+                contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState: self.presentationInterfaceState, context: self.context, messages: updatedMessages, controllerInteraction: self.controllerInteraction, selectAll: selectAll, interfaceInteraction: self.interfaceInteraction, messageNode: resolvedMessageNode),
                 peerMessageAllowedReactions(context: self.context, message: topMessage),
                 peerMessageSelectedReactions(context: self.context, message: topMessage),
                 topMessageReactions(context: self.context, message: topMessage, subPeerId: self.chatLocation.threadId.flatMap(EnginePeer.Id.init)),

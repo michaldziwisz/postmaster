@@ -377,7 +377,7 @@ final class VoiceOverContextMenuController: ViewController, ContextControllerPro
         if typeName.contains("ChatDeleteMessageContextItemNode") {
             return self.presentationData.strings.Conversation_ContextMenuDelete
         } else if typeName.contains("ChatReadReportContextItemNode") {
-            return self.presentationData.strings.Conversation_ContextMenuSeen(0)
+            return self.presentationData.strings.Chat_ContextMenuReadDate_ReadAvailablePrefix
         } else if typeName.contains("ChatMessageAuthorContextItemNode") {
             return self.presentationData.strings.Chat_ContextMenu_AuthorInfo("").string
         } else if typeName.contains("ChatRateTranscriptionContextItemNode") {

@@ -4591,6 +4591,19 @@ public final class ChatHistoryListNodeImpl: ListView, ChatHistoryNode, ChatHisto
             }
         }
     }
+
+    func messageItemView(for messageId: MessageId) -> ChatMessageItemView? {
+        var result: ChatMessageItemView?
+        self.forEachItemNode { itemNode in
+            guard result == nil else {
+                return
+            }
+            if let itemNode = itemNode as? ChatMessageItemView, let item = itemNode.item, item.message.id == messageId {
+                result = itemNode
+            }
+        }
+        return result
+    }
     
     func requestMessageUpdate(_ id: MessageId, andScrollToItem scroll: Bool = false) {
         if let historyView = self.historyView {

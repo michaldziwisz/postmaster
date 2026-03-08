@@ -866,6 +866,13 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
     }
     
     let isScheduled = chatPresentationInterfaceState.subject == .scheduledMessages
+    let voiceOverReadStatsSignal: Signal<MessageReadStats?, NoError>
+    if UIAccessibility.isVoiceOverRunning, readStats == nil {
+        voiceOverReadStatsSignal = context.engine.messages.messageReadStats(id: messages[0].id)
+        |> take(1)
+    } else {
+        voiceOverReadStatsSignal = .single(readStats)
+    }
     
     let dataSignal: Signal<(MessageContextMenuData, [MessageId: ChatUpdatingMessageMedia], InfoSummaryData, AppConfiguration, Bool, Int32, AvailableReactions?, TranslationSettings, LoggingSettings, NotificationSoundList?, EnginePeer?), NoError> = combineLatest(
         loadLimits,
@@ -933,9 +940,10 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
         return (data, updatingMessageMedia, infoSummaryData, appConfig, isMessageRead, messageViewsPrivacyTips, availableReactions, translationSettings, loggingSettings, notificationSoundList, accountPeer)
     }
     
-    return dataSignal
+    return combineLatest(dataSignal, voiceOverReadStatsSignal)
     |> deliverOnMainQueue
-    |> map { data, updatingMessageMedia, infoSummaryData, appConfig, isMessageRead, messageViewsPrivacyTips, availableReactions, translationSettings, loggingSettings, notificationSoundList, accountPeer -> ContextController.Items in
+    |> map { value, resolvedReadStats -> ContextController.Items in
+        let (data, updatingMessageMedia, infoSummaryData, appConfig, isMessageRead, messageViewsPrivacyTips, availableReactions, translationSettings, loggingSettings, notificationSoundList, accountPeer) = value
         let isPremium = accountPeer?.isPremium ?? false
         
         var actions: [ContextMenuItem] = []
@@ -1064,6 +1072,36 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
                     rateTranscriptionAction(value)
                 }), false), at: 0)
                 actions.insert(.separator, at: 1)
+            }
+        }
+        
+        if UIAccessibility.isVoiceOverRunning {
+            var canRequestAudioTranscription = false
+            for media in message.media {
+                if let file = media as? TelegramMediaFile, file.isVoice || file.isInstantVideo {
+                    canRequestAudioTranscription = true
+                    break
+                }
+            }
+            if canRequestAudioTranscription {
+                let shouldShowAudioTranscriptionAction: Bool
+                if let audioTranscription {
+                    shouldShowAudioTranscriptionAction = audioTranscription.text.isEmpty || audioTranscription.isPending
+                } else {
+                    shouldShowAudioTranscriptionAction = true
+                }
+                if shouldShowAudioTranscriptionAction {
+                    actions.append(.action(ContextMenuActionItem(text: chatPresentationInterfaceState.strings.GroupBoost_AudioTranscription, icon: { theme in
+                        return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Message"), color: theme.actionSheet.primaryTextColor)
+                    }, action: { _, f in
+                        let _ = context.engine.messages.transcribeAudio(messageId: message.id)
+                        |> deliverOnMainQueue
+                        .startStandalone(next: { _ in
+                        })
+                        f(.dismissWithoutContent)
+                    })))
+                    actions.append(.separator)
+                }
             }
         }
         
@@ -1244,7 +1282,7 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
         }
         
         for attribute in message.attributes {
-            if hasExpandedAudioTranscription, let attribute = attribute as? AudioTranscriptionMessageAttribute {
+            if (hasExpandedAudioTranscription || UIAccessibility.isVoiceOverRunning), let attribute = attribute as? AudioTranscriptionMessageAttribute, !attribute.text.isEmpty {
                 if !messageText.isEmpty {
                     messageText.append("\n")
                 }
@@ -2112,10 +2150,7 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
                     actions.insert(.separator, at: 0)
                 }
                 
-                var readStats = readStats
-                if !(hasReadReports || reactionCount != 0) {
-                    readStats = MessageReadStats(reactionCount: 0, peers: [], readTimestamps: [:])
-                }
+                let readStats = readStats ?? resolvedReadStats
                 let openReadReportAction: (ContextControllerProtocol, @escaping (ContextMenuActionResult) -> Void, MessageReadStats?, [StickerPackCollectionInfo], TelegramMediaFile?) -> Void = { c, f, stats, customReactionEmojiPacks, firstCustomEmojiReaction in
                     if message.id.peerId.namespace == Namespaces.Peer.CloudUser {
                         if let stats, stats.peers.isEmpty {
@@ -2197,53 +2232,56 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
                     }
                 }
                 if UIAccessibility.isVoiceOverRunning {
-                    let voiceOverPresentationData = context.sharedContext.currentPresentationData.with { $0 }
-                    actions.insert(.action(ContextMenuActionItem(text: voiceOverReadReportContextText(accountPeerId: context.account.peerId, presentationData: voiceOverPresentationData, message: message, stats: readStats), icon: { theme in
-                        return generateTintedImage(image: UIImage(bundleImageName: voiceOverReadReportContextIconName(message: message, isEdit: false)), color: theme.actionSheet.primaryTextColor)
-                    }, action: { c, f in
-                        if message.id.peerId.namespace == Namespaces.Peer.CloudUser {
-                            if let readStats, readStats.peers.isEmpty {
-                                let presentController = {
-                                    let controller = context.sharedContext.makePremiumPrivacyControllerController(context: context, subject: .readTime, peerId: peer.id)
-                                    controllerInteraction.navigationController()?.pushViewController(controller)
-                                }
-                                if let c {
-                                    c.dismiss(completion: presentController)
-                                } else {
-                                    f(.dismissWithoutContent)
-                                    Queue.mainQueue().async {
-                                        presentController()
+                    let shouldInsertVoiceOverReadReport = reactionCount != 0 || readStats != nil || message.id.peerId.namespace == Namespaces.Peer.CloudUser
+                    if shouldInsertVoiceOverReadReport {
+                        let voiceOverPresentationData = context.sharedContext.currentPresentationData.with { $0 }
+                        actions.insert(.action(ContextMenuActionItem(text: voiceOverReadReportContextText(accountPeerId: context.account.peerId, presentationData: voiceOverPresentationData, message: message, stats: readStats), icon: { theme in
+                            return generateTintedImage(image: UIImage(bundleImageName: voiceOverReadReportContextIconName(message: message, isEdit: false)), color: theme.actionSheet.primaryTextColor)
+                        }, action: { c, f in
+                            if message.id.peerId.namespace == Namespaces.Peer.CloudUser {
+                                if let readStats, readStats.peers.isEmpty {
+                                    let presentController = {
+                                        let controller = context.sharedContext.makePremiumPrivacyControllerController(context: context, subject: .readTime, peerId: peer.id)
+                                        controllerInteraction.navigationController()?.pushViewController(controller)
                                     }
+                                    if let c {
+                                        c.dismiss(completion: presentController)
+                                    } else {
+                                        f(.dismissWithoutContent)
+                                        Queue.mainQueue().async {
+                                            presentController()
+                                        }
+                                    }
+                                    return
                                 }
+                            }
+                            guard (readStats != nil && !readStats!.peers.isEmpty) || reactionCount != 0 else {
+                                f(.default)
                                 return
                             }
-                        }
-                        guard (readStats != nil && !readStats!.peers.isEmpty) || reactionCount != 0 else {
-                            f(.default)
-                            return
-                        }
-                        let presentList = {
-                            guard let rootController = controllerInteraction.navigationController()?.view.window?.rootViewController else {
-                                return
-                            }
-                            let presentationData = context.sharedContext.currentPresentationData.with { $0 }
-                            presentVoiceOverReactionListController(from: rootController, context: context, presentationData: presentationData, availableReactions: availableReactions, message: message, reaction: nil, readStats: readStats, onDismiss: {
-                                if let view = controllerInteraction.navigationController()?.topViewController?.view {
-                                    UIAccessibility.post(notification: .screenChanged, argument: view)
+                            let presentList = {
+                                guard let rootController = controllerInteraction.navigationController()?.view.window?.rootViewController else {
+                                    return
                                 }
-                            }, openPeer: { peer, hasReaction in
-                                controllerInteraction.openPeer(peer, .default, MessageReference(message), hasReaction ? .reaction : .default)
-                            })
-                        }
-                        if let c {
-                            c.dismiss(completion: presentList)
-                        } else {
-                            f(.dismissWithoutContent)
-                            Queue.mainQueue().async {
-                                presentList()
+                                let presentationData = context.sharedContext.currentPresentationData.with { $0 }
+                                presentVoiceOverReactionListController(from: rootController, context: context, presentationData: presentationData, availableReactions: availableReactions, message: message, reaction: nil, readStats: readStats, onDismiss: {
+                                    if let view = controllerInteraction.navigationController()?.topViewController?.view {
+                                        UIAccessibility.post(notification: .screenChanged, argument: view)
+                                    }
+                                }, openPeer: { peer, hasReaction in
+                                    controllerInteraction.openPeer(peer, .default, MessageReference(message), hasReaction ? .reaction : .default)
+                                })
                             }
-                        }
-                    })), at: 0)
+                            if let c {
+                                c.dismiss(completion: presentList)
+                            } else {
+                                f(.dismissWithoutContent)
+                                Queue.mainQueue().async {
+                                    presentList()
+                                }
+                            }
+                        })), at: 0)
+                    }
                 } else {
                     actions.insert(.custom(ChatReadReportContextItem(context: context, message: message, hasReadReports: hasReadReports, isEdit: false, stats: readStats, action: { c, f, stats, customReactionEmojiPacks, firstCustomEmojiReaction in
                         openReadReportAction(c, f, stats, customReactionEmojiPacks, firstCustomEmojiReaction)
@@ -3809,7 +3847,22 @@ private func voiceOverReadReportContextText(accountPeerId: PeerId, presentationD
             return presentationData.strings.Conversation_ContextMenuSeen(Int32(stats.peers.count))
         }
     }
-    return presentationData.strings.Conversation_ContextMenuSeen(0)
+    if message.id.peerId.namespace == Namespaces.Peer.CloudUser {
+        return presentationData.strings.Chat_ContextMenuReadDate_ReadAvailablePrefix
+    }
+    if reactionCount != 0 {
+        return presentationData.strings.Chat_ContextReactionCount(Int32(reactionCount))
+    }
+    for media in message.media {
+        if let file = media as? TelegramMediaFile {
+            if file.isVoice {
+                return presentationData.strings.Conversation_ContextMenuNobodyListened
+            } else if file.isInstantVideo {
+                return presentationData.strings.Conversation_ContextMenuNobodyWatched
+            }
+        }
+    }
+    return presentationData.strings.Conversation_ContextMenuNoViews
 }
 
 private func voiceOverReadReportContextIconName(message: Message, isEdit: Bool) -> String {
