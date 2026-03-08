@@ -131,11 +131,11 @@ extension ChatControllerImpl {
                         }
                         actions.allPresetReactionsAreAvailable = true
                     }
-                    
+
                     if let channel = self.presentationInterfaceState.renderedPeer?.peer as? TelegramChannel, case .broadcast = channel.info {
                         actions.alwaysAllowPremiumReactions = true
                     }
-                    
+
                     if !actions.reactionItems.isEmpty {
                         let reactionItems: [EmojiComponentReactionItem] = actions.reactionItems.compactMap { item -> EmojiComponentReactionItem? in
                             switch item {
@@ -206,7 +206,7 @@ extension ChatControllerImpl {
                         }
                     }
                 }
-                
+
                 self.chatDisplayNode.messageTransitionNode.dismissMessageReactionContexts()
                 
                 let presentationContext = self.controllerInteraction?.presentationContext
@@ -302,6 +302,38 @@ extension ChatControllerImpl {
                     }
                 }
                 
+                if UIAccessibility.isVoiceOverRunning {
+                    self.canReadHistory.set(false)
+
+                    let sourceRectInWindow: CGRect?
+                    if let window = node.view.window {
+                        sourceRectInWindow = node.view.convert(frame, to: window)
+                    } else {
+                        sourceRectInWindow = nil
+                    }
+
+                    self.currentVoiceOverContextMenuController?.dismiss(completion: nil)
+                    let controller = VoiceOverContextMenuController(
+                        presentationData: self.presentationData,
+                        items: actionsSignal,
+                        sourceView: node.view,
+                        sourceRectInWindow: sourceRectInWindow,
+                        focusReturnView: node.view
+                    )
+                    controller.dismissed = { [weak self, weak controller] in
+                        guard let self, let controller else {
+                            return
+                        }
+                        self.canReadHistory.set(true)
+                        if self.currentVoiceOverContextMenuController === controller {
+                            self.currentVoiceOverContextMenuController = nil
+                        }
+                    }
+                    self.currentVoiceOverContextMenuController = controller
+                    self.present(controller, in: .window(.root))
+                    return
+                }
+
                 let source: ContextContentSource
                 if let location = location {
                     source = .location(ChatMessageContextLocationContentSource(controller: self, location: node.view.convert(node.bounds, to: nil).origin.offsetBy(dx: location.x, dy: location.y)))

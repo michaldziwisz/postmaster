@@ -488,8 +488,9 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
     weak var slowmodeTooltipController: ChatSlowmodeHintController?
     
     weak var currentContextController: ContextController?
+    weak var currentVoiceOverContextMenuController: VoiceOverContextMenuController?
     public var visibleContextController: ViewController? {
-        return self.currentContextController
+        return self.currentVoiceOverContextMenuController ?? self.currentContextController
     }
     
     weak var sendMessageActionsController: ChatSendMessageActionSheetController?
@@ -851,6 +852,9 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                 Queue.mainQueue().after(0.15) {
                     contextController.dismiss(result: .dismissWithoutContent, completion: nil)
                 }
+            }
+            if let voiceOverContextMenuController = self.currentVoiceOverContextMenuController {
+                voiceOverContextMenuController.dismiss(completion: nil)
             }
             
             let mode = params.mode

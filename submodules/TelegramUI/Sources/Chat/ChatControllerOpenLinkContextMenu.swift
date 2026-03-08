@@ -50,6 +50,60 @@ extension ChatControllerImpl {
                 openText = self.presentationData.strings.Conversation_FileOpenIn
             }
             
+            if UIAccessibility.isVoiceOverRunning {
+                let alertController = UIAlertController(title: nil, message: cleanUrl, preferredStyle: .actionSheet)
+                if hasOpenAction {
+                    alertController.addAction(UIAlertAction(title: openText, style: .default, handler: { [weak self] _ in
+                        guard let self else {
+                            return
+                        }
+                        if canOpenIn {
+                            self.openUrlIn(url)
+                        } else {
+                            self.openUrl(url, concealed: false)
+                        }
+                    }))
+                }
+                if let phoneNumber = phoneNumber {
+                    alertController.addAction(UIAlertAction(title: self.presentationData.strings.Conversation_AddContact, style: .default, handler: { [weak self] _ in
+                        self?.controllerInteraction?.addContact(phoneNumber)
+                    }))
+                }
+                alertController.addAction(UIAlertAction(title: canAddToReadingList ? self.presentationData.strings.ShareMenu_CopyShareLink : self.presentationData.strings.Conversation_ContextMenuCopy, style: .default, handler: { [weak self] _ in
+                    guard let self else {
+                        return
+                    }
+                    UIPasteboard.general.string = cleanUrl
+
+                    let content: UndoOverlayContent
+                    if isPhoneNumber {
+                        content = .copy(text: self.presentationData.strings.Conversation_PhoneCopied)
+                    } else if isEmail {
+                        content = .copy(text: self.presentationData.strings.Conversation_EmailCopied)
+                    } else if canAddToReadingList {
+                        content = .linkCopied(title: nil, text: self.presentationData.strings.Conversation_LinkCopied)
+                    } else {
+                        content = .copy(text: self.presentationData.strings.Conversation_TextCopied)
+                    }
+                    self.present(UndoOverlayController(presentationData: self.presentationData, content: content, elevatedLayout: false, animateInAsReplacement: false, action: { _ in return false }), in: .current)
+                }))
+                if canAddToReadingList {
+                    alertController.addAction(UIAlertAction(title: self.presentationData.strings.Conversation_AddToReadingList, style: .default, handler: { _ in
+                        if let link = URL(string: url) {
+                            let _ = try? SSReadingList.default()?.addItem(with: link, title: nil, previewText: nil)
+                        }
+                    }))
+                }
+                alertController.addAction(UIAlertAction(title: self.presentationData.strings.Common_Cancel, style: .cancel))
+                if let popoverPresentationController = alertController.popoverPresentationController {
+                    popoverPresentationController.sourceView = self.view
+                    popoverPresentationController.sourceRect = CGRect(x: self.view.bounds.midX, y: self.view.bounds.midY, width: 1.0, height: 1.0)
+                }
+                self.chatDisplayNode.dismissInput()
+                self.present(alertController, animated: true)
+                return
+            }
+
             let actionSheet = ActionSheetController(presentationData: self.presentationData)
             var items: [ActionSheetItem] = []
             items.append(ActionSheetTextItem(title: cleanUrl))
@@ -107,7 +161,7 @@ extension ChatControllerImpl {
             ])])
             self.chatDisplayNode.dismissInput()
             self.present(actionSheet, in: .window(.root))
-            
+
             return
         }
         
@@ -140,10 +194,10 @@ extension ChatControllerImpl {
         } else if canOpenIn {
             openText = self.presentationData.strings.Conversation_FileOpenIn
         }
-            
+
         let recognizer: TapLongTapOrDoubleTapGestureRecognizer? = nil// anyRecognizer as? TapLongTapOrDoubleTapGestureRecognizer
         let gesture: ContextGesture? = nil // anyRecognizer as? ContextGesture
-        
+
         let source: ContextContentSource
 //                if let location = location {
 //                    source = .location(ChatMessageContextLocationContentSource(controller: self, location: messageNode.view.convert(messageNode.bounds, to: nil).origin.offsetBy(dx: location.x, dy: location.y)))
@@ -194,9 +248,41 @@ extension ChatControllerImpl {
                 }))
             )
         }
-        
+
+        if UIAccessibility.isVoiceOverRunning {
+            self.canReadHistory.set(false)
+
+            let sourceRectInWindow: CGRect?
+            if let window = contentNode.view.window {
+                sourceRectInWindow = contentNode.view.convert(contentNode.bounds, to: window)
+            } else {
+                sourceRectInWindow = nil
+            }
+
+            self.currentVoiceOverContextMenuController?.dismiss(completion: nil)
+            let controller = VoiceOverContextMenuController(
+                presentationData: self.presentationData,
+                items: .single(ContextController.Items(content: .list(items))),
+                sourceView: contentNode.view,
+                sourceRectInWindow: sourceRectInWindow,
+                focusReturnView: contentNode.view
+            )
+            controller.dismissed = { [weak self, weak controller] in
+                guard let self, let controller else {
+                    return
+                }
+                self.canReadHistory.set(true)
+                if self.currentVoiceOverContextMenuController === controller {
+                    self.currentVoiceOverContextMenuController = nil
+                }
+            }
+            self.currentVoiceOverContextMenuController = controller
+            self.present(controller, in: .window(.root))
+            return
+        }
+
         self.canReadHistory.set(false)
-        
+
         let controller = makeContextController(presentationData: self.presentationData, source: source, items: .single(ContextController.Items(content: .list(items))), recognizer: recognizer, gesture: gesture, disableScreenshots: false)
         controller.dismissed = { [weak self] in
             self?.canReadHistory.set(true)
