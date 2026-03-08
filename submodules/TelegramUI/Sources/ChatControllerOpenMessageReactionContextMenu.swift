@@ -187,8 +187,23 @@ extension ChatControllerImpl {
                     return
                 }
                 
+                if UIAccessibility.isVoiceOverRunning, canViewMessageReactionList(message: message), let rootViewController = self.view.window?.rootViewController {
+                    self.chatDisplayNode.messageTransitionNode.dismissMessageReactionContexts()
+                    self.canReadHistory.set(false)
+                    presentVoiceOverReactionListController(from: rootViewController, context: self.context, presentationData: self.presentationData, availableReactions: availableReactions, message: message, reaction: value, readStats: nil, onDismiss: { [weak self] in
+                        self?.canReadHistory.set(true)
+                        if let view = self?.view {
+                            UIAccessibility.post(notification: .screenChanged, argument: view)
+                        }
+                    }, openPeer: { [weak self] peer, hasReaction in
+                        guard let self else {
+                            return
+                        }
+                        self.openPeer(peer: peer, navigation: .default, fromMessage: MessageReference(message), fromReactionMessageId: hasReaction ? message.id : nil)
+                    })
+                    return
+                }
                 var dismissController: ((@escaping () -> Void) -> Void)?
-                
                 var items: ContextController.Items
                 if canViewMessageReactionList(message: message) {
                     items = ContextController.Items(content: .custom(ReactionListContextMenuContent(

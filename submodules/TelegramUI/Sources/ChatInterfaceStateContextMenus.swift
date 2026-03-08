@@ -1034,7 +1034,7 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
         var hasRateTranscription = false
         if hasExpandedAudioTranscription, let audioTranscription = audioTranscription, !didRateAudioTranscription {
             hasRateTranscription = true
-            actions.insert(.custom(ChatRateTranscriptionContextItem(context: context, message: message, action: { [weak context] value in
+            let rateTranscriptionAction: (Bool) -> Void = { [weak context] value in
                 guard let context = context else {
                     return
                 }
@@ -1044,8 +1044,27 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
                 let presentationData = context.sharedContext.currentPresentationData.with { $0 }
                 let content: UndoOverlayContent = .info(title: nil, text: presentationData.strings.Chat_AudioTranscriptionFeedbackTip, timeout: nil, customUndoText: nil)
                 controllerInteraction.displayUndo(content)
-            }), false), at: 0)
-            actions.insert(.separator, at: 1)
+            }
+            if UIAccessibility.isVoiceOverRunning {
+                actions.insert(.action(ContextMenuActionItem(text: chatPresentationInterfaceState.strings.Common_No, textLayout: .secondLineWithValue(chatPresentationInterfaceState.strings.Chat_AudioTranscriptionRateAction), icon: { theme in
+                    return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/ThumbsDown"), color: theme.actionSheet.primaryTextColor)
+                }, action: { _, f in
+                    rateTranscriptionAction(false)
+                    f(.dismissWithoutContent)
+                })), at: 0)
+                actions.insert(.action(ContextMenuActionItem(text: chatPresentationInterfaceState.strings.Common_Yes, textLayout: .secondLineWithValue(chatPresentationInterfaceState.strings.Chat_AudioTranscriptionRateAction), icon: { theme in
+                    return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/ThumbsUp"), color: theme.actionSheet.primaryTextColor)
+                }, action: { _, f in
+                    rateTranscriptionAction(true)
+                    f(.dismissWithoutContent)
+                })), at: 0)
+                actions.insert(.separator, at: 2)
+            } else {
+                actions.insert(.custom(ChatRateTranscriptionContextItem(context: context, message: message, action: { value in
+                    rateTranscriptionAction(value)
+                }), false), at: 0)
+                actions.insert(.separator, at: 1)
+            }
         }
         
         if !hasRateTranscription && message.minAutoremoveOrClearTimeout == nil {
@@ -1931,14 +1950,23 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
             }
 
             if let autoremoveDeadline = autoremoveDeadline, !isEditing, !isSending {
-                actions.append(.custom(ChatDeleteMessageContextItem(timestamp: Double(autoremoveDeadline), action: { controller, f in
+                let deleteAction: (ContextControllerProtocol, @escaping (ContextMenuActionResult) -> Void) -> Void = { controller, f in
                     if isEditing {
                         context.account.pendingUpdateMessageManager.cancel(messageId: message.id)
                         f(.default)
                     } else {
                         interfaceInteraction.deleteMessages(selectAll ? messages : [message], controller, f)
                     }
-                }), false))
+                }
+                if UIAccessibility.isVoiceOverRunning {
+                    actions.append(.action(ContextMenuActionItem(text: title, textColor: .destructive, textLayout: .secondLineWithValue(stringForRemainingTime(Int32(max(0.0, Double(autoremoveDeadline) - Date().timeIntervalSince1970)), strings: chatPresentationInterfaceState.strings)), icon: { theme in
+                        return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Delete"), color: theme.actionSheet.destructiveActionTextColor)
+                    }, action: deleteAction)))
+                } else {
+                    actions.append(.custom(ChatDeleteMessageContextItem(timestamp: Double(autoremoveDeadline), action: { controller, f in
+                        deleteAction(controller, f)
+                    }), false))
+                }
             } else if !isUnremovableAction {
                 var iconName: String = isSending ? "Chat/Context Menu/Clear" : "Chat/Context Menu/Delete"
                 if message.attributes.contains(where: { $0 is PublishedSuggestedPostMessageAttribute }) && message.timestamp > Int32(Date().timeIntervalSince1970) - 60 * 60 * 24 {
@@ -2024,11 +2052,36 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
         })
 
         if canViewAuthor {
-            actions.insert(.custom(ChatMessageAuthorContextItem(context: context, message: message, action: { c, f, peer in
-                c.dismiss(completion: {
-                    controllerInteraction.openPeer(peer, .default, nil, .default)
-                })
-            }), false), at: 0)
+            if UIAccessibility.isVoiceOverRunning {
+                actions.insert(.action(ContextMenuActionItem(text: chatPresentationInterfaceState.strings.Conversation_ContextMenuOpenProfile, icon: { _ in
+                    return nil
+                }, action: { c, f in
+                    let _ = (context.engine.messages.requestMessageAuthor(id: message.id)
+                    |> take(1)
+                    |> deliverOnMainQueue).startStandalone(next: { peer in
+                        guard let peer else {
+                            f(.default)
+                            return
+                        }
+                        if let c {
+                            c.dismiss(completion: {
+                                controllerInteraction.openPeer(peer, .default, nil, .default)
+                            })
+                        } else {
+                            f(.dismissWithoutContent)
+                            Queue.mainQueue().async {
+                                controllerInteraction.openPeer(peer, .default, nil, .default)
+                            }
+                        }
+                    })
+                })), at: 0)
+            } else {
+                actions.insert(.custom(ChatMessageAuthorContextItem(context: context, message: message, action: { c, f, peer in
+                    c.dismiss(completion: {
+                        controllerInteraction.openPeer(peer, .default, nil, .default)
+                    })
+                }), false), at: 0)
+            }
         }
         
         if let peer = message.peers[message.id.peerId], (canViewStats || reactionCount != 0) {
@@ -2063,19 +2116,20 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
                 if !(hasReadReports || reactionCount != 0) {
                     readStats = MessageReadStats(reactionCount: 0, peers: [], readTimestamps: [:])
                 }
-
-                actions.insert(.custom(ChatReadReportContextItem(context: context, message: message, hasReadReports: hasReadReports, isEdit: false, stats: readStats, action: { c, f, stats, customReactionEmojiPacks, firstCustomEmojiReaction in
+                let openReadReportAction: (ContextControllerProtocol, @escaping (ContextMenuActionResult) -> Void, MessageReadStats?, [StickerPackCollectionInfo], TelegramMediaFile?) -> Void = { c, f, stats, customReactionEmojiPacks, firstCustomEmojiReaction in
                     if message.id.peerId.namespace == Namespaces.Peer.CloudUser {
                         if let stats, stats.peers.isEmpty {
                             c.dismiss(completion: {
                                 let controller = context.sharedContext.makePremiumPrivacyControllerController(context: context, subject: .readTime, peerId: peer.id)
                                 controllerInteraction.navigationController()?.pushViewController(controller)
                             })
+                            return
                         }
                     } else if reactionCount == 0, let stats = stats, stats.peers.count == 1, !"".isEmpty {
                         c.dismiss(completion: {
                             controllerInteraction.openPeer(stats.peers[0], .default, nil, .default)
                         })
+                        return
                     } else if (stats != nil && !stats!.peers.isEmpty) || reactionCount != 0 {
                         var tip: ContextController.Tip?
                         
@@ -2141,7 +2195,60 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
                     } else {
                         f(.default)
                     }
-                }), false), at: 0)
+                }
+                if UIAccessibility.isVoiceOverRunning {
+                    let voiceOverPresentationData = context.sharedContext.currentPresentationData.with { $0 }
+                    actions.insert(.action(ContextMenuActionItem(text: voiceOverReadReportContextText(accountPeerId: context.account.peerId, presentationData: voiceOverPresentationData, message: message, stats: readStats), icon: { theme in
+                        return generateTintedImage(image: UIImage(bundleImageName: voiceOverReadReportContextIconName(message: message, isEdit: false)), color: theme.actionSheet.primaryTextColor)
+                    }, action: { c, f in
+                        if message.id.peerId.namespace == Namespaces.Peer.CloudUser {
+                            if let readStats, readStats.peers.isEmpty {
+                                let presentController = {
+                                    let controller = context.sharedContext.makePremiumPrivacyControllerController(context: context, subject: .readTime, peerId: peer.id)
+                                    controllerInteraction.navigationController()?.pushViewController(controller)
+                                }
+                                if let c {
+                                    c.dismiss(completion: presentController)
+                                } else {
+                                    f(.dismissWithoutContent)
+                                    Queue.mainQueue().async {
+                                        presentController()
+                                    }
+                                }
+                                return
+                            }
+                        }
+                        guard (readStats != nil && !readStats!.peers.isEmpty) || reactionCount != 0 else {
+                            f(.default)
+                            return
+                        }
+                        let presentList = {
+                            guard let rootController = controllerInteraction.navigationController()?.view.window?.rootViewController else {
+                                return
+                            }
+                            let presentationData = context.sharedContext.currentPresentationData.with { $0 }
+                            presentVoiceOverReactionListController(from: rootController, context: context, presentationData: presentationData, availableReactions: availableReactions, message: message, reaction: nil, readStats: readStats, onDismiss: {
+                                if let view = controllerInteraction.navigationController()?.topViewController?.view {
+                                    UIAccessibility.post(notification: .screenChanged, argument: view)
+                                }
+                            }, openPeer: { peer, hasReaction in
+                                controllerInteraction.openPeer(peer, .default, MessageReference(message), hasReaction ? .reaction : .default)
+                            })
+                        }
+                        if let c {
+                            c.dismiss(completion: presentList)
+                        } else {
+                            f(.dismissWithoutContent)
+                            Queue.mainQueue().async {
+                                presentList()
+                            }
+                        }
+                    })), at: 0)
+                } else {
+                    actions.insert(.custom(ChatReadReportContextItem(context: context, message: message, hasReadReports: hasReadReports, isEdit: false, stats: readStats, action: { c, f, stats, customReactionEmojiPacks, firstCustomEmojiReaction in
+                        openReadReportAction(c, f, stats, customReactionEmojiPacks, firstCustomEmojiReaction)
+                    }), false), at: 0)
+                }
             }
         }
         
@@ -2149,7 +2256,14 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
             if !actions.isEmpty {
                 actions.insert(.separator, at: 0)
             }
-            actions.insert(.custom(ChatReadReportContextItem(context: context, message: message, hasReadReports: false, isEdit: true, stats: MessageReadStats(reactionCount: 0, peers: [], readTimestamps: [:]), action: nil), false), at: 0)
+            let voiceOverPresentationData = context.sharedContext.currentPresentationData.with { $0 }
+            if UIAccessibility.isVoiceOverRunning, let editedText = voiceOverEditedContextMenuText(presentationData: voiceOverPresentationData, message: message) {
+                actions.insert(.action(ContextMenuActionItem(text: editedText, textColor: .disabled, icon: { theme in
+                    return generateTintedImage(image: UIImage(bundleImageName: voiceOverReadReportContextIconName(message: message, isEdit: true)), color: theme.actionSheet.primaryTextColor)
+                }, action: nil)), at: 0)
+            } else {
+                actions.insert(.custom(ChatReadReportContextItem(context: context, message: message, hasReadReports: false, isEdit: true, stats: MessageReadStats(reactionCount: 0, peers: [], readTimestamps: [:]), action: nil), false), at: 0)
+            }
         }
         
         if !actions.isEmpty, case .separator = actions[0] {
@@ -3609,6 +3723,105 @@ private func stringForRemainingTime(_ duration: Int32, strings: PresentationStri
         durationString = String(format: "%d:%02d", minutes, seconds)
     }
     return strings.Conversation_AutoremoveRemainingTime(durationString).string
+}
+
+private func voiceOverEditedContextMenuText(presentationData: PresentationData, message: Message) -> String? {
+    guard let attribute = message.attributes.first(where: { attribute in
+        if let attribute = attribute as? EditedMessageAttribute, !attribute.isHidden, attribute.date != 0 {
+            return true
+        }
+        return false
+    }) as? EditedMessageAttribute else {
+        return nil
+    }
+    return humanReadableStringForTimestamp(strings: presentationData.strings, dateTimeFormat: presentationData.dateTimeFormat, timestamp: attribute.date, alwaysShowTime: true, allowYesterday: true, format: HumanReadableStringFormat(
+        dateFormatString: { value in
+            return PresentationStrings.FormattedString(string: presentationData.strings.Chat_PrivateMessageEditTimestamp_Date(value).string, ranges: [])
+        },
+        tomorrowFormatString: { value in
+            return PresentationStrings.FormattedString(string: presentationData.strings.Chat_PrivateMessageEditTimestamp_TodayAt(value).string, ranges: [])
+        },
+        todayFormatString: { value in
+            return PresentationStrings.FormattedString(string: presentationData.strings.Chat_PrivateMessageEditTimestamp_TodayAt(value).string, ranges: [])
+        },
+        yesterdayFormatString: { value in
+            return PresentationStrings.FormattedString(string: presentationData.strings.Chat_PrivateMessageEditTimestamp_YesterdayAt(value).string, ranges: [])
+        }
+    )).string
+}
+
+private func voiceOverReadReportContextText(accountPeerId: PeerId, presentationData: PresentationData, message: Message, stats: MessageReadStats?) -> String {
+    var reactionCount = 0
+    for reaction in mergedMessageReactionsAndPeers(accountPeerId: accountPeerId, accountPeer: nil, message: message).reactions {
+        reactionCount += Int(reaction.count)
+    }
+    if let stats = stats {
+        reactionCount = stats.reactionCount
+
+        if stats.peers.isEmpty {
+            if message.id.peerId.namespace == Namespaces.Peer.CloudUser {
+                return presentationData.strings.Chat_ContextMenuReadDate_ReadAvailablePrefix
+            } else if reactionCount != 0 {
+                return presentationData.strings.Chat_ContextReactionCount(Int32(reactionCount))
+            } else {
+                for media in message.media {
+                    if let file = media as? TelegramMediaFile {
+                        if file.isVoice {
+                            return presentationData.strings.Conversation_ContextMenuNobodyListened
+                        } else if file.isInstantVideo {
+                            return presentationData.strings.Conversation_ContextMenuNobodyWatched
+                        }
+                    }
+                }
+                return presentationData.strings.Conversation_ContextMenuNoViews
+            }
+        } else if message.id.peerId.namespace == Namespaces.Peer.CloudUser, let timestamp = stats.readTimestamps.first?.value {
+            return humanReadableStringForTimestamp(strings: presentationData.strings, dateTimeFormat: presentationData.dateTimeFormat, timestamp: timestamp, alwaysShowTime: true, allowYesterday: true, format: HumanReadableStringFormat(
+                dateFormatString: { value in
+                    return PresentationStrings.FormattedString(string: presentationData.strings.Chat_PrivateMessageSeenTimestamp_Date(value).string, ranges: [])
+                },
+                tomorrowFormatString: { value in
+                    return PresentationStrings.FormattedString(string: presentationData.strings.Chat_PrivateMessageSeenTimestamp_TodayAt(value).string, ranges: [])
+                },
+                todayFormatString: { value in
+                    return PresentationStrings.FormattedString(string: presentationData.strings.Chat_PrivateMessageSeenTimestamp_TodayAt(value).string, ranges: [])
+                },
+                yesterdayFormatString: { value in
+                    return PresentationStrings.FormattedString(string: presentationData.strings.Chat_PrivateMessageSeenTimestamp_YesterdayAt(value).string, ranges: [])
+                }
+            )).string
+        } else if reactionCount != 0 {
+            if reactionCount >= stats.peers.count {
+                return presentationData.strings.Chat_OutgoingContextReactionCount(Int32(reactionCount))
+            } else {
+                return presentationData.strings.Chat_OutgoingContextMixedReactionCount("\(reactionCount)", "\(stats.peers.count)").string
+            }
+        } else {
+            for media in message.media {
+                if let file = media as? TelegramMediaFile {
+                    if file.isVoice {
+                        return presentationData.strings.Conversation_ContextMenuListened(Int32(stats.peers.count))
+                    } else if file.isInstantVideo {
+                        return presentationData.strings.Conversation_ContextMenuWatched(Int32(stats.peers.count))
+                    }
+                }
+            }
+            return presentationData.strings.Conversation_ContextMenuSeen(Int32(stats.peers.count))
+        }
+    }
+    return presentationData.strings.Conversation_ContextMenuSeen(0)
+}
+
+private func voiceOverReadReportContextIconName(message: Message, isEdit: Bool) -> String {
+    if isEdit {
+        return "Chat/Message/MenuEditIcon"
+    } else if message.id.peerId.namespace == Namespaces.Peer.CloudUser {
+        return "Chat/Message/MenuReadIcon"
+    } else if let reactionsAttribute = message.reactionsAttribute, !reactionsAttribute.reactions.isEmpty {
+        return "Chat/Context Menu/Reactions"
+    } else {
+        return "Chat/Context Menu/Read"
+    }
 }
 
 final class ChatRateTranscriptionContextItem: ContextMenuCustomItem {
