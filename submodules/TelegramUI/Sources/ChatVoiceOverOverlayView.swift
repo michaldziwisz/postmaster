@@ -1211,6 +1211,7 @@ public final class ChatVoiceOverOverlayView: UIView {
     }
 
     func updateInterfaceState(_ state: ChatPresentationInterfaceState) {
+        let previousActiveTranslationLanguage = self.activeTranslationLanguage(for: self.interfaceState)
         self.interfaceState = state
         if state.renderedPeer?.peer != nil {
             self.isComposerEnabled = canSendMessagesToChat(state)
@@ -1271,6 +1272,10 @@ public final class ChatVoiceOverOverlayView: UIView {
         self.updateRecordButton(state: state)
         self.updateTitle(state: state)
         self.updateVoicePlayerControls()
+        if previousActiveTranslationLanguage != self.activeTranslationLanguage(for: state) {
+            self.messageTextActionItemsCache.removeAll(keepingCapacity: true)
+            self.tableView.reloadData()
+        }
         self.invalidateAccessibilityElements()
     }
 
@@ -3500,6 +3505,7 @@ public final class ChatVoiceOverOverlayView: UIView {
     private func resolveMessageRow(message: Message, state: ChatPresentationInterfaceState) -> (title: String, subtitle: String?, accessibilityLabel: String, hint: String?, traits: UIAccessibilityTraits) {
         let isIncoming = message.effectivelyIncoming(state.accountPeerId)
         let textActionItems = self.messageTextActionItems(for: message)
+        let translatedText = self.translatedMessageText(for: message, state: state)
 
         var announceIncomingAuthors = false
         if let chatPeer = message.peers[message.id.peerId] {
@@ -3526,6 +3532,9 @@ public final class ChatVoiceOverOverlayView: UIView {
             dateTimeFormat: state.dateTimeFormat,
             accountPeerId: state.accountPeerId
         ).0.string.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let translatedText, !translatedText.isEmpty {
+            title = translatedText
+        }
         var accessibilityLabel = ""
         var hint: String?
         var traits: UIAccessibilityTraits = [.staticText]
@@ -3585,7 +3594,7 @@ public final class ChatVoiceOverOverlayView: UIView {
                     votesText = state.strings.VoiceOver_Chat_PollNoVotes
                 }
 
-                let question = poll.text.trimmingCharacters(in: .whitespacesAndNewlines)
+                let question = (translatedText ?? poll.text).trimmingCharacters(in: .whitespacesAndNewlines)
                 let optionCountText = state.strings.VoiceOver_Chat_PollOptionCount(Int32(poll.options.count))
 
                 var baseLabel = ""
@@ -3637,7 +3646,7 @@ public final class ChatVoiceOverOverlayView: UIView {
                     return format.replacingOccurrences(of: "{count}", with: "\(todo.items.count)")
                 }()
 
-                let todoTitle = todo.text.trimmingCharacters(in: .whitespacesAndNewlines)
+                let todoTitle = (translatedText ?? todo.text).trimmingCharacters(in: .whitespacesAndNewlines)
 
                 var baseLabel = ""
                 baseLabel.append(typeText)
@@ -3731,9 +3740,9 @@ public final class ChatVoiceOverOverlayView: UIView {
                     }
                 }
 
-                if !message.text.isEmpty {
+                if let captionText = translatedText ?? self.nonEmptyMessageText(for: message) {
                     baseLabel.append(". ")
-                    baseLabel.append(state.strings.VoiceOver_Chat_Caption(message.text).string)
+                    baseLabel.append(state.strings.VoiceOver_Chat_Caption(captionText).string)
                 }
 
                 if isIncoming, announceIncomingAuthors, let authorName {
@@ -3757,9 +3766,9 @@ public final class ChatVoiceOverOverlayView: UIView {
                 } else {
                     accessibilityLabel = state.strings.VoiceOver_Chat_YourPhoto
                 }
-                if !message.text.isEmpty {
+                if let captionText = translatedText ?? self.nonEmptyMessageText(for: message) {
                     accessibilityLabel.append(". ")
-                    accessibilityLabel.append(state.strings.VoiceOver_Chat_Caption(message.text).string)
+                    accessibilityLabel.append(state.strings.VoiceOver_Chat_Caption(captionText).string)
                 }
                 hint = state.strings.VoiceOver_Chat_OpenHint
                 return (state.strings.VoiceOver_Chat_Photo, subtitle, accessibilityLabel, hint, traits)
@@ -3795,6 +3804,10 @@ public final class ChatVoiceOverOverlayView: UIView {
                     if let fileName = file.fileName, !fileName.isEmpty {
                         accessibilityLabel.append(". ")
                         accessibilityLabel.append(fileName)
+                    }
+                    if let captionText = translatedText ?? self.nonEmptyMessageText(for: message) {
+                        accessibilityLabel.append(". ")
+                        accessibilityLabel.append(state.strings.VoiceOver_Chat_Caption(captionText).string)
                     }
                     accessibilityLabel.append(". ")
                     accessibilityLabel.append(state.strings.VoiceOver_Chat_Size(sizeString).string)
@@ -3905,12 +3918,13 @@ public final class ChatVoiceOverOverlayView: UIView {
     }
 
     private func buildMessageTextActionItems(for message: Message) -> [MessageTextActionItem] {
-        let rawText = message.text
+        let translatedContent = self.translatedMessageContent(for: message, state: self.interfaceState)
+        let rawText = translatedContent?.text ?? message.text
         guard !rawText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             return []
         }
 
-        var entities = message.textEntitiesAttribute?.entities ?? []
+        var entities = translatedContent?.entities ?? message.textEntitiesAttribute?.entities ?? []
         if entities.isEmpty {
             entities = generateTextEntities(rawText, enabledTypes: [.all, .timecode])
         }
@@ -3993,6 +4007,10 @@ public final class ChatVoiceOverOverlayView: UIView {
     }
 
     private func textSelectionContent(for message: Message) -> NSAttributedString? {
+        if let translatedText = self.translatedMessageText(for: message, state: self.interfaceState) {
+            return NSAttributedString(string: translatedText)
+        }
+
         if let transcribedText = transcribedText(message: message) {
             switch transcribedText {
             case let .success(text, _):
@@ -4014,6 +4032,9 @@ public final class ChatVoiceOverOverlayView: UIView {
     }
 
     private func transcriptText(for message: Message) -> String? {
+        if let translatedText = self.translatedMessageText(for: message, state: self.interfaceState), self.isVoiceMessage(message) {
+            return translatedText
+        }
         guard let transcribedText = transcribedText(message: message) else {
             return nil
         }
@@ -4031,6 +4052,59 @@ public final class ChatVoiceOverOverlayView: UIView {
             return nil
         }
         return transcriptText
+    }
+
+    private func normalizedTranslationLanguage(_ language: String?) -> String? {
+        guard let language, !language.isEmpty else {
+            return nil
+        }
+        let rawSuffix = "-raw"
+        if language.hasSuffix(rawSuffix) {
+            return String(language.dropLast(rawSuffix.count))
+        }
+        return language
+    }
+
+    private func activeTranslationLanguage(for state: ChatPresentationInterfaceState?) -> String? {
+        guard let translationState = state?.translationState, translationState.isEnabled else {
+            return nil
+        }
+        return self.normalizedTranslationLanguage(translationState.toLang)
+    }
+
+    private func translationAttribute(for message: Message, state: ChatPresentationInterfaceState?) -> TranslationMessageAttribute? {
+        guard let targetLanguage = self.activeTranslationLanguage(for: state) else {
+            return nil
+        }
+        return message.attributes.first(where: { attribute in
+            guard let attribute = attribute as? TranslationMessageAttribute else {
+                return false
+            }
+            return self.normalizedTranslationLanguage(attribute.toLang) == targetLanguage
+        }) as? TranslationMessageAttribute
+    }
+
+    private func translatedMessageContent(for message: Message, state: ChatPresentationInterfaceState?) -> (text: String, entities: [MessageTextEntity])? {
+        guard let translation = self.translationAttribute(for: message, state: state) else {
+            return nil
+        }
+        let trimmedText = translation.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedText.isEmpty else {
+            return nil
+        }
+        return (translation.text, translation.entities)
+    }
+
+    private func translatedMessageText(for message: Message, state: ChatPresentationInterfaceState?) -> String? {
+        return self.translatedMessageContent(for: message, state: state)?.text
+    }
+
+    private func nonEmptyMessageText(for message: Message) -> String? {
+        let trimmedText = message.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedText.isEmpty else {
+            return nil
+        }
+        return message.text
     }
 
     private func supportsAudioTranscription(for message: Message) -> Bool {
