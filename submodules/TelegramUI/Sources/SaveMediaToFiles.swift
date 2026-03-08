@@ -10,7 +10,14 @@ import LegacyMediaPickerUI
 import SaveToCameraRoll
 import PresentationDataUtils
 
-func saveMediaToFiles(context: AccountContext, fileReference: FileMediaReference, present: @escaping (ViewController, Any?) -> Void) -> Disposable {
+private func fileNameForExport(fileReference: FileMediaReference, sourcePath: String) -> String {
+    let originalFileName = fileReference.media.fileName?.trimmingCharacters(in: .whitespacesAndNewlines)
+
+    var fileExtension: String?
+    if let originalFileName, let dotIndex = originalFileName.lastIndex(of: ".") {
+        fileExtension = String(originalFileName[originalFileName.index(after: dotIndex)...])
+    }
+
     var title: String?
     var performer: String?
     for attribute in fileReference.media.attributes {
@@ -23,7 +30,49 @@ func saveMediaToFiles(context: AccountContext, fileReference: FileMediaReference
             }
         }
     }
-    
+
+    if title != nil || performer != nil || fileReference.media.isMusic || fileReference.media.isVoice {
+        let audioAsset = AVURLAsset(url: URL(fileURLWithPath: sourcePath))
+
+        var resolvedTitle = title
+        var resolvedPerformer = performer
+        if resolvedTitle == nil || resolvedPerformer == nil {
+            for metadata in audioAsset.commonMetadata {
+                if resolvedPerformer == nil, metadata.commonKey == .commonKeyArtist {
+                    resolvedPerformer = metadata.stringValue
+                }
+                if resolvedTitle == nil, metadata.commonKey == .commonKeyTitle {
+                    resolvedTitle = metadata.stringValue
+                }
+            }
+        }
+
+        var nameComponents: [String] = []
+        if let resolvedPerformer, !resolvedPerformer.isEmpty {
+            nameComponents.append(resolvedPerformer)
+        }
+        if let resolvedTitle, !resolvedTitle.isEmpty {
+            nameComponents.append(resolvedTitle)
+        }
+
+        if !nameComponents.isEmpty {
+            let resolvedExtension = (fileExtension?.isEmpty == false ? fileExtension! : "mp3")
+            return "\(nameComponents.joined(separator: " – ")).\(resolvedExtension)"
+        }
+    }
+
+    if let originalFileName, !originalFileName.isEmpty {
+        return originalFileName
+    }
+
+    if let fileExtension, !fileExtension.isEmpty {
+        return "file.\(fileExtension)"
+    } else {
+        return "file"
+    }
+}
+
+func saveMediaToFiles(context: AccountContext, fileReference: FileMediaReference, present: @escaping (ViewController, Any?) -> Void) -> Disposable {
     var signal = fetchMediaData(context: context, postbox: context.account.postbox, userLocation: .other, mediaReference: fileReference.abstract)
     
     var cancelImpl: (() -> Void)?
@@ -61,63 +110,25 @@ func saveMediaToFiles(context: AccountContext, fileReference: FileMediaReference
             break
         case let .data(data):
             if data.complete {
-                var symlinkPath = data.path + ".mp3"
-                if fileSize(symlinkPath) != nil {
-                    try? FileManager.default.removeItem(atPath: symlinkPath)
+                let tempFile = TempBox.shared.tempFile(fileName: fileNameForExport(fileReference: fileReference, sourcePath: data.path))
+                try? FileManager.default.removeItem(atPath: tempFile.path)
+                if (try? FileManager.default.linkItem(atPath: data.path, toPath: tempFile.path)) == nil {
+                    let _ = try? FileManager.default.copyItem(atPath: data.path, toPath: tempFile.path)
                 }
-                let _ = try? FileManager.default.linkItem(atPath: data.path, toPath: symlinkPath)
-                
-                let audioUrl = URL(fileURLWithPath: symlinkPath)
-                let audioAsset = AVURLAsset(url: audioUrl)
-                
-                var fileExtension = "mp3"
-                if let filename = fileReference.media.fileName {
-                    if let dotIndex = filename.lastIndex(of: ".") {
-                        fileExtension = String(filename[filename.index(after: dotIndex)...])
+
+                var didCleanup = false
+                let cleanup: () -> Void = {
+                    guard !didCleanup else {
+                        return
                     }
+                    didCleanup = true
+                    TempBox.shared.dispose(tempFile)
                 }
-                
-                var nameComponents: [String] = []
-                if let title {
-                    if let performer {
-                        nameComponents.append(performer)
-                    }
-                    nameComponents.append(title)
-                } else {
-                    var artist: String?
-                    var title: String?
-                    for data in audioAsset.commonMetadata {
-                        if data.commonKey == .commonKeyArtist {
-                            artist = data.stringValue
-                        }
-                        if data.commonKey == .commonKeyTitle {
-                            title = data.stringValue
-                        }
-                    }
-                    if let artist, !artist.isEmpty {
-                        nameComponents.append(artist)
-                    }
-                    if let title, !title.isEmpty {
-                        nameComponents.append(title)
-                    }
-                    if nameComponents.isEmpty, var filename = fileReference.media.fileName {
-                        if let dotIndex = filename.lastIndex(of: ".") {
-                            filename = String(filename[..<dotIndex])
-                        }
-                        nameComponents.append(filename)
-                    }
-                }
-                if !nameComponents.isEmpty {
-                    try? FileManager.default.removeItem(atPath: symlinkPath)
-                    
-                    let fileName = "\(nameComponents.joined(separator: " – ")).\(fileExtension)"
-                    symlinkPath = symlinkPath.replacingOccurrences(of: audioUrl.lastPathComponent, with: fileName)
-                    let _ = try? FileManager.default.linkItem(atPath: data.path, toPath: symlinkPath)
-                }
-                
-                let url = URL(fileURLWithPath: symlinkPath)
-                let controller = legacyICloudFilePicker(theme: presentationData.theme, mode: .export, url: url, documentTypes: [], forceDarkTheme: false, dismissed: {}, completion: { _ in
-                    
+
+                let controller = legacyICloudFilePicker(theme: presentationData.theme, mode: .export, url: URL(fileURLWithPath: tempFile.path), documentTypes: [], forceDarkTheme: false, dismissed: {
+                    cleanup()
+                }, completion: { _ in
+                    cleanup()
                 })
                 present(controller, nil)
             }

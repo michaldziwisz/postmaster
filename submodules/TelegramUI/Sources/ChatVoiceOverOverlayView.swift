@@ -754,6 +754,16 @@ public final class ChatVoiceOverOverlayView: UIView {
         }
     }
 
+    private enum MessageActivation {
+        case none
+        case openPoll
+        case openTodo
+        case toggleVoicePlayback
+        case openDefault
+        case openTextAction(TelegramTextAttributesVoiceOver.Action)
+        case presentTextActions([MessageTextActionItem])
+    }
+
     public struct Actions {
         public var back: (() -> Void)?
         public var openProfile: (() -> Void)?
@@ -2594,7 +2604,11 @@ public final class ChatVoiceOverOverlayView: UIView {
                 return [.staticText]
             }
             let resolved = self.resolveRow(row, state: state)
-            return resolved.traits
+            var traits = resolved.traits
+            if case let .message(message) = row.kind, self.isMessageActivatable(message) {
+                traits.insert(.button)
+            }
+            return traits
         }
     }
 
@@ -3777,62 +3791,61 @@ public final class ChatVoiceOverOverlayView: UIView {
     }
 
     private func isMessageActivatable(_ message: Message) -> Bool {
-        for media in message.media {
-            if media is TelegramMediaImage {
-                return true
-            }
-            if media is TelegramMediaFile {
-                return true
-            }
-            if media is TelegramMediaContact {
-                return true
-            }
-            if media is TelegramMediaMap {
-                return true
-            }
-            if media is TelegramMediaPoll {
-                return true
-            }
-            if media is TelegramMediaTodo {
-                return true
-            }
+        if case .none = self.messageActivation(for: message) {
+            return false
+        } else {
+            return true
         }
-        return !self.messageTextActionItems(for: message).isEmpty
     }
 
     private func activateMessageRow(_ message: Message) -> Bool {
-        guard self.isMessageActivatable(message) else {
+        switch self.messageActivation(for: message) {
+        case .none:
             return false
-        }
-        if self.pollMedia(in: message) != nil, let action = self.actions.openPollMessage {
-            action(message)
+        case .openPoll:
+            self.actions.openPollMessage?(message)
             return true
-        }
-        if self.todoMedia(in: message) != nil, let action = self.actions.openTodoMessage {
-            action(message)
+        case .openTodo:
+            self.actions.openTodoMessage?(message)
             return true
-        }
-        if self.isVoiceMessage(message), let action = self.actions.toggleVoiceMessagePlayback {
-            action(message)
+        case .toggleVoicePlayback:
+            self.actions.toggleVoiceMessagePlayback?(message)
             return true
-        }
-        if self.usesDefaultMessageActivation(message) {
+        case .openDefault:
             self.actions.activateMessage?(message)
             return true
+        case let .openTextAction(action):
+            self.actions.activateMessageTextAction?(message, action)
+            return true
+        case let .presentTextActions(items):
+            self.actions.presentMessageTextActions?(message, items)
+            return true
+        }
+    }
+
+    private func messageActivation(for message: Message) -> MessageActivation {
+        if self.pollMedia(in: message) != nil, self.actions.openPollMessage != nil {
+            return .openPoll
+        }
+        if self.todoMedia(in: message) != nil, self.actions.openTodoMessage != nil {
+            return .openTodo
+        }
+        if self.isVoiceMessage(message), self.actions.toggleVoiceMessagePlayback != nil {
+            return .toggleVoicePlayback
+        }
+        if self.usesDefaultMessageActivation(message), self.actions.activateMessage != nil {
+            return .openDefault
         }
 
         let textActionItems = self.messageTextActionItems(for: message)
-        if textActionItems.count == 1, let action = self.actions.activateMessageTextAction {
-            action(message, textActionItems[0].action)
-            return true
+        if textActionItems.count == 1, self.actions.activateMessageTextAction != nil {
+            return .openTextAction(textActionItems[0].action)
         }
-        if textActionItems.count > 1, let action = self.actions.presentMessageTextActions {
-            action(message, textActionItems)
-            return true
+        if textActionItems.count > 1, self.actions.presentMessageTextActions != nil {
+            return .presentTextActions(textActionItems)
         }
 
-        self.actions.activateMessage?(message)
-        return true
+        return .none
     }
 
     private func usesDefaultMessageActivation(_ message: Message) -> Bool {

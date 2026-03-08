@@ -253,43 +253,14 @@ func openChatMessageImpl(_ params: OpenChatMessageParams) -> Bool {
                 } else if let rootController = params.navigationController?.view.window?.rootViewController {
                     let proceed = {
                         let canShare = !params.message.isCopyProtected()
-                        var useBrowserScreen = false
-                        if BrowserScreen.supportedDocumentMimeTypes.contains(file.mimeType) {
-                            useBrowserScreen = true
-                        } else if let fileName = file.fileName as? NSString, BrowserScreen.supportedDocumentExtensions.contains(fileName.pathExtension.lowercased())  {
-                            useBrowserScreen = true
-                        }
-                        if UIAccessibility.isVoiceOverRunning {
-                            presentDocumentPreviewController(rootController: rootController, theme: presentationData.theme, strings: presentationData.strings, postbox: params.context.account.postbox, file: file, canShare: canShare)
-                        } else if useBrowserScreen {
-                            if let navigationController = params.navigationController, let minimizedContainer = navigationController.minimizedContainer {
-                                for controller in minimizedContainer.controllers {
-                                    if let controller = controller as? BrowserScreen, controller.subject.fileId == file.fileId {
-                                        navigationController.maximizeViewController(controller, animated: true)
-                                        return
-                                    }
-                                }
-                            }
-
-                            let subject: BrowserScreen.Subject
-                            if file.mimeType == "application/pdf" {
-                                subject = .pdfDocument(file: .message(message: MessageReference(params.message), media: file), canShare: canShare)
-                            } else {
-                                subject = .document(file: .message(message: MessageReference(params.message), media: file), canShare: canShare)
-                            }
-                            let controller = BrowserScreen(context: params.context, subject: subject)
-                            controller.openDocument = { [weak controller] file, canShare in
-                                guard let controller else {
-                                    return
-                                }
-                                controller.dismiss()
-
-                                presentDocumentPreviewController(rootController: rootController, theme: presentationData.theme, strings: presentationData.strings, postbox: params.context.account.postbox, file: file, canShare: canShare)
-                            }
-                            params.navigationController?.pushViewController(controller)
-                        } else {
-                            presentDocumentPreviewController(rootController: rootController, theme: presentationData.theme, strings: presentationData.strings, postbox: params.context.account.postbox, file: file, canShare: canShare)
-                        }
+                        presentDocumentPreviewController(
+                            rootController: rootController,
+                            context: params.context,
+                            theme: presentationData.theme,
+                            strings: presentationData.strings,
+                            fileReference: .message(message: MessageReference(params.message), media: file),
+                            canShare: canShare
+                        )
                     }
                     if file.mimeType.contains("image/svg") {
                         let presentationData = params.context.sharedContext.currentPresentationData.with { $0 }

@@ -6,6 +6,9 @@ import TelegramCore
 import QuickLook
 import Display
 import TelegramPresentationData
+import AccountContext
+import SaveToCameraRoll
+import OverlayStatusController
 
 private final class DocumentPreviewItem: NSObject, QLPreviewItem {
     private let url: URL
@@ -25,21 +28,44 @@ private final class DocumentPreviewItem: NSObject, QLPreviewItem {
     }
 }
 
+private final class DocumentActivityViewController: UIActivityViewController {
+    private var tempFile: TempBoxFile?
+
+    init(activityItems: [Any], applicationActivities: [UIActivity]?, tempFile: TempBoxFile?) {
+        self.tempFile = tempFile
+        super.init(activityItems: activityItems, applicationActivities: applicationActivities)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    deinit {
+        if let tempFile = self.tempFile {
+            TempBox.shared.dispose(tempFile)
+        }
+    }
+
+    override func accessibilityPerformEscape() -> Bool {
+        self.dismiss(animated: true)
+        return true
+    }
+}
+
 final class CompactDocumentPreviewController: QLPreviewController, QLPreviewControllerDelegate, QLPreviewControllerDataSource {
-    private let postbox: Postbox
-    private let file: TelegramMediaFile
     private let canShare: Bool
     private let strings: PresentationStrings
     
-    private var item: DocumentPreviewItem?
+    private let item: DocumentPreviewItem
     
     private var tempFile: TempBoxFile?
     
-    init(theme: PresentationTheme, strings: PresentationStrings, postbox: Postbox, file: TelegramMediaFile, canShare: Bool = true) {
-        self.postbox = postbox
-        self.file = file
+    init(theme: PresentationTheme, strings: PresentationStrings, item: DocumentPreviewItem, tempFile: TempBoxFile?, canShare: Bool = true) {
         self.canShare = canShare
         self.strings = strings
+        self.item = item
+        self.tempFile = tempFile
         
         super.init(nibName: nil, bundle: nil)
         
@@ -49,16 +75,6 @@ final class CompactDocumentPreviewController: QLPreviewController, QLPreviewCont
         let backButtonItem = UIBarButtonItem(title: strings.Common_Back, style: .plain, target: self, action: #selector(self.cancelPressed))
         backButtonItem.accessibilityLabel = strings.Common_Back
         self.navigationItem.leftBarButtonItem = backButtonItem
-        
-        if let path = self.postbox.mediaBox.completedResourcePath(self.file.resource) {
-            var updatedPath = path
-            if let fileName = self.file.fileName {
-                let tempFile = TempBox.shared.file(path: path, fileName: fileName)
-                updatedPath = tempFile.path
-                self.tempFile = tempFile
-            }
-            self.item = DocumentPreviewItem(url: URL(fileURLWithPath: updatedPath), title: self.file.fileName ?? strings.Message_File)
-        }
     }
     
     required init?(coder aDecoder: NSCoder) {
@@ -82,20 +98,11 @@ final class CompactDocumentPreviewController: QLPreviewController, QLPreviewCont
     }
     
     func numberOfPreviewItems(in controller: QLPreviewController) -> Int {
-        if self.item != nil {
-            return 1
-        } else {
-            return 0
-        }
+        return 1
     }
     
     func previewController(_ controller: QLPreviewController, previewItemAt index: Int) -> QLPreviewItem {
-        if let item = self.item {
-            return item
-        } else {
-            assertionFailure()
-            return DocumentPreviewItem(url: URL(fileURLWithPath: ""), title: "")
-        }
+        return self.item
     }
     
     func previewControllerWillDismiss(_ controller: QLPreviewController) {
@@ -196,7 +203,35 @@ final class CompactDocumentPreviewController: QLPreviewController, QLPreviewCont
     }
 }
 
-func presentDocumentPreviewController(rootController: UIViewController, theme: PresentationTheme, strings: PresentationStrings, postbox: Postbox, file: TelegramMediaFile, canShare: Bool) {
+private func preparedDocumentPreviewItem(path: String, fileName: String?, fallbackTitle: String) -> (item: DocumentPreviewItem, tempFile: TempBoxFile?) {
+    let title = (fileName?.isEmpty == false ? fileName! : fallbackTitle)
+    if let fileName, !fileName.isEmpty {
+        let tempFile = TempBox.shared.file(path: path, fileName: fileName)
+        let item = DocumentPreviewItem(url: URL(fileURLWithPath: tempFile.path), title: title)
+        return (item, tempFile)
+    } else {
+        let item = DocumentPreviewItem(url: URL(fileURLWithPath: path), title: title)
+        return (item, nil)
+    }
+}
+
+private func makeDocumentLoadingOverlay(theme: PresentationTheme, present: @escaping (ViewController, Any?) -> Void, cancel: @escaping () -> Void) -> Disposable {
+    return (Signal<Never, NoError> { _ in
+        let controller = OverlayStatusController(theme: theme, type: .loading(cancelled: {
+            cancel()
+        }))
+        present(controller, ViewControllerPresentationArguments(presentationAnimation: .modalSheet))
+        return ActionDisposable { [weak controller] in
+            Queue.mainQueue().async {
+                controller?.dismiss()
+            }
+        }
+    }
+    |> runOn(Queue.mainQueue())
+    |> delay(0.15, queue: Queue.mainQueue())).startStrict()
+}
+
+func presentDocumentPreviewController(rootController: UIViewController, context: AccountContext, theme: PresentationTheme, strings: PresentationStrings, fileReference: FileMediaReference, canShare: Bool) {
     let navigationBar = UINavigationBar.appearance(whenContainedInInstancesOf: [QLPreviewController.self])
     navigationBar.barTintColor = theme.rootController.navigationBar.opaqueBackgroundColor
     navigationBar.setBackgroundImage(generateImage(CGSize(width: 1.0, height: 1.0), rotatedContext: { size, context in
@@ -211,6 +246,49 @@ func presentDocumentPreviewController(rootController: UIViewController, theme: P
         context.fill(CGRect(origin: CGPoint(), size: CGSize(width: 1.0, height: UIScreenPixel)))
     })
     navigationBar.titleTextAttributes = [NSAttributedString.Key.font: Font.semibold(17.0), NSAttributedString.Key.foregroundColor: theme.rootController.navigationBar.primaryTextColor]
-    
-    rootController.present(CompactDocumentPreviewController(theme: theme, strings: strings, postbox: postbox, file: file, canShare: canShare), animated: true, completion: nil)
+
+    let file = fileReference.media
+
+    let disposable = MetaDisposable()
+    let progressDisposable = makeDocumentLoadingOverlay(theme: theme, present: { controller, _ in
+        rootController.present(controller, animated: true)
+    }, cancel: {
+        disposable.set(nil)
+    })
+
+    disposable.set((fetchMediaData(context: context, postbox: context.account.postbox, userLocation: .other, mediaReference: fileReference.abstract)
+    |> afterDisposed {
+        Queue.mainQueue().async {
+            progressDisposable.dispose()
+        }
+    }
+    |> deliverOnMainQueue).startStrict(next: { state, _ in
+        guard case let .data(data) = state, data.complete else {
+            return
+        }
+
+        let preparedItem = preparedDocumentPreviewItem(path: data.path, fileName: file.fileName, fallbackTitle: file.fileName ?? strings.Message_File)
+        progressDisposable.dispose()
+
+        Queue.mainQueue().after(0.1, {
+            if QLPreviewController.canPreview(preparedItem.item) {
+                let controller = CompactDocumentPreviewController(theme: theme, strings: strings, item: preparedItem.item, tempFile: preparedItem.tempFile, canShare: canShare)
+                rootController.present(controller, animated: true)
+            } else if canShare, let url = preparedItem.item.previewItemURL {
+                let controller = DocumentActivityViewController(activityItems: [url], applicationActivities: nil, tempFile: preparedItem.tempFile)
+                if let popoverPresentationController = controller.popoverPresentationController {
+                    popoverPresentationController.sourceView = rootController.view
+                    popoverPresentationController.sourceRect = CGRect(x: rootController.view.bounds.midX, y: rootController.view.bounds.midY, width: 1.0, height: 1.0)
+                }
+                rootController.present(controller, animated: true)
+            } else {
+                if let tempFile = preparedItem.tempFile {
+                    TempBox.shared.dispose(tempFile)
+                }
+                let controller = UIAlertController(title: nil, message: getAppBundle().localizedString(forKey: "OpenFile.CannotPreview", value: "This file can't be previewed in the app.", table: nil), preferredStyle: .alert)
+                controller.addAction(UIAlertAction(title: strings.Common_OK, style: .default))
+                rootController.present(controller, animated: true)
+            }
+        })
+    }))
 }
