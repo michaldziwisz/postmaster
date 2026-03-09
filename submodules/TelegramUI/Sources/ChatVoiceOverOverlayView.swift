@@ -612,7 +612,7 @@ private final class ChatVoiceOverOverlayInputTextView: UITextView {
     }
 
     private var shouldTreatNewlineAsSend: Bool {
-        return UIAccessibility.isVoiceOverRunning && self.returnKeyType == .send && self.isBrailleInputModeActive
+        return UIAccessibility.isVoiceOverRunning && self.isBrailleInputModeActive
     }
 
     override func insertText(_ text: String) {
@@ -1170,8 +1170,8 @@ public final class ChatVoiceOverOverlayView: UIView {
         self.inputTextView.layer.cornerRadius = 10.0
         self.inputTextView.layer.masksToBounds = true
         self.inputTextView.textContainerInset = UIEdgeInsets(top: 8.0, left: 6.0, bottom: 8.0, right: 6.0)
-        self.inputTextView.returnKeyType = .send
-        self.inputTextView.enablesReturnKeyAutomatically = true
+        self.inputTextView.returnKeyType = .default
+        self.inputTextView.enablesReturnKeyAutomatically = false
         self.inputTextView.onRequestSend = { [weak self] in
             return self?.sendCurrentInputText() ?? false
         }
@@ -3378,9 +3378,6 @@ public final class ChatVoiceOverOverlayView: UIView {
             guard self.window != nil, !self.accessibilityElementsHidden, self.accessibilityViewIsModal else {
                 return
             }
-            if let rootViewController = self.window?.rootViewController, rootViewController.presentedViewController != nil {
-                return
-            }
 
             self.setVoiceOverScrollbarAccessibilityElementActive(false, anchorTableRow: nil)
 
@@ -3410,9 +3407,6 @@ public final class ChatVoiceOverOverlayView: UIView {
                     return
                 }
                 guard self.window != nil, !self.accessibilityElementsHidden, self.accessibilityViewIsModal else {
-                    return
-                }
-                if let rootViewController = self.window?.rootViewController, rootViewController.presentedViewController != nil {
                     return
                 }
                 guard !self.isVoiceOverFocusWithinOverlay() else {
@@ -4475,10 +4469,18 @@ public final class ChatVoiceOverOverlayView: UIView {
 
     private func setupKeyboardObservers() {
         let nc = NotificationCenter.default
-        let token = nc.addObserver(forName: UIResponder.keyboardWillChangeFrameNotification, object: nil, queue: .main) { [weak self] notification in
+        let frameToken = nc.addObserver(forName: UIResponder.keyboardWillChangeFrameNotification, object: nil, queue: .main) { [weak self] notification in
             self?.handleKeyboard(notification: notification)
         }
-        self.keyboardObservers.append(token)
+        let willHideToken = nc.addObserver(forName: UIResponder.keyboardWillHideNotification, object: nil, queue: .main) { [weak self] _ in
+            self?.scheduleKeyboardDismissFocusRestoreIfNeeded(after: 0.12)
+        }
+        let didHideToken = nc.addObserver(forName: UIResponder.keyboardDidHideNotification, object: nil, queue: .main) { [weak self] _ in
+            self?.scheduleKeyboardDismissFocusRestoreIfNeeded(after: 0.05)
+        }
+        self.keyboardObservers.append(frameToken)
+        self.keyboardObservers.append(willHideToken)
+        self.keyboardObservers.append(didHideToken)
     }
 
     private func setupAccessibilityObservers() {
