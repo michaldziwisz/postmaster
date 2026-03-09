@@ -449,6 +449,30 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
             overlay.voiceOverDidReturnToChat()
         }
     }
+
+    func prepareForVoiceOverExternalPresentation() {
+        guard let overlay = self.voiceOverOverlayView else {
+            return
+        }
+        overlay.accessibilityViewIsModal = false
+        overlay.accessibilityElementsHidden = true
+    }
+
+    func restoreVoiceOverOverlayAfterExternalPresentation(focusProfileButton: Bool) {
+        guard let overlay = self.voiceOverOverlayView else {
+            if let controllerView = self.controller?.viewIfLoaded {
+                UIAccessibility.post(notification: .screenChanged, argument: controllerView)
+            }
+            return
+        }
+        overlay.accessibilityElementsHidden = false
+        overlay.accessibilityViewIsModal = true
+        if focusProfileButton {
+            overlay.voiceOverFocusProfileButton()
+        } else {
+            overlay.voiceOverDidReturnToChat()
+        }
+    }
     
     private var derivedLayoutState: ChatControllerNodeDerivedLayoutState?
     
@@ -1163,6 +1187,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                     self?.controller?.navigationButtonAction(.dismiss)
                 }
                 overlay.actions.openProfile = { [weak self] in
+                    self?.prepareForVoiceOverExternalPresentation()
                     self?.interfaceInteraction?.openPeerInfo()
                 }
                 let performVoiceOverTextAction: (Message, TelegramTextAttributesVoiceOver.Action) -> Void = { [weak self] message, action in

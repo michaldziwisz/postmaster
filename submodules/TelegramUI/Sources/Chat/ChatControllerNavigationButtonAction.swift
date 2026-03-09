@@ -438,7 +438,7 @@ extension ChatControllerImpl {
                             return
                         }
 
-                        if UIAccessibility.isVoiceOverRunning, let navigationController = self.effectiveNavigationController {
+                        if UIAccessibility.isVoiceOverRunning {
                             let controller = VoiceOverChatInfoController(
                                 context: self.context,
                                 presentationData: self.presentationData,
@@ -446,9 +446,19 @@ extension ChatControllerImpl {
                                 threadId: self.chatLocation.threadId,
                                 onSearch: { [weak self] in
                                     self?.interfaceInteraction?.beginMessageSearch(.everything, "")
+                                },
+                                onDismiss: { [weak self] in
+                                    guard let self else {
+                                        return
+                                    }
+                                    self.chatDisplayNode.restoreVoiceOverOverlayAfterExternalPresentation(focusProfileButton: true)
                                 }
                             )
-                            navigationController.pushViewController(controller, animated: true)
+                            let navigationController = UINavigationController(rootViewController: controller)
+                            navigationController.modalPresentationStyle = .fullScreen
+                            navigationController.isModalInPresentation = false
+                            navigationController.view.accessibilityViewIsModal = true
+                            self.present(navigationController, animated: true)
                             let _ = self.dismissPreviewing?(false)
                             return
                         }

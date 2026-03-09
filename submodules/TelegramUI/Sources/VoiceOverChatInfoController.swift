@@ -38,12 +38,13 @@ private final class VoiceOverChatInfoSwitchCell: UITableViewCell {
     }
 }
 
-final class VoiceOverChatInfoController: UITableViewController {
+final class VoiceOverChatInfoController: UITableViewController, UIAdaptivePresentationControllerDelegate {
     private let context: AccountContext
     private let presentationData: PresentationData
     private let peerId: EnginePeer.Id
     private let threadId: Int64?
     private let onSearch: (() -> Void)?
+    private let onDismiss: (() -> Void)?
 
     private let stateDisposable = MetaDisposable()
 
@@ -54,13 +55,15 @@ final class VoiceOverChatInfoController: UITableViewController {
         presentationData: PresentationData,
         peerId: EnginePeer.Id,
         threadId: Int64?,
-        onSearch: (() -> Void)? = nil
+        onSearch: (() -> Void)? = nil,
+        onDismiss: (() -> Void)? = nil
     ) {
         self.context = context
         self.presentationData = presentationData
         self.peerId = peerId
         self.threadId = threadId
         self.onSearch = onSearch
+        self.onDismiss = onDismiss
 
         super.init(style: .insetGrouped)
     }
@@ -80,12 +83,25 @@ final class VoiceOverChatInfoController: UITableViewController {
         self.navigationItem.largeTitleDisplayMode = .never
         self.view.backgroundColor = .systemBackground
         self.view.accessibilityViewIsModal = UIAccessibility.isVoiceOverRunning
+        self.presentationController?.delegate = self
+
+        let backButtonItem = UIBarButtonItem(title: self.presentationData.strings.Common_Back, style: .plain, target: self, action: #selector(self.backPressed))
+        backButtonItem.accessibilityLabel = self.presentationData.strings.Common_Back
+        self.navigationItem.leftBarButtonItem = backButtonItem
 
         self.tableView.rowHeight = UITableView.automaticDimension
         self.tableView.estimatedRowHeight = 60.0
         self.tableView.cellLayoutMarginsFollowReadableWidth = true
 
         self.bindState()
+    }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        self.presentationController?.delegate = self
+        if UIAccessibility.isVoiceOverRunning {
+            UIAccessibility.post(notification: .screenChanged, argument: self.tableView)
+        }
     }
 
     override func numberOfSections(in tableView: UITableView) -> Int {
@@ -183,8 +199,12 @@ final class VoiceOverChatInfoController: UITableViewController {
     }
 
     override func accessibilityPerformEscape() -> Bool {
-        self.navigationController?.popViewController(animated: true)
+        self.backPressed()
         return true
+    }
+
+    func presentationControllerDidDismiss(_ presentationController: UIPresentationController) {
+        self.onDismiss?()
     }
 
     private func bindState() {
@@ -370,7 +390,13 @@ final class VoiceOverChatInfoController: UITableViewController {
     }
 
     private func popAndPerformSearch(_ action: @escaping () -> Void) {
-        if let navigationController = self.navigationController {
+        if self.navigationController?.presentingViewController != nil || self.presentingViewController != nil {
+            self.dismiss(animated: true) {
+                Queue.mainQueue().after(0.35, {
+                    action()
+                })
+            }
+        } else if let navigationController = self.navigationController {
             navigationController.popViewController(animated: true)
             Queue.mainQueue().after(0.35, {
                 action()
@@ -412,5 +438,14 @@ final class VoiceOverChatInfoController: UITableViewController {
             return String(code.dropLast(rawSuffix.count))
         }
         return code
+    }
+
+    @objc private func backPressed() {
+        if self.navigationController?.presentingViewController != nil || self.presentingViewController != nil {
+            let onDismiss = self.onDismiss
+            self.dismiss(animated: true, completion: onDismiss)
+        } else {
+            self.navigationController?.popViewController(animated: true)
+        }
     }
 }

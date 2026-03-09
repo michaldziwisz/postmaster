@@ -665,6 +665,14 @@ private final class ChatVoiceOverOverlayScrollbarAccessibilityElement: UIAccessi
         super.accessibilityElementDidBecomeFocused()
         self.overlay?.noteVoiceOverNavigationActivity()
     }
+
+    override var accessibilityCustomActions: [UIAccessibilityCustomAction]? {
+        get {
+            return self.overlay?.voiceOverScrollbarAccessibilityCustomActions()
+        }
+        set {
+        }
+    }
 }
 
 private final class ChatVoiceOverOverlayRowAccessibilityElement: UIAccessibilityElement {
@@ -1777,6 +1785,13 @@ public final class ChatVoiceOverOverlayView: UIView {
         self.actions.openProfile?()
     }
 
+    func voiceOverFocusProfileButton() {
+        guard UIAccessibility.isVoiceOverRunning else {
+            return
+        }
+        UIAccessibility.post(notification: .screenChanged, argument: self.profileButton)
+    }
+
     @objc private func attachPressed() {
         guard self.isComposerEnabled else {
             return
@@ -2652,25 +2667,26 @@ public final class ChatVoiceOverOverlayView: UIView {
         }
         switch element.kind {
         case .loadEarlier:
+            var actions: [UIAccessibilityCustomAction] = []
+            if let chatInfoAction = self.makeChatInfoAccessibilityCustomAction() {
+                actions.append(chatInfoAction)
+            }
             #if DEBUG
             let debugTitle = "Speak debug state"
-            return [
-                UIAccessibilityCustomAction(name: debugTitle, actionHandler: { [weak self] _ in
-                    guard let self else {
-                        return false
-                    }
-                    let now = CACurrentMediaTime()
-                    let lastRequestAgeMs = Int((now - self.lastLoadEarlierRequestTimestamp) * 1000.0)
-                    let beforeOldestId = self.loadEarlierOldestIndexBeforeRequest?.id.id
-                    let currentOldestId = self.rows.first?.index.id.id
-                    let message = "Load earlier debug. waiting \(self.isWaitingForLoadEarlier ? "true" : "false"). canLoadEarlier \(self.canLoadEarlierHistory ? "true" : "false"). isLoadingEarlier \(self.isLoadingEarlierHistory ? "true" : "false"). rows \(self.rows.count). beforeOldestId \(String(describing: beforeOldestId)). currentOldestId \(String(describing: currentOldestId)). requestId \(self.loadEarlierRequestId). noProgressCount \(self.loadEarlierNoProgressCount). lastRequestAge \(lastRequestAgeMs) ms."
-                    UIAccessibility.post(notification: .announcement, argument: message)
-                    return true
-                })
-            ]
-            #else
-            return nil
+            actions.append(UIAccessibilityCustomAction(name: debugTitle, actionHandler: { [weak self] _ in
+                guard let self else {
+                    return false
+                }
+                let now = CACurrentMediaTime()
+                let lastRequestAgeMs = Int((now - self.lastLoadEarlierRequestTimestamp) * 1000.0)
+                let beforeOldestId = self.loadEarlierOldestIndexBeforeRequest?.id.id
+                let currentOldestId = self.rows.first?.index.id.id
+                let message = "Load earlier debug. waiting \(self.isWaitingForLoadEarlier ? "true" : "false"). canLoadEarlier \(self.canLoadEarlierHistory ? "true" : "false"). isLoadingEarlier \(self.isLoadingEarlierHistory ? "true" : "false"). rows \(self.rows.count). beforeOldestId \(String(describing: beforeOldestId)). currentOldestId \(String(describing: currentOldestId)). requestId \(self.loadEarlierRequestId). noProgressCount \(self.loadEarlierNoProgressCount). lastRequestAge \(lastRequestAgeMs) ms."
+                UIAccessibility.post(notification: .announcement, argument: message)
+                return true
+            }))
             #endif
+            return actions.isEmpty ? nil : actions
         case .row:
             guard let row = self.row(for: element) else {
                 return nil
@@ -2678,14 +2694,40 @@ public final class ChatVoiceOverOverlayView: UIView {
             guard case let .message(message) = row.kind else {
                 return nil
             }
-            let customActions = self.makeMessageAccessibilityCustomActions(message: message, state: state, menuRectProvider: { [weak self] in
+            var customActions = self.makeMessageAccessibilityCustomActions(message: message, state: state, menuRectProvider: { [weak self] in
                 guard let self, let indexPath = self.indexPath(for: element) else {
                     return nil
                 }
                 return self.tableView.convert(self.tableView.rectForRow(at: indexPath), to: self)
             })
+            if let chatInfoAction = self.makeChatInfoAccessibilityCustomAction() {
+                customActions.append(chatInfoAction)
+            }
             return customActions.isEmpty ? nil : customActions
         }
+    }
+
+    fileprivate func voiceOverScrollbarAccessibilityCustomActions() -> [UIAccessibilityCustomAction]? {
+        guard let chatInfoAction = self.makeChatInfoAccessibilityCustomAction() else {
+            return nil
+        }
+        return [chatInfoAction]
+    }
+
+    private func makeChatInfoAccessibilityCustomAction() -> UIAccessibilityCustomAction? {
+        guard let state = self.interfaceState else {
+            return nil
+        }
+        guard self.actions.openProfile != nil else {
+            return nil
+        }
+        return UIAccessibilityCustomAction(name: state.strings.KeyCommand_ChatInfo, actionHandler: { [weak self] _ in
+            guard let self else {
+                return false
+            }
+            self.actions.openProfile?()
+            return true
+        })
     }
 
     private func isVoiceOverNavigationInProgress(graceInterval: CFTimeInterval = 0.8) -> Bool {
