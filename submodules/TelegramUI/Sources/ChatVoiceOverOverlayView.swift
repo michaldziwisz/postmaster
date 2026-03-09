@@ -805,6 +805,7 @@ public final class ChatVoiceOverOverlayView: UIView {
         public var performTextSelectionAction: ((Message, NSAttributedString, TextSelectionAction) -> Void)?
         public var requestAudioTranscription: ((Message) -> Void)?
         public var viewAudioTranscript: ((Message) -> Void)?
+        public var requestVisibleTranslations: (([MessageId]) -> Void)?
 
         public init(
             back: (() -> Void)? = nil,
@@ -828,7 +829,8 @@ public final class ChatVoiceOverOverlayView: UIView {
             presentMessageTextActions: ((Message, [MessageTextActionItem]) -> Void)? = nil,
             performTextSelectionAction: ((Message, NSAttributedString, TextSelectionAction) -> Void)? = nil,
             requestAudioTranscription: ((Message) -> Void)? = nil,
-            viewAudioTranscript: ((Message) -> Void)? = nil
+            viewAudioTranscript: ((Message) -> Void)? = nil,
+            requestVisibleTranslations: (([MessageId]) -> Void)? = nil
         ) {
             self.back = back
             self.openProfile = openProfile
@@ -852,6 +854,7 @@ public final class ChatVoiceOverOverlayView: UIView {
             self.performTextSelectionAction = performTextSelectionAction
             self.requestAudioTranscription = requestAudioTranscription
             self.viewAudioTranscript = viewAudioTranscript
+            self.requestVisibleTranslations = requestVisibleTranslations
         }
     }
 
@@ -882,6 +885,7 @@ public final class ChatVoiceOverOverlayView: UIView {
 
     private let composerView = UIView()
     private let attachButton = UIButton(type: .system)
+    private let chatInfoShortcutButton = UIButton(type: .system)
     private let inputTextView = UITextView()
     private let recordButton = UIButton(type: .system)
     private let sendButton = UIButton(type: .system)
@@ -1093,6 +1097,10 @@ public final class ChatVoiceOverOverlayView: UIView {
         self.attachButton.addTarget(self, action: #selector(self.attachPressed), for: .touchUpInside)
         self.composerView.addSubview(self.attachButton)
 
+        self.chatInfoShortcutButton.translatesAutoresizingMaskIntoConstraints = false
+        self.chatInfoShortcutButton.addTarget(self, action: #selector(self.profilePressed), for: .touchUpInside)
+        self.composerView.addSubview(self.chatInfoShortcutButton)
+
         self.inputTextView.translatesAutoresizingMaskIntoConstraints = false
         self.inputTextView.delegate = self
         self.inputTextView.font = UIFont.preferredFont(forTextStyle: .body)
@@ -1167,6 +1175,11 @@ public final class ChatVoiceOverOverlayView: UIView {
             self.attachButton.widthAnchor.constraint(equalToConstant: 44.0),
             self.attachButton.heightAnchor.constraint(equalToConstant: 44.0),
 
+            self.chatInfoShortcutButton.leadingAnchor.constraint(equalTo: self.attachButton.trailingAnchor, constant: 8.0),
+            self.chatInfoShortcutButton.bottomAnchor.constraint(equalTo: self.composerView.bottomAnchor, constant: -10.0),
+            self.chatInfoShortcutButton.widthAnchor.constraint(equalToConstant: 44.0),
+            self.chatInfoShortcutButton.heightAnchor.constraint(equalToConstant: 44.0),
+
             self.sendButton.trailingAnchor.constraint(equalTo: self.composerView.trailingAnchor, constant: -12.0),
             self.sendButton.bottomAnchor.constraint(equalTo: self.composerView.bottomAnchor, constant: -10.0),
             self.sendButton.widthAnchor.constraint(equalToConstant: 44.0),
@@ -1177,7 +1190,7 @@ public final class ChatVoiceOverOverlayView: UIView {
             self.recordButton.widthAnchor.constraint(equalToConstant: 44.0),
             self.recordButton.heightAnchor.constraint(equalToConstant: 44.0),
 
-            self.inputTextView.leadingAnchor.constraint(equalTo: self.attachButton.trailingAnchor, constant: 8.0),
+            self.inputTextView.leadingAnchor.constraint(equalTo: self.chatInfoShortcutButton.trailingAnchor, constant: 8.0),
             self.inputTextView.trailingAnchor.constraint(equalTo: self.recordButton.leadingAnchor, constant: -8.0),
             self.inputTextView.topAnchor.constraint(equalTo: self.composerView.topAnchor, constant: 10.0),
             self.inputTextView.bottomAnchor.constraint(equalTo: self.composerView.bottomAnchor, constant: -10.0),
@@ -1241,6 +1254,7 @@ public final class ChatVoiceOverOverlayView: UIView {
         self.backButton.tintColor = state.theme.rootController.navigationBar.accentTextColor
         self.profileButton.tintColor = state.theme.rootController.navigationBar.accentTextColor
         self.attachButton.tintColor = state.theme.rootController.navigationBar.accentTextColor
+        self.chatInfoShortcutButton.tintColor = state.theme.rootController.navigationBar.accentTextColor
         self.recordButton.tintColor = state.theme.rootController.navigationBar.accentTextColor
         self.sendButton.tintColor = state.theme.rootController.navigationBar.accentTextColor
 
@@ -1252,6 +1266,11 @@ public final class ChatVoiceOverOverlayView: UIView {
         self.profileButton.accessibilityHint = state.strings.VoiceOver_Chat_OpenHint
         self.profileButton.accessibilityTraits = [.button]
 
+        self.chatInfoShortcutButton.setTitle("ⓘ", for: .normal)
+        self.chatInfoShortcutButton.accessibilityLabel = state.strings.KeyCommand_ChatInfo
+        self.chatInfoShortcutButton.accessibilityHint = state.strings.VoiceOver_Chat_OpenHint
+        self.chatInfoShortcutButton.accessibilityTraits = [.button]
+
         self.attachButton.setTitle("＋", for: .normal)
         self.attachButton.accessibilityLabel = state.strings.VoiceOver_AttachMedia
         self.attachButton.accessibilityTraits = [.button]
@@ -1261,7 +1280,7 @@ public final class ChatVoiceOverOverlayView: UIView {
         self.sendButton.accessibilityTraits = [.button]
 
         let isComposerEnabled = self.isComposerEnabled
-        self.composerView.isUserInteractionEnabled = isComposerEnabled
+        self.composerView.isUserInteractionEnabled = true
         self.reconcileVoiceOverScrollbarFocusIfNeeded()
         self.updateComposerAccessibilityVisibility()
 
@@ -1284,6 +1303,7 @@ public final class ChatVoiceOverOverlayView: UIView {
             self.messageTextActionItemsCache.removeAll(keepingCapacity: true)
             self.tableView.reloadData()
         }
+        self.requestVisibleTranslationsIfNeeded()
         self.invalidateAccessibilityElements()
     }
 
@@ -1736,6 +1756,7 @@ public final class ChatVoiceOverOverlayView: UIView {
         if !self.isNearTop() {
             self.loadEarlierNoProgressCount = 0
         }
+        self.requestVisibleTranslationsIfNeeded()
     }
 
     public func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
@@ -1746,6 +1767,7 @@ public final class ChatVoiceOverOverlayView: UIView {
             self.captureLastUserScrollAnchor()
             self.applyPendingEntriesIfPossible()
             self.maybeEnsureAtLatestIfNeeded()
+            self.requestVisibleTranslationsIfNeeded()
         }
     }
 
@@ -1756,6 +1778,7 @@ public final class ChatVoiceOverOverlayView: UIView {
         self.captureLastUserScrollAnchor()
         self.applyPendingEntriesIfPossible()
         self.maybeEnsureAtLatestIfNeeded()
+        self.requestVisibleTranslationsIfNeeded()
     }
 
     public func scrollViewDidEndScrollingAnimation(_ scrollView: UIScrollView) {
@@ -1765,6 +1788,7 @@ public final class ChatVoiceOverOverlayView: UIView {
         self.captureLastUserScrollAnchor()
         self.applyPendingEntriesIfPossible()
         self.maybeEnsureAtLatestIfNeeded()
+        self.requestVisibleTranslationsIfNeeded()
     }
 
     // MARK: - UITextViewDelegate
@@ -1789,7 +1813,8 @@ public final class ChatVoiceOverOverlayView: UIView {
         guard UIAccessibility.isVoiceOverRunning else {
             return
         }
-        UIAccessibility.post(notification: .screenChanged, argument: self.profileButton)
+        self.setVoiceOverScrollbarAccessibilityElementActive(false, anchorTableRow: nil)
+        UIAccessibility.post(notification: .screenChanged, argument: self.chatInfoShortcutButton)
     }
 
     @objc private func attachPressed() {
@@ -3102,6 +3127,8 @@ public final class ChatVoiceOverOverlayView: UIView {
         if didLoadEarlierProgress {
             self.loadEarlierInitiationFocus = nil
         }
+
+        self.requestVisibleTranslationsIfNeeded()
     }
 
     private func captureLastUserScrollAnchor() {
@@ -4382,8 +4409,57 @@ public final class ChatVoiceOverOverlayView: UIView {
     }
 
     private func updateComposerAccessibilityVisibility() {
-        self.composerView.accessibilityElementsHidden = !self.isComposerEnabled || (self.voiceOverScrollbarAccessibilityElementAnchorTableRow != nil)
-        self.voicePlayerView.accessibilityElementsHidden = (self.voiceOverScrollbarAccessibilityElementAnchorTableRow != nil)
+        let isScrollbarActive = (self.voiceOverScrollbarAccessibilityElementAnchorTableRow != nil)
+        self.composerView.accessibilityElementsHidden = isScrollbarActive
+        self.voicePlayerView.accessibilityElementsHidden = isScrollbarActive
+        if self.isComposerEnabled {
+            self.composerView.accessibilityElements = [
+                self.chatInfoShortcutButton,
+                self.attachButton,
+                self.inputTextView as Any,
+                self.recordButton,
+                self.sendButton
+            ]
+        } else {
+            self.composerView.accessibilityElements = [
+                self.chatInfoShortcutButton
+            ]
+        }
+    }
+
+    private func requestVisibleTranslationsIfNeeded() {
+        guard UIAccessibility.isVoiceOverRunning else {
+            return
+        }
+        guard self.activeTranslationLanguage(for: self.interfaceState) != nil else {
+            return
+        }
+        guard let visibleIndexPaths = self.tableView.indexPathsForVisibleRows, !visibleIndexPaths.isEmpty else {
+            return
+        }
+
+        let rowOffset = self.loadEarlierRowOffset
+        var messageIds: [MessageId] = []
+        messageIds.reserveCapacity(visibleIndexPaths.count)
+
+        for indexPath in visibleIndexPaths.sorted() {
+            guard indexPath.section == 0 else {
+                continue
+            }
+            let rowIndex = indexPath.row - rowOffset
+            guard rowIndex >= 0, rowIndex < self.rows.count else {
+                continue
+            }
+            guard case let .message(message) = self.rows[rowIndex].kind else {
+                continue
+            }
+            messageIds.append(message.id)
+        }
+
+        guard !messageIds.isEmpty else {
+            return
+        }
+        self.actions.requestVisibleTranslations?(messageIds)
     }
 
     private func handleKeyboard(notification: Notification) {

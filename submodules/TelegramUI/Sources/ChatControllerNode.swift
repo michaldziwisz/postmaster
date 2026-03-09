@@ -60,6 +60,7 @@ import MessageFeeHeaderPanelComponent
 import LegacyChatHeaderPanelComponent
 import ChatSearchNavigationContentNode
 import GroupCallHeaderPanelComponent
+import TranslateUI
 import PresentationDataUtils
 import ChatMessageItemCommon
 
@@ -574,6 +575,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
     }
     
     private var lastSendTimestamp = 0.0
+    private let voiceOverVisibleTranslationManager = ChatMessageThrottledProcessingManager(delay: 0.25, submitInterval: 1.0)
     
     private var openStickersBeginWithEmoji: Bool = false
     private var openStickersDisposable: Disposable?
@@ -921,6 +923,42 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
         getMessageTransitionNode = { [weak self] in
             return self?.messageTransitionNode
         }
+
+        self.voiceOverVisibleTranslationManager.setProcess { [weak self] messageIds in
+            guard let self else {
+                return
+            }
+            guard let translationState = self.chatPresentationInterfaceState.translationState, translationState.isEnabled else {
+                return
+            }
+
+            func normalizedTranslationLanguage(_ language: String?) -> String? {
+                guard let language, !language.isEmpty else {
+                    return nil
+                }
+                let rawSuffix = "-raw"
+                if language.hasSuffix(rawSuffix) {
+                    return String(language.dropLast(rawSuffix.count))
+                }
+                return language
+            }
+
+            guard let targetLanguage = normalizedTranslationLanguage(translationState.toLang) else {
+                return
+            }
+
+            let orderedIds = Array(messageIds.map(\.messageId))
+            guard !orderedIds.isEmpty else {
+                return
+            }
+
+            let _ = translateMessageIds(
+                context: self.context,
+                messageIds: orderedIds,
+                fromLang: normalizedTranslationLanguage(translationState.fromLang),
+                toLang: targetLanguage
+            ).startStandalone()
+        }
         
         self.controller?.presentationContext.topLevelSubview = { [weak self] in
             guard let strongSelf = self else {
@@ -1238,6 +1276,13 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                 }
                 overlay.actions.scrollToLatest = { [weak self] in
                     self?.historyNode.scrollToEndOfHistory()
+                }
+                overlay.actions.requestVisibleTranslations = { [weak self] messageIds in
+                    guard let self else {
+                        return
+                    }
+                    let ids = messageIds.map { MessageAndThreadId(messageId: $0, threadId: nil) }
+                    self.voiceOverVisibleTranslationManager.add(ids)
                 }
                 overlay.actions.activateMessage = { [weak self] message in
                     guard let self else {
