@@ -600,10 +600,24 @@ private final class ChatVoiceOverOverlayInputTextView: UITextView {
     var onRequestSend: (() -> Bool)?
     private var isPerformingExplicitLineBreak = false
 
+    private var isBrailleInputModeActive: Bool {
+        guard let textInputMode = self.textInputMode else {
+            return false
+        }
+        if let primaryLanguage = textInputMode.primaryLanguage?.lowercased(), primaryLanguage.contains("braille") {
+            return true
+        }
+        let className = NSStringFromClass(type(of: textInputMode)).lowercased()
+        return className.contains("braille")
+    }
+
+    private var shouldTreatNewlineAsSend: Bool {
+        return UIAccessibility.isVoiceOverRunning && self.returnKeyType == .send && self.isBrailleInputModeActive
+    }
+
     override func insertText(_ text: String) {
         if text == "\n",
-           UIAccessibility.isVoiceOverRunning,
-           self.returnKeyType == .send,
+           self.shouldTreatNewlineAsSend,
            !self.isPerformingExplicitLineBreak,
            self.onRequestSend?() == true {
             return
@@ -613,8 +627,7 @@ private final class ChatVoiceOverOverlayInputTextView: UITextView {
 
     @objc(insertNewline:)
     func insertNewline(_ sender: Any?) {
-        if UIAccessibility.isVoiceOverRunning,
-           self.returnKeyType == .send,
+        if self.shouldTreatNewlineAsSend,
            self.onRequestSend?() == true {
             return
         }
@@ -3346,7 +3359,7 @@ public final class ChatVoiceOverOverlayView: UIView {
         return true
     }
 
-    private func scheduleKeyboardDismissFocusRestoreIfNeeded(after delay: TimeInterval) {
+    private func scheduleKeyboardDismissFocusRestoreIfNeeded(after delay: TimeInterval, remainingAttempts: Int = 3) {
         guard UIAccessibility.isVoiceOverRunning else {
             return
         }
@@ -3368,21 +3381,44 @@ public final class ChatVoiceOverOverlayView: UIView {
             if let rootViewController = self.window?.rootViewController, rootViewController.presentedViewController != nil {
                 return
             }
-            guard !self.isVoiceOverFocusWithinOverlay() else {
-                return
-            }
 
             self.setVoiceOverScrollbarAccessibilityElementActive(false, anchorTableRow: nil)
 
-            if !self.composerView.accessibilityElementsHidden, self.isComposerEnabled {
-                UIAccessibility.post(notification: .screenChanged, argument: self.inputTextView)
+            let focusTarget: Any = {
+                if !self.composerView.accessibilityElementsHidden, self.isComposerEnabled {
+                    return self.inputTextView
+                }
+                if let targetIndexPath = self.voiceOverFallbackFocusIndexPath(), let element = self.accessibilityElement(at: targetIndexPath) {
+                    return element
+                }
+                return self.profileButton
+            }()
+
+            if !self.isVoiceOverFocusWithinOverlay() {
+                UIAccessibility.post(notification: .screenChanged, argument: focusTarget)
+            }
+
+            guard remainingAttempts > 1 else {
                 return
             }
 
-            if let targetIndexPath = self.voiceOverFallbackFocusIndexPath(), let element = self.accessibilityElement(at: targetIndexPath) {
-                UIAccessibility.post(notification: .screenChanged, argument: element)
-            } else {
-                UIAccessibility.post(notification: .screenChanged, argument: self.profileButton)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
+                guard let self else {
+                    return
+                }
+                guard UIAccessibility.isVoiceOverRunning else {
+                    return
+                }
+                guard self.window != nil, !self.accessibilityElementsHidden, self.accessibilityViewIsModal else {
+                    return
+                }
+                if let rootViewController = self.window?.rootViewController, rootViewController.presentedViewController != nil {
+                    return
+                }
+                guard !self.isVoiceOverFocusWithinOverlay() else {
+                    return
+                }
+                self.scheduleKeyboardDismissFocusRestoreIfNeeded(after: 0.0, remainingAttempts: remainingAttempts - 1)
             }
         }
 
