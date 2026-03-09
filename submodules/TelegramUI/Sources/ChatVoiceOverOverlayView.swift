@@ -885,7 +885,6 @@ public final class ChatVoiceOverOverlayView: UIView {
 
     private let composerView = UIView()
     private let attachButton = UIButton(type: .system)
-    private let chatInfoShortcutButton = UIButton(type: .system)
     private let inputTextView = UITextView()
     private let recordButton = UIButton(type: .system)
     private let sendButton = UIButton(type: .system)
@@ -998,11 +997,24 @@ public final class ChatVoiceOverOverlayView: UIView {
         return formatter
     }()
 
-    // Prefer UIKit's native accessibility tree for the chat screen (top bar + table view cells + composer).
-    // This enables the system VoiceOver scrollbar and 3-finger scroll gestures without custom hit-testing.
     public override var accessibilityElements: [Any]? {
         get {
-            return nil
+            guard UIAccessibility.isVoiceOverRunning else {
+                return nil
+            }
+            var elements: [Any] = [
+                self.backButton,
+                self.profileButton,
+                self.titleLabel,
+                self.tableAccessibilityContainerView
+            ]
+            if !self.voicePlayerView.isHidden && !self.voicePlayerView.accessibilityElementsHidden {
+                elements.append(self.voicePlayerView)
+            }
+            if !self.composerView.accessibilityElementsHidden {
+                elements.append(self.composerView)
+            }
+            return elements
         }
         set {
         }
@@ -1097,10 +1109,6 @@ public final class ChatVoiceOverOverlayView: UIView {
         self.attachButton.addTarget(self, action: #selector(self.attachPressed), for: .touchUpInside)
         self.composerView.addSubview(self.attachButton)
 
-        self.chatInfoShortcutButton.translatesAutoresizingMaskIntoConstraints = false
-        self.chatInfoShortcutButton.addTarget(self, action: #selector(self.profilePressed), for: .touchUpInside)
-        self.composerView.addSubview(self.chatInfoShortcutButton)
-
         self.inputTextView.translatesAutoresizingMaskIntoConstraints = false
         self.inputTextView.delegate = self
         self.inputTextView.font = UIFont.preferredFont(forTextStyle: .body)
@@ -1109,6 +1117,8 @@ public final class ChatVoiceOverOverlayView: UIView {
         self.inputTextView.layer.cornerRadius = 10.0
         self.inputTextView.layer.masksToBounds = true
         self.inputTextView.textContainerInset = UIEdgeInsets(top: 8.0, left: 6.0, bottom: 8.0, right: 6.0)
+        self.inputTextView.returnKeyType = .send
+        self.inputTextView.enablesReturnKeyAutomatically = true
         self.composerView.addSubview(self.inputTextView)
 
         self.recordButton.translatesAutoresizingMaskIntoConstraints = false
@@ -1175,11 +1185,6 @@ public final class ChatVoiceOverOverlayView: UIView {
             self.attachButton.widthAnchor.constraint(equalToConstant: 44.0),
             self.attachButton.heightAnchor.constraint(equalToConstant: 44.0),
 
-            self.chatInfoShortcutButton.leadingAnchor.constraint(equalTo: self.attachButton.trailingAnchor, constant: 8.0),
-            self.chatInfoShortcutButton.bottomAnchor.constraint(equalTo: self.composerView.bottomAnchor, constant: -10.0),
-            self.chatInfoShortcutButton.widthAnchor.constraint(equalToConstant: 44.0),
-            self.chatInfoShortcutButton.heightAnchor.constraint(equalToConstant: 44.0),
-
             self.sendButton.trailingAnchor.constraint(equalTo: self.composerView.trailingAnchor, constant: -12.0),
             self.sendButton.bottomAnchor.constraint(equalTo: self.composerView.bottomAnchor, constant: -10.0),
             self.sendButton.widthAnchor.constraint(equalToConstant: 44.0),
@@ -1190,7 +1195,7 @@ public final class ChatVoiceOverOverlayView: UIView {
             self.recordButton.widthAnchor.constraint(equalToConstant: 44.0),
             self.recordButton.heightAnchor.constraint(equalToConstant: 44.0),
 
-            self.inputTextView.leadingAnchor.constraint(equalTo: self.chatInfoShortcutButton.trailingAnchor, constant: 8.0),
+            self.inputTextView.leadingAnchor.constraint(equalTo: self.attachButton.trailingAnchor, constant: 8.0),
             self.inputTextView.trailingAnchor.constraint(equalTo: self.recordButton.leadingAnchor, constant: -8.0),
             self.inputTextView.topAnchor.constraint(equalTo: self.composerView.topAnchor, constant: 10.0),
             self.inputTextView.bottomAnchor.constraint(equalTo: self.composerView.bottomAnchor, constant: -10.0),
@@ -1254,7 +1259,6 @@ public final class ChatVoiceOverOverlayView: UIView {
         self.backButton.tintColor = state.theme.rootController.navigationBar.accentTextColor
         self.profileButton.tintColor = state.theme.rootController.navigationBar.accentTextColor
         self.attachButton.tintColor = state.theme.rootController.navigationBar.accentTextColor
-        self.chatInfoShortcutButton.tintColor = state.theme.rootController.navigationBar.accentTextColor
         self.recordButton.tintColor = state.theme.rootController.navigationBar.accentTextColor
         self.sendButton.tintColor = state.theme.rootController.navigationBar.accentTextColor
 
@@ -1266,11 +1270,6 @@ public final class ChatVoiceOverOverlayView: UIView {
         self.profileButton.accessibilityHint = state.strings.VoiceOver_Chat_OpenHint
         self.profileButton.accessibilityTraits = [.button]
 
-        self.chatInfoShortcutButton.setTitle("ⓘ", for: .normal)
-        self.chatInfoShortcutButton.accessibilityLabel = state.strings.KeyCommand_ChatInfo
-        self.chatInfoShortcutButton.accessibilityHint = state.strings.VoiceOver_Chat_OpenHint
-        self.chatInfoShortcutButton.accessibilityTraits = [.button]
-
         self.attachButton.setTitle("＋", for: .normal)
         self.attachButton.accessibilityLabel = state.strings.VoiceOver_AttachMedia
         self.attachButton.accessibilityTraits = [.button]
@@ -1280,7 +1279,7 @@ public final class ChatVoiceOverOverlayView: UIView {
         self.sendButton.accessibilityTraits = [.button]
 
         let isComposerEnabled = self.isComposerEnabled
-        self.composerView.isUserInteractionEnabled = true
+        self.composerView.isUserInteractionEnabled = isComposerEnabled
         self.reconcileVoiceOverScrollbarFocusIfNeeded()
         self.updateComposerAccessibilityVisibility()
 
@@ -1814,7 +1813,7 @@ public final class ChatVoiceOverOverlayView: UIView {
             return
         }
         self.setVoiceOverScrollbarAccessibilityElementActive(false, anchorTableRow: nil)
-        UIAccessibility.post(notification: .screenChanged, argument: self.chatInfoShortcutButton)
+        UIAccessibility.post(notification: .screenChanged, argument: self.profileButton)
     }
 
     @objc private func attachPressed() {
@@ -4414,16 +4413,13 @@ public final class ChatVoiceOverOverlayView: UIView {
         self.voicePlayerView.accessibilityElementsHidden = isScrollbarActive
         if self.isComposerEnabled {
             self.composerView.accessibilityElements = [
-                self.chatInfoShortcutButton,
                 self.attachButton,
                 self.inputTextView as Any,
                 self.recordButton,
                 self.sendButton
             ]
         } else {
-            self.composerView.accessibilityElements = [
-                self.chatInfoShortcutButton
-            ]
+            self.composerView.accessibilityElements = []
         }
     }
 
