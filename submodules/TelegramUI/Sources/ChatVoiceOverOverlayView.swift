@@ -12,6 +12,7 @@ import TelegramUIPreferences
 import ChatMessageItemCommon
 import TextFormat
 import TextSelectionNode
+import ChatInputTextNode
 
 private final class ChatVoiceOverOverlayTableView: UITableView {
     var onDidPerformAccessibilityScroll: (() -> Void)?
@@ -596,34 +597,48 @@ private final class ChatVoiceOverOverlayCell: UITableViewCell {
     }
 }
 
-private final class ChatVoiceOverOverlayInputTextView: UITextView {
-    var onRequestSend: (() -> Bool)?
-    private var isPerformingExplicitLineBreak = false
+private var chatVoiceOverInputOnRequestSendKey: UInt8 = 0
+private var chatVoiceOverInputIsPerformingExplicitLineBreakKey: UInt8 = 0
 
-    override func insertText(_ text: String) {
-        super.insertText(text)
+private extension ChatInputTextView {
+    var voiceOverOnRequestSend: (() -> Bool)? {
+        get {
+            return objc_getAssociatedObject(self, &chatVoiceOverInputOnRequestSendKey) as? (() -> Bool)
+        }
+        set {
+            objc_setAssociatedObject(self, &chatVoiceOverInputOnRequestSendKey, newValue, .OBJC_ASSOCIATION_COPY_NONATOMIC)
+        }
+    }
+
+    var voiceOverIsPerformingExplicitLineBreak: Bool {
+        get {
+            return (objc_getAssociatedObject(self, &chatVoiceOverInputIsPerformingExplicitLineBreakKey) as? NSNumber)?.boolValue ?? false
+        }
+        set {
+            objc_setAssociatedObject(self, &chatVoiceOverInputIsPerformingExplicitLineBreakKey, NSNumber(value: newValue), .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
+        }
     }
 
     @objc(insertNewline:)
-    func insertNewline(_ sender: Any?) {
+    func voiceOverInsertNewline(_ sender: Any?) {
         if UIAccessibility.isVoiceOverRunning,
-           !self.isPerformingExplicitLineBreak,
-           self.onRequestSend?() == true {
+           !self.voiceOverIsPerformingExplicitLineBreak,
+           self.voiceOverOnRequestSend?() == true {
             return
         }
-        super.insertText("\n")
+        self.insertText("\n")
     }
 
     @objc(insertLineBreak:)
-    func insertLineBreak(_ sender: Any?) {
-        self.isPerformingExplicitLineBreak = true
-        super.insertText("\n")
-        self.isPerformingExplicitLineBreak = false
+    func voiceOverInsertLineBreak(_ sender: Any?) {
+        self.voiceOverIsPerformingExplicitLineBreak = true
+        self.insertText("\n")
+        self.voiceOverIsPerformingExplicitLineBreak = false
     }
 
     @objc(insertParagraphSeparator:)
-    func insertParagraphSeparator(_ sender: Any?) {
-        self.insertLineBreak(sender)
+    func voiceOverInsertParagraphSeparator(_ sender: Any?) {
+        self.voiceOverInsertLineBreak(sender)
     }
 }
 
@@ -916,7 +931,7 @@ public final class ChatVoiceOverOverlayView: UIView {
 
     private let composerView = UIView()
     private let attachButton = UIButton(type: .system)
-    private let inputTextView = ChatVoiceOverOverlayInputTextView()
+    private let inputTextNode = ChatInputTextNode(disableTiling: true)
     private let recordButton = UIButton(type: .system)
     private let sendButton = UIButton(type: .system)
 
@@ -1030,6 +1045,10 @@ public final class ChatVoiceOverOverlayView: UIView {
         return formatter
     }()
 
+    private var inputTextView: ChatInputTextView {
+        return self.inputTextNode.textView
+    }
+
     public override var accessibilityElements: [Any]? {
         get {
             guard UIAccessibility.isVoiceOverRunning else {
@@ -1142,20 +1161,20 @@ public final class ChatVoiceOverOverlayView: UIView {
         self.attachButton.addTarget(self, action: #selector(self.attachPressed), for: .touchUpInside)
         self.composerView.addSubview(self.attachButton)
 
-        self.inputTextView.translatesAutoresizingMaskIntoConstraints = false
-        self.inputTextView.delegate = self
+        self.inputTextNode.delegate = self
+        self.inputTextNode.view.translatesAutoresizingMaskIntoConstraints = false
         self.inputTextView.font = UIFont.preferredFont(forTextStyle: .body)
         self.inputTextView.adjustsFontForContentSizeCategory = true
         self.inputTextView.isScrollEnabled = true
         self.inputTextView.layer.cornerRadius = 10.0
         self.inputTextView.layer.masksToBounds = true
-        self.inputTextView.textContainerInset = UIEdgeInsets(top: 8.0, left: 6.0, bottom: 8.0, right: 6.0)
+        self.inputTextNode.textContainerInset = UIEdgeInsets(top: 8.0, left: 6.0, bottom: 8.0, right: 6.0)
         self.inputTextView.returnKeyType = .default
         self.inputTextView.enablesReturnKeyAutomatically = false
-        self.inputTextView.onRequestSend = { [weak self] in
+        self.inputTextView.voiceOverOnRequestSend = { [weak self] in
             return self?.sendCurrentInputText() ?? false
         }
-        self.composerView.addSubview(self.inputTextView)
+        self.composerView.addSubview(self.inputTextNode.view)
 
         self.recordButton.translatesAutoresizingMaskIntoConstraints = false
         self.recordButton.addTarget(self, action: #selector(self.recordPressed), for: .touchUpInside)
@@ -1231,12 +1250,12 @@ public final class ChatVoiceOverOverlayView: UIView {
             self.recordButton.widthAnchor.constraint(equalToConstant: 44.0),
             self.recordButton.heightAnchor.constraint(equalToConstant: 44.0),
 
-            self.inputTextView.leadingAnchor.constraint(equalTo: self.attachButton.trailingAnchor, constant: 8.0),
-            self.inputTextView.trailingAnchor.constraint(equalTo: self.recordButton.leadingAnchor, constant: -8.0),
-            self.inputTextView.topAnchor.constraint(equalTo: self.composerView.topAnchor, constant: 10.0),
-            self.inputTextView.bottomAnchor.constraint(equalTo: self.composerView.bottomAnchor, constant: -10.0),
-            self.inputTextView.heightAnchor.constraint(greaterThanOrEqualToConstant: 44.0),
-            self.inputTextView.heightAnchor.constraint(lessThanOrEqualToConstant: 120.0),
+            self.inputTextNode.view.leadingAnchor.constraint(equalTo: self.attachButton.trailingAnchor, constant: 8.0),
+            self.inputTextNode.view.trailingAnchor.constraint(equalTo: self.recordButton.leadingAnchor, constant: -8.0),
+            self.inputTextNode.view.topAnchor.constraint(equalTo: self.composerView.topAnchor, constant: 10.0),
+            self.inputTextNode.view.bottomAnchor.constraint(equalTo: self.composerView.bottomAnchor, constant: -10.0),
+            self.inputTextNode.view.heightAnchor.constraint(greaterThanOrEqualToConstant: 44.0),
+            self.inputTextNode.view.heightAnchor.constraint(lessThanOrEqualToConstant: 120.0),
 
             self.tableView.topAnchor.constraint(equalTo: self.topBarView.bottomAnchor),
             self.tableView.leadingAnchor.constraint(equalTo: self.leadingAnchor),
@@ -1851,22 +1870,58 @@ public final class ChatVoiceOverOverlayView: UIView {
         self.requestVisibleTranslationsIfNeeded()
     }
 
-    // MARK: - UITextViewDelegate
+    // MARK: - ChatInputTextNodeDelegate
 
-    public func textViewDidBeginEditing(_ textView: UITextView) {
+    public func chatInputTextNodeDidBeginEditing() {
         self.keyboardDismissFocusRestoreWorkItem?.cancel()
         self.keyboardDismissFocusRestoreWorkItem = nil
         if UIAccessibility.isVoiceOverRunning {
-            UIAccessibility.post(notification: .layoutChanged, argument: textView)
+            UIAccessibility.post(notification: .layoutChanged, argument: self.inputTextView)
         }
     }
 
-    public func textViewDidEndEditing(_ textView: UITextView) {
+    public func chatInputTextNodeDidFinishEditing() {
         self.scheduleKeyboardDismissFocusRestoreIfNeeded(after: 0.1)
     }
 
-    public func textViewDidChange(_ textView: UITextView) {
+    public func chatInputTextNodeDidUpdateText() {
         self.updateComposerPrimaryActionButtons()
+    }
+
+    public func chatInputTextNodeShouldReturn(modifierFlags: UIKeyModifierFlags) -> Bool {
+        self.insertComposerNewline()
+        return false
+    }
+
+    public func chatInputTextNodeDidChangeSelection(dueToEditing: Bool) {
+    }
+
+    public func chatInputTextNodeBackspaceWhileEmpty() {
+    }
+
+    @available(iOS 13.0, *)
+    public func chatInputTextNodeMenu(forTextRange textRange: NSRange, suggestedActions: [UIMenuElement]) -> UIMenu {
+        return UIMenu(children: suggestedActions)
+    }
+
+    public func chatInputTextNode(shouldChangeTextIn range: NSRange, replacementText text: String) -> Bool {
+        return true
+    }
+
+    public func chatInputTextNodeShouldCopy() -> Bool {
+        return true
+    }
+
+    public func chatInputTextNodeShouldPaste() -> Bool {
+        return true
+    }
+
+    public func chatInputTextNodeShouldRespondToAction(action: Selector) -> Bool {
+        return true
+    }
+
+    public func chatInputTextNodeTargetForAction(action: Selector) -> ChatInputTextNode.TargetForAction? {
+        return nil
     }
 
     // MARK: - Actions
@@ -1923,7 +1978,7 @@ public final class ChatVoiceOverOverlayView: UIView {
     }
 
     public override func accessibilityPerformEscape() -> Bool {
-        if self.inputTextView.isFirstResponder || self.lastKnownKeyboardOverlap > 0.0 {
+        if self.inputTextView.isFirstResponder || self.lastKnownKeyboardOverlap > 0.0 || self.hasFirstResponderDescendant() {
             self.setVoiceOverScrollbarAccessibilityElementActive(false, anchorTableRow: nil)
             self.endEditing(true)
             self.scheduleKeyboardDismissFocusRestoreIfNeeded(after: 0.08)
@@ -3375,6 +3430,27 @@ public final class ChatVoiceOverOverlayView: UIView {
         return true
     }
 
+    private func insertComposerNewline() {
+        self.inputTextView.insertText("\n")
+        self.updateComposerPrimaryActionButtons()
+    }
+
+    private func hasFirstResponderDescendant() -> Bool {
+        return self.findFirstResponder(in: self) != nil
+    }
+
+    private func findFirstResponder(in view: UIView) -> UIView? {
+        if view.isFirstResponder {
+            return view
+        }
+        for subview in view.subviews {
+            if let responder = self.findFirstResponder(in: subview) {
+                return responder
+            }
+        }
+        return nil
+    }
+
     private func scheduleKeyboardDismissFocusRestoreIfNeeded(after delay: TimeInterval, remainingAttempts: Int = 3) {
         guard UIAccessibility.isVoiceOverRunning else {
             return
@@ -3408,7 +3484,7 @@ public final class ChatVoiceOverOverlayView: UIView {
             }()
 
             if !self.isVoiceOverFocusWithinOverlay() {
-                UIAccessibility.post(notification: .screenChanged, argument: focusTarget)
+                UIAccessibility.post(notification: .layoutChanged, argument: focusTarget)
             }
 
             guard remainingAttempts > 1 else {
@@ -4670,5 +4746,5 @@ public final class ChatVoiceOverOverlayView: UIView {
     }
 }
 
-extension ChatVoiceOverOverlayView: UITableViewDataSource, UITableViewDelegate, UITextViewDelegate {
+extension ChatVoiceOverOverlayView: UITableViewDataSource, UITableViewDelegate, ChatInputTextNodeDelegate {
 }
