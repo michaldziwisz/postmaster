@@ -1,5 +1,6 @@
 import UIKit
 import SwiftSignalKit
+import Postbox
 import TelegramCore
 import TelegramPresentationData
 import TelegramUIPreferences
@@ -206,7 +207,20 @@ final class VoiceOverChatInfoController: UITableViewController {
         let autoTranslateEnabled = self.context.engine.data.subscribe(TelegramEngine.EngineData.Item.Peer.AutoTranslateEnabled(id: self.peerId))
         |> distinctUntilChanged
         let currentChatTranslationState = chatTranslationState(context: self.context, peerId: self.peerId, threadId: self.threadId)
-        |> distinctUntilChanged
+        |> distinctUntilChanged(isEqual: { lhs, rhs in
+            switch (lhs, rhs) {
+            case (.none, .none):
+                return true
+            case let (.some(lhs), .some(rhs)):
+                return lhs.baseLang == rhs.baseLang
+                    && lhs.fromLang == rhs.fromLang
+                    && lhs.timestamp == rhs.timestamp
+                    && lhs.toLang == rhs.toLang
+                    && lhs.isEnabled == rhs.isEnabled
+            default:
+                return false
+            }
+        })
 
         self.stateDisposable.set((combineLatest(
             queue: .mainQueue(),
