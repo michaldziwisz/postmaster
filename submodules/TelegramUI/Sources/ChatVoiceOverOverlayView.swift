@@ -600,34 +600,14 @@ private final class ChatVoiceOverOverlayInputTextView: UITextView {
     var onRequestSend: (() -> Bool)?
     private var isPerformingExplicitLineBreak = false
 
-    private var isBrailleInputModeActive: Bool {
-        guard let textInputMode = self.textInputMode else {
-            return false
-        }
-        if let primaryLanguage = textInputMode.primaryLanguage?.lowercased(), primaryLanguage.contains("braille") {
-            return true
-        }
-        let className = NSStringFromClass(type(of: textInputMode)).lowercased()
-        return className.contains("braille")
-    }
-
-    private var shouldTreatNewlineAsSend: Bool {
-        return UIAccessibility.isVoiceOverRunning && self.isBrailleInputModeActive
-    }
-
     override func insertText(_ text: String) {
-        if text == "\n",
-           self.shouldTreatNewlineAsSend,
-           !self.isPerformingExplicitLineBreak,
-           self.onRequestSend?() == true {
-            return
-        }
         super.insertText(text)
     }
 
     @objc(insertNewline:)
     func insertNewline(_ sender: Any?) {
-        if self.shouldTreatNewlineAsSend,
+        if UIAccessibility.isVoiceOverRunning,
+           !self.isPerformingExplicitLineBreak,
            self.onRequestSend?() == true {
             return
         }
@@ -1491,6 +1471,7 @@ public final class ChatVoiceOverOverlayView: UIView {
             self.recordButton.accessibilityHint = nil
             self.recordButton.isEnabled = false
             self.recordButton.accessibilityTraits = [.button, .notEnabled]
+            self.updateComposerPrimaryActionButtons()
             return
         }
 
@@ -1514,6 +1495,30 @@ public final class ChatVoiceOverOverlayView: UIView {
                 self.recordButton.isEnabled = true
             }
         }
+
+        self.updateComposerPrimaryActionButtons()
+    }
+
+    private func hasComposerDraftText() -> Bool {
+        return !self.inputTextView.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private func updateComposerPrimaryActionButtons() {
+        let isRecording = self.interfaceState?.inputTextPanelState.mediaRecordingState != nil
+        let hasDraftText = self.hasComposerDraftText()
+        let shouldShowSend = self.isComposerEnabled && !isRecording && hasDraftText
+        let shouldShowRecord = !shouldShowSend
+
+        self.sendButton.isHidden = !shouldShowSend
+        self.sendButton.isAccessibilityElement = shouldShowSend
+        self.sendButton.accessibilityElementsHidden = !shouldShowSend
+        self.sendButton.isEnabled = self.isComposerEnabled && shouldShowSend
+
+        self.recordButton.isHidden = !shouldShowRecord
+        self.recordButton.isAccessibilityElement = shouldShowRecord
+        self.recordButton.accessibilityElementsHidden = !shouldShowRecord
+
+        self.updateComposerAccessibilityVisibility()
     }
 
     private func makeRows(from entries: [ChatHistoryEntry]) -> [Row] {
@@ -1860,6 +1865,10 @@ public final class ChatVoiceOverOverlayView: UIView {
         self.scheduleKeyboardDismissFocusRestoreIfNeeded(after: 0.1)
     }
 
+    public func textViewDidChange(_ textView: UITextView) {
+        self.updateComposerPrimaryActionButtons()
+    }
+
     // MARK: - Actions
 
     @objc private func backPressed() {
@@ -1914,6 +1923,12 @@ public final class ChatVoiceOverOverlayView: UIView {
     }
 
     public override func accessibilityPerformEscape() -> Bool {
+        if self.inputTextView.isFirstResponder || self.lastKnownKeyboardOverlap > 0.0 {
+            self.setVoiceOverScrollbarAccessibilityElementActive(false, anchorTableRow: nil)
+            self.endEditing(true)
+            self.scheduleKeyboardDismissFocusRestoreIfNeeded(after: 0.08)
+            return true
+        }
         if let back = self.actions.back {
             back()
             return true
@@ -3356,6 +3371,7 @@ public final class ChatVoiceOverOverlayView: UIView {
         }
         self.actions.sendText?(text)
         self.inputTextView.text = ""
+        self.updateComposerPrimaryActionButtons()
         return true
     }
 
@@ -4570,12 +4586,17 @@ public final class ChatVoiceOverOverlayView: UIView {
         self.composerView.accessibilityElementsHidden = isScrollbarActive
         self.voicePlayerView.accessibilityElementsHidden = isScrollbarActive
         if self.isComposerEnabled {
-            self.composerView.accessibilityElements = [
+            var elements: [Any] = [
                 self.attachButton,
-                self.inputTextView as Any,
-                self.recordButton,
-                self.sendButton
+                self.inputTextView as Any
             ]
+            if !self.sendButton.isHidden {
+                elements.append(self.sendButton)
+            }
+            if !self.recordButton.isHidden {
+                elements.append(self.recordButton)
+            }
+            self.composerView.accessibilityElements = elements
         } else {
             self.composerView.accessibilityElements = []
         }
