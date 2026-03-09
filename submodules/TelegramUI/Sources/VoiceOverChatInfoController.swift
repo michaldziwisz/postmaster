@@ -1,6 +1,5 @@
 import UIKit
 import SwiftSignalKit
-import Postbox
 import TelegramCore
 import TelegramPresentationData
 import TelegramUIPreferences
@@ -49,7 +48,6 @@ final class VoiceOverChatInfoController: UITableViewController {
     private let stateDisposable = MetaDisposable()
 
     private var sections: [VoiceOverChatInfoSection] = []
-    private var currentPeer: Peer?
 
     init(
         context: AccountContext,
@@ -235,7 +233,6 @@ final class VoiceOverChatInfoController: UITableViewController {
             guard let self else {
                 return
             }
-            self.currentPeer = peer
             self.reloadSections(
                 peer: peer,
                 aboutText: aboutText.knownValue ?? nil,
@@ -248,7 +245,7 @@ final class VoiceOverChatInfoController: UITableViewController {
     }
 
     private func reloadSections(
-        peer: Peer?,
+        peer: EnginePeer?,
         aboutText: String?,
         translationSettings: TranslationSettings,
         isPremium: Bool,
@@ -297,7 +294,7 @@ final class VoiceOverChatInfoController: UITableViewController {
             ))
         }
 
-        if let channel = peer as? TelegramChannel {
+        if case let .channel(channel) = peer {
             let premiumConfiguration = PremiumConfiguration.with(appConfiguration: self.context.currentAppConfiguration.with { $0 })
             let requiredLevel = BoostSubject.autoTranslate.requiredLevel(group: false, context: self.context, configuration: premiumConfiguration)
             let channelBoostLevel = channel.approximateBoostLevel ?? 0
@@ -326,7 +323,7 @@ final class VoiceOverChatInfoController: UITableViewController {
                 detailRows.append(.info(title: "Username", subtitle: "@\(addressName)"))
             }
 
-            if let telegramUser = peer as? TelegramUser, let phone = telegramUser.phone, !phone.isEmpty {
+            if case let .user(telegramUser) = peer, let phone = telegramUser.phone, !phone.isEmpty {
                 detailRows.append(.info(title: "Phone", subtitle: phone))
             }
         }
@@ -390,11 +387,11 @@ final class VoiceOverChatInfoController: UITableViewController {
         return "\(title), \(subtitle)"
     }
 
-    private func peerDisplayTitle(_ peer: Peer) -> String {
+    private func peerDisplayTitle(_ peer: EnginePeer) -> String {
         if peer.id == self.context.account.peerId {
             return self.presentationData.strings.DialogList_SavedMessages
         }
-        return EnginePeer(peer).displayTitle(strings: self.presentationData.strings, displayOrder: self.presentationData.nameDisplayOrder)
+        return peer.displayTitle(strings: self.presentationData.strings, displayOrder: self.presentationData.nameDisplayOrder)
     }
 
     private func translationLanguageSubtitle(for state: ChatTranslationState) -> String? {
