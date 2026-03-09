@@ -437,6 +437,21 @@ extension ChatControllerImpl {
                             ))
                             return
                         }
+
+                        if UIAccessibility.isVoiceOverRunning, let navigationController = self.effectiveNavigationController {
+                            let controller = VoiceOverChatInfoController(
+                                context: self.context,
+                                presentationData: self.presentationData,
+                                peerId: peer.id,
+                                threadId: self.chatLocation.threadId,
+                                onSearch: { [weak self] in
+                                    self?.interfaceInteraction?.beginMessageSearch(.everything, "")
+                                }
+                            )
+                            navigationController.pushViewController(controller, animated: true)
+                            let _ = self.dismissPreviewing?(false)
+                            return
+                        }
                         
                         if peer.restrictionText(platform: "ios", contentSettings: self.context.currentContentSettings.with { $0 }) == nil && !self.presentationInterfaceState.isNotAccessible {
                             if peer.id == self.context.account.peerId {
