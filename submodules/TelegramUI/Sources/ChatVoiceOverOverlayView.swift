@@ -596,6 +596,44 @@ private final class ChatVoiceOverOverlayCell: UITableViewCell {
     }
 }
 
+private final class ChatVoiceOverOverlayInputTextView: UITextView {
+    var onRequestSend: (() -> Bool)?
+    private var isPerformingExplicitLineBreak = false
+
+    override func insertText(_ text: String) {
+        if text == "\n",
+           UIAccessibility.isVoiceOverRunning,
+           self.returnKeyType == .send,
+           !self.isPerformingExplicitLineBreak,
+           self.onRequestSend?() == true {
+            return
+        }
+        super.insertText(text)
+    }
+
+    @objc(insertNewline:)
+    func insertNewline(_ sender: Any?) {
+        if UIAccessibility.isVoiceOverRunning,
+           self.returnKeyType == .send,
+           self.onRequestSend?() == true {
+            return
+        }
+        super.insertText("\n")
+    }
+
+    @objc(insertLineBreak:)
+    func insertLineBreak(_ sender: Any?) {
+        self.isPerformingExplicitLineBreak = true
+        super.insertText("\n")
+        self.isPerformingExplicitLineBreak = false
+    }
+
+    @objc(insertParagraphSeparator:)
+    func insertParagraphSeparator(_ sender: Any?) {
+        self.insertLineBreak(sender)
+    }
+}
+
 private final class ChatVoiceOverOverlayScrollbarAccessibilityElement: UIAccessibilityElement {
     weak var overlay: ChatVoiceOverOverlayView?
 
@@ -885,7 +923,7 @@ public final class ChatVoiceOverOverlayView: UIView {
 
     private let composerView = UIView()
     private let attachButton = UIButton(type: .system)
-    private let inputTextView = UITextView()
+    private let inputTextView = ChatVoiceOverOverlayInputTextView()
     private let recordButton = UIButton(type: .system)
     private let sendButton = UIButton(type: .system)
 
@@ -972,6 +1010,8 @@ public final class ChatVoiceOverOverlayView: UIView {
     private var lastApplyWasStableIdsOnly: Bool = false
     private var lastStableIdsOnlyVisibleReloadTimestamp: CFTimeInterval = 0.0
     private var voiceOverFocusRecoveryWorkItem: DispatchWorkItem?
+    private var keyboardDismissFocusRestoreWorkItem: DispatchWorkItem?
+    private var lastKnownKeyboardOverlap: CGFloat = 0.0
 
     private var lastVoiceOverNavigationTimestamp: CFTimeInterval = 0.0
     private var voiceOverScrollbarAccessibilityElementAnchorTableRow: Int?
@@ -1119,6 +1159,9 @@ public final class ChatVoiceOverOverlayView: UIView {
         self.inputTextView.textContainerInset = UIEdgeInsets(top: 8.0, left: 6.0, bottom: 8.0, right: 6.0)
         self.inputTextView.returnKeyType = .send
         self.inputTextView.enablesReturnKeyAutomatically = true
+        self.inputTextView.onRequestSend = { [weak self] in
+            return self?.sendCurrentInputText() ?? false
+        }
         self.composerView.addSubview(self.inputTextView)
 
         self.recordButton.translatesAutoresizingMaskIntoConstraints = false
@@ -1793,9 +1836,15 @@ public final class ChatVoiceOverOverlayView: UIView {
     // MARK: - UITextViewDelegate
 
     public func textViewDidBeginEditing(_ textView: UITextView) {
+        self.keyboardDismissFocusRestoreWorkItem?.cancel()
+        self.keyboardDismissFocusRestoreWorkItem = nil
         if UIAccessibility.isVoiceOverRunning {
             UIAccessibility.post(notification: .layoutChanged, argument: textView)
         }
+    }
+
+    public func textViewDidEndEditing(_ textView: UITextView) {
+        self.scheduleKeyboardDismissFocusRestoreIfNeeded(after: 0.1)
     }
 
     // MARK: - Actions
@@ -1838,15 +1887,7 @@ public final class ChatVoiceOverOverlayView: UIView {
     }
 
     @objc private func sendPressed() {
-        guard self.isComposerEnabled else {
-            return
-        }
-        let text = self.inputTextView.text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty else {
-            return
-        }
-        self.actions.sendText?(text)
-        self.inputTextView.text = ""
+        _ = self.sendCurrentInputText()
     }
 
     @objc private func refreshTriggered() {
@@ -3270,6 +3311,85 @@ public final class ChatVoiceOverOverlayView: UIView {
         return focusedView
     }
 
+    private func isVoiceOverFocusWithinOverlay() -> Bool {
+        guard UIAccessibility.isVoiceOverRunning else {
+            return false
+        }
+        let focusedElement = UIAccessibility.focusedElement(using: .notificationVoiceOver)
+        if let focusedView = focusedElement as? UIView {
+            return focusedView.isDescendant(of: self)
+        }
+        if let focusedRow = focusedElement as? ChatVoiceOverOverlayRowAccessibilityElement {
+            return focusedRow.overlay === self
+        }
+        if let focusedScrollbar = focusedElement as? ChatVoiceOverOverlayScrollbarAccessibilityElement {
+            return focusedScrollbar.overlay === self
+        }
+        if let focusedAccessibilityElement = focusedElement as? UIAccessibilityElement,
+           let containerView = focusedAccessibilityElement.accessibilityContainer as? UIView {
+            return containerView.isDescendant(of: self)
+        }
+        return false
+    }
+
+    @discardableResult
+    private func sendCurrentInputText() -> Bool {
+        guard self.isComposerEnabled else {
+            return false
+        }
+        let text = self.inputTextView.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else {
+            return false
+        }
+        self.actions.sendText?(text)
+        self.inputTextView.text = ""
+        return true
+    }
+
+    private func scheduleKeyboardDismissFocusRestoreIfNeeded(after delay: TimeInterval) {
+        guard UIAccessibility.isVoiceOverRunning else {
+            return
+        }
+
+        self.keyboardDismissFocusRestoreWorkItem?.cancel()
+
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self else {
+                return
+            }
+            self.keyboardDismissFocusRestoreWorkItem = nil
+
+            guard UIAccessibility.isVoiceOverRunning else {
+                return
+            }
+            guard self.window != nil, !self.accessibilityElementsHidden, self.accessibilityViewIsModal else {
+                return
+            }
+            if let rootViewController = self.window?.rootViewController, rootViewController.presentedViewController != nil {
+                return
+            }
+            guard !self.isVoiceOverFocusWithinOverlay() else {
+                return
+            }
+
+            self.setVoiceOverScrollbarAccessibilityElementActive(false, anchorTableRow: nil)
+
+            if !self.composerView.accessibilityElementsHidden, self.isComposerEnabled {
+                UIAccessibility.post(notification: .screenChanged, argument: self.inputTextView)
+                return
+            }
+
+            if let targetIndexPath = self.voiceOverFallbackFocusIndexPath(), let element = self.accessibilityElement(at: targetIndexPath) {
+                UIAccessibility.post(notification: .screenChanged, argument: element)
+            } else {
+                UIAccessibility.post(notification: .screenChanged, argument: self.profileButton)
+            }
+        }
+
+        self.keyboardDismissFocusRestoreWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: workItem)
+    }
+
 	    private func scheduleVoiceOverFocusRecoveryIfNeeded() {
 	        guard UIAccessibility.isVoiceOverRunning else {
 	            return
@@ -4469,6 +4589,8 @@ public final class ChatVoiceOverOverlayView: UIView {
         let endFrameInScreen = endFrameValue.cgRectValue
         let endFrame = self.convert(endFrameInScreen, from: nil)
         let overlap = max(0.0, self.bounds.maxY - endFrame.minY - self.safeAreaInsets.bottom)
+        let previousOverlap = self.lastKnownKeyboardOverlap
+        self.lastKnownKeyboardOverlap = overlap
 
         let duration = (userInfo[UIResponder.keyboardAnimationDurationUserInfoKey] as? NSNumber)?.doubleValue ?? 0.25
         let curveRaw = (userInfo[UIResponder.keyboardAnimationCurveUserInfoKey] as? NSNumber)?.intValue ?? UIView.AnimationCurve.easeInOut.rawValue
@@ -4478,6 +4600,13 @@ public final class ChatVoiceOverOverlayView: UIView {
 
         UIView.animate(withDuration: duration, delay: 0.0, options: [curve, .beginFromCurrentState]) {
             self.layoutIfNeeded()
+        }
+
+        if overlap > 0.0 {
+            self.keyboardDismissFocusRestoreWorkItem?.cancel()
+            self.keyboardDismissFocusRestoreWorkItem = nil
+        } else if previousOverlap > 0.0 {
+            self.scheduleKeyboardDismissFocusRestoreIfNeeded(after: max(0.1, duration + 0.05))
         }
     }
 }
