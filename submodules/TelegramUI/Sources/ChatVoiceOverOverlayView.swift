@@ -599,8 +599,29 @@ private final class ChatVoiceOverOverlayCell: UITableViewCell {
 
 private var chatVoiceOverInputOnRequestSendKey: UInt8 = 0
 private var chatVoiceOverInputIsPerformingExplicitLineBreakKey: UInt8 = 0
+private var chatVoiceOverInputOnPerformEscapeKey: UInt8 = 0
 
 private extension ChatInputTextView {
+    static let voiceOverAccessibilitySwizzling: Void = {
+        func swizzle(_ currentSelector: Selector, _ replacementSelector: Selector) {
+            guard let originalMethod = class_getInstanceMethod(ChatInputTextView.self, currentSelector),
+                  let replacementMethod = class_getInstanceMethod(ChatInputTextView.self, replacementSelector)
+            else {
+                return
+            }
+            if class_addMethod(ChatInputTextView.self, currentSelector, method_getImplementation(replacementMethod), method_getTypeEncoding(replacementMethod)) {
+                class_replaceMethod(ChatInputTextView.self, replacementSelector, method_getImplementation(originalMethod), method_getTypeEncoding(originalMethod))
+            } else {
+                method_exchangeImplementations(originalMethod, replacementMethod)
+            }
+        }
+
+        swizzle(#selector(accessibilityPerformEscape), #selector(voiceOverAccessibilityPerformEscape))
+        swizzle(#selector(insertNewline(_:)), #selector(voiceOverInsertNewline(_:)))
+        swizzle(#selector(insertLineBreak(_:)), #selector(voiceOverInsertLineBreak(_:)))
+        swizzle(#selector(insertParagraphSeparator(_:)), #selector(voiceOverInsertParagraphSeparator(_:)))
+    }()
+
     var voiceOverOnRequestSend: (() -> Bool)? {
         get {
             return objc_getAssociatedObject(self, &chatVoiceOverInputOnRequestSendKey) as? (() -> Bool)
@@ -619,6 +640,22 @@ private extension ChatInputTextView {
         }
     }
 
+    var voiceOverOnPerformEscape: (() -> Bool)? {
+        get {
+            return objc_getAssociatedObject(self, &chatVoiceOverInputOnPerformEscapeKey) as? (() -> Bool)
+        }
+        set {
+            objc_setAssociatedObject(self, &chatVoiceOverInputOnPerformEscapeKey, newValue, .OBJC_ASSOCIATION_COPY_NONATOMIC)
+        }
+    }
+
+    @objc func voiceOverAccessibilityPerformEscape() -> Bool {
+        if self.voiceOverOnPerformEscape?() == true {
+            return true
+        }
+        return self.voiceOverAccessibilityPerformEscape()
+    }
+
     @objc(insertNewline:)
     func voiceOverInsertNewline(_ sender: Any?) {
         if UIAccessibility.isVoiceOverRunning,
@@ -626,19 +663,21 @@ private extension ChatInputTextView {
            self.voiceOverOnRequestSend?() == true {
             return
         }
-        self.insertText("\n")
+        self.voiceOverInsertNewline(sender)
     }
 
     @objc(insertLineBreak:)
     func voiceOverInsertLineBreak(_ sender: Any?) {
         self.voiceOverIsPerformingExplicitLineBreak = true
-        self.insertText("\n")
+        self.voiceOverInsertLineBreak(sender)
         self.voiceOverIsPerformingExplicitLineBreak = false
     }
 
     @objc(insertParagraphSeparator:)
     func voiceOverInsertParagraphSeparator(_ sender: Any?) {
-        self.voiceOverInsertLineBreak(sender)
+        self.voiceOverIsPerformingExplicitLineBreak = true
+        self.voiceOverInsertParagraphSeparator(sender)
+        self.voiceOverIsPerformingExplicitLineBreak = false
     }
 }
 
@@ -1057,15 +1096,15 @@ public final class ChatVoiceOverOverlayView: UIView {
             var elements: [Any] = [
                 self.backButton,
                 self.profileButton,
-                self.titleLabel,
-                self.tableAccessibilityContainerView
+                self.titleLabel
             ]
-            if !self.voicePlayerView.isHidden && !self.voicePlayerView.accessibilityElementsHidden {
-                elements.append(self.voicePlayerView)
-            }
             if !self.composerView.accessibilityElementsHidden {
                 elements.append(self.composerView)
             }
+            if !self.voicePlayerView.isHidden && !self.voicePlayerView.accessibilityElementsHidden {
+                elements.append(self.voicePlayerView)
+            }
+            elements.append(self.tableAccessibilityContainerView)
             return elements
         }
         set {
@@ -1074,6 +1113,8 @@ public final class ChatVoiceOverOverlayView: UIView {
 
     public override init(frame: CGRect) {
         super.init(frame: frame)
+
+        _ = ChatInputTextView.voiceOverAccessibilitySwizzling
 
         self.isAccessibilityElement = false
         self.accessibilityViewIsModal = true
@@ -1169,10 +1210,22 @@ public final class ChatVoiceOverOverlayView: UIView {
         self.inputTextView.layer.cornerRadius = 10.0
         self.inputTextView.layer.masksToBounds = true
         self.inputTextNode.textContainerInset = UIEdgeInsets(top: 8.0, left: 6.0, bottom: 8.0, right: 6.0)
-        self.inputTextView.returnKeyType = .default
+        self.inputTextView.returnKeyType = .send
         self.inputTextView.enablesReturnKeyAutomatically = false
         self.inputTextView.voiceOverOnRequestSend = { [weak self] in
             return self?.sendCurrentInputText() ?? false
+        }
+        self.inputTextView.voiceOverOnPerformEscape = { [weak self] in
+            guard let self else {
+                return false
+            }
+            guard self.inputTextView.isFirstResponder || self.lastKnownKeyboardOverlap > 0.0 || self.hasFirstResponderDescendant() else {
+                return false
+            }
+            self.setVoiceOverScrollbarAccessibilityElementActive(false, anchorTableRow: nil)
+            self.endEditing(true)
+            self.scheduleKeyboardDismissFocusRestoreIfNeeded(after: 0.08)
+            return true
         }
         self.composerView.addSubview(self.inputTextNode.view)
 
@@ -1889,6 +1942,9 @@ public final class ChatVoiceOverOverlayView: UIView {
     }
 
     public func chatInputTextNodeShouldReturn(modifierFlags: UIKeyModifierFlags) -> Bool {
+        if self.sendCurrentInputText() {
+            return false
+        }
         self.insertComposerNewline()
         return false
     }
@@ -4581,6 +4637,11 @@ public final class ChatVoiceOverOverlayView: UIView {
             self?.handleAccessibilityElementFocused(notification: notification)
         }
         self.accessibilityObservers.append(token)
+
+        let textDidChangeToken = nc.addObserver(forName: UITextView.textDidChangeNotification, object: self.inputTextView, queue: .main) { [weak self] _ in
+            self?.updateComposerPrimaryActionButtons()
+        }
+        self.accessibilityObservers.append(textDidChangeToken)
     }
 
     private func handleAccessibilityElementFocused(notification: Notification) {
