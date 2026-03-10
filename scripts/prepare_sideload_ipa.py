@@ -71,11 +71,20 @@ def main() -> int:
 
         strip_signing_artifacts(payload_path)
 
-        temp_output_path = temp_root / "Postmaster-sideload.ipa"
-        repackage_ipa(extracted_dir, temp_output_path)
-
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(temp_output_path, output_path)
+        with tempfile.NamedTemporaryFile(
+            prefix="postmaster_sideload_",
+            suffix=".ipa",
+            dir=output_path.parent,
+            delete=False
+        ) as temp_output_file:
+            temp_output_path = Path(temp_output_file.name)
+
+        try:
+            repackage_ipa(extracted_dir, temp_output_path)
+            os.replace(temp_output_path, output_path)
+        finally:
+            temp_output_path.unlink(missing_ok=True)
 
     return 0
 
