@@ -406,7 +406,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
         // Some controllers (e.g. media gallery presented in the root window) are not reflected in
         // `viewControllers` or `galleryPresentationContext`. Use the active window host's view
         // controller enumeration to determine if the chat is truly the top-most controller.
-        if resolvedIsChatOnTop, let window = ChatControllerNode.resolveVoiceOverOverlayWindow(controller: controller, overlay: overlay), let windowHost = window as? WindowHost {
+        if resolvedIsChatOnTop, !overlay.shouldPreserveModalIsolationDuringFocusRecovery, let window = ChatControllerNode.resolveVoiceOverOverlayWindow(controller: controller, overlay: overlay), let windowHost = window as? WindowHost {
             var didEncounterChatController = false
             var hasVisibleControllerAboveChat = false
             windowHost.forEachController { candidate in

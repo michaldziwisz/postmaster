@@ -1059,6 +1059,7 @@ public final class ChatVoiceOverOverlayView: UIView {
     private var voiceOverFocusRecoveryWorkItem: DispatchWorkItem?
     private var keyboardDismissFocusRestoreWorkItem: DispatchWorkItem?
     private var lastKnownKeyboardOverlap: CGFloat = 0.0
+    private var voiceOverModalIsolationGraceDeadline: CFTimeInterval = 0.0
 
     private var lastVoiceOverNavigationTimestamp: CFTimeInterval = 0.0
     private var voiceOverScrollbarAccessibilityElementAnchorTableRow: Int?
@@ -3523,6 +3524,20 @@ public final class ChatVoiceOverOverlayView: UIView {
         return self.profileButton
     }
 
+    public var shouldPreserveModalIsolationDuringFocusRecovery: Bool {
+        guard UIAccessibility.isVoiceOverRunning else {
+            return false
+        }
+        return CACurrentMediaTime() < self.voiceOverModalIsolationGraceDeadline
+    }
+
+    private func extendVoiceOverModalIsolationGrace(_ duration: TimeInterval) {
+        let deadline = CACurrentMediaTime() + max(0.0, duration)
+        if deadline > self.voiceOverModalIsolationGraceDeadline {
+            self.voiceOverModalIsolationGraceDeadline = deadline
+        }
+    }
+
     private func shouldForceVoiceOverFocusRestore(to target: Any) -> Bool {
         guard UIAccessibility.isVoiceOverRunning else {
             return false
@@ -3589,6 +3604,8 @@ public final class ChatVoiceOverOverlayView: UIView {
             return
         }
 
+        self.extendVoiceOverModalIsolationGrace(max(1.2, delay + 1.0))
+
         self.keyboardDismissFocusRestoreWorkItem?.cancel()
 
         let workItem = DispatchWorkItem { [weak self] in
@@ -3647,6 +3664,7 @@ public final class ChatVoiceOverOverlayView: UIView {
         guard self.window != nil, !self.accessibilityElementsHidden, self.accessibilityViewIsModal else {
             return
         }
+        self.extendVoiceOverModalIsolationGrace(1.2)
         guard self.voiceOverFocusRecoveryWorkItem == nil else {
             return
         }
