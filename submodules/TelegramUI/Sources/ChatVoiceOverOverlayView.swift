@@ -616,10 +616,10 @@ private extension ChatInputTextView {
             }
         }
 
-        swizzle(#selector(accessibilityPerformEscape), #selector(voiceOverAccessibilityPerformEscape))
-        swizzle(#selector(insertNewline(_:)), #selector(voiceOverInsertNewline(_:)))
-        swizzle(#selector(insertLineBreak(_:)), #selector(voiceOverInsertLineBreak(_:)))
-        swizzle(#selector(insertParagraphSeparator(_:)), #selector(voiceOverInsertParagraphSeparator(_:)))
+        swizzle(NSSelectorFromString("accessibilityPerformEscape"), #selector(voiceOverAccessibilityPerformEscape))
+        swizzle(NSSelectorFromString("insertNewline:"), #selector(voiceOverInsertNewline(_:)))
+        swizzle(NSSelectorFromString("insertLineBreak:"), #selector(voiceOverInsertLineBreak(_:)))
+        swizzle(NSSelectorFromString("insertParagraphSeparator:"), #selector(voiceOverInsertParagraphSeparator(_:)))
     }()
 
     var voiceOverOnRequestSend: (() -> Bool)? {
