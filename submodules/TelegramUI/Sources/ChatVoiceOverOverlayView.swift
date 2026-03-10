@@ -3450,11 +3450,10 @@ public final class ChatVoiceOverOverlayView: UIView {
         return focusedView
     }
 
-    private func isVoiceOverFocusWithinOverlay() -> Bool {
-        guard UIAccessibility.isVoiceOverRunning else {
+    private func isVoiceOverElementWithinOverlay(_ focusedElement: Any?) -> Bool {
+        guard let focusedElement else {
             return false
         }
-        let focusedElement = UIAccessibility.focusedElement(using: .notificationVoiceOver)
         if let focusedView = focusedElement as? UIView {
             return focusedView.isDescendant(of: self)
         }
@@ -3469,6 +3468,13 @@ public final class ChatVoiceOverOverlayView: UIView {
             return containerView.isDescendant(of: self)
         }
         return false
+    }
+
+    private func isVoiceOverFocusWithinOverlay() -> Bool {
+        guard UIAccessibility.isVoiceOverRunning else {
+            return false
+        }
+        return self.isVoiceOverElementWithinOverlay(UIAccessibility.focusedElement(using: .notificationVoiceOver))
     }
 
     @discardableResult
@@ -3505,6 +3511,16 @@ public final class ChatVoiceOverOverlayView: UIView {
             return self.attachButton
         }
         return self.inputTextView
+    }
+
+    private func preferredVoiceOverRecoveryTarget() -> Any {
+        if let composerTarget = self.preferredComposerFocusTarget() {
+            return composerTarget
+        }
+        if let targetIndexPath = self.voiceOverFallbackFocusIndexPath(), let element = self.accessibilityElement(at: targetIndexPath) {
+            return element
+        }
+        return self.profileButton
     }
 
     private func shouldForceVoiceOverFocusRestore(to target: Any) -> Bool {
@@ -3590,15 +3606,7 @@ public final class ChatVoiceOverOverlayView: UIView {
 
             self.setVoiceOverScrollbarAccessibilityElementActive(false, anchorTableRow: nil)
 
-            let focusTarget: Any = {
-                if let composerTarget = self.preferredComposerFocusTarget() {
-                    return composerTarget
-                }
-                if let targetIndexPath = self.voiceOverFallbackFocusIndexPath(), let element = self.accessibilityElement(at: targetIndexPath) {
-                    return element
-                }
-                return self.profileButton
-            }()
+            let focusTarget = self.preferredVoiceOverRecoveryTarget()
 
             if self.shouldForceVoiceOverFocusRestore(to: focusTarget) {
                 UIAccessibility.post(notification: .screenChanged, argument: focusTarget)
@@ -3632,14 +3640,19 @@ public final class ChatVoiceOverOverlayView: UIView {
         DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: workItem)
     }
 
-	    private func scheduleVoiceOverFocusRecoveryIfNeeded() {
-	        guard UIAccessibility.isVoiceOverRunning else {
-	            return
-	        }
+    private func scheduleVoiceOverFocusRecoveryIfNeeded() {
+        guard UIAccessibility.isVoiceOverRunning else {
+            return
+        }
+        guard self.window != nil, !self.accessibilityElementsHidden, self.accessibilityViewIsModal else {
+            return
+        }
         guard self.voiceOverFocusRecoveryWorkItem == nil else {
             return
         }
-        guard UIAccessibility.focusedElement(using: .notificationVoiceOver) == nil else {
+
+        let focusedElement = UIAccessibility.focusedElement(using: .notificationVoiceOver)
+        guard focusedElement == nil || !self.isVoiceOverElementWithinOverlay(focusedElement) else {
             return
         }
 
@@ -3652,25 +3665,29 @@ public final class ChatVoiceOverOverlayView: UIView {
             guard UIAccessibility.isVoiceOverRunning else {
                 return
             }
-            guard UIAccessibility.focusedElement(using: .notificationVoiceOver) == nil else {
+            guard self.window != nil, !self.accessibilityElementsHidden, self.accessibilityViewIsModal else {
                 return
             }
 
-            // In some transitions (e.g. returning from system pickers), VoiceOver can lose focus.
-            // Also ensure the composer isn't left hidden because a scrollbar element was active.
+            let currentFocusedElement = UIAccessibility.focusedElement(using: .notificationVoiceOver)
+            guard currentFocusedElement == nil || !self.isVoiceOverElementWithinOverlay(currentFocusedElement) else {
+                return
+            }
+
+            // In some transitions (e.g. returning from system pickers or after keyboard dismissal),
+            // VoiceOver can lose focus or jump outside this modal overlay.
             self.setVoiceOverScrollbarAccessibilityElementActive(false, anchorTableRow: nil)
 
-            let targetIndexPath = self.voiceOverFallbackFocusIndexPath()
-            if let targetIndexPath, let element = self.accessibilityElement(at: targetIndexPath) {
-                UIAccessibility.post(notification: .screenChanged, argument: element)
-            } else {
-                UIAccessibility.post(notification: .screenChanged, argument: self.titleLabel)
+            let recoveryTarget = self.preferredVoiceOverRecoveryTarget()
+            UIAccessibility.post(notification: .screenChanged, argument: recoveryTarget)
+            DispatchQueue.main.async {
+                UIAccessibility.post(notification: .layoutChanged, argument: recoveryTarget)
             }
         }
 
-	        self.voiceOverFocusRecoveryWorkItem = workItem
-	        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15, execute: workItem)
-	    }
+        self.voiceOverFocusRecoveryWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1, execute: workItem)
+    }
 
 	    private func reconcileVoiceOverScrollbarFocusIfNeeded() {
 	        guard UIAccessibility.isVoiceOverRunning else {
@@ -4779,6 +4796,9 @@ public final class ChatVoiceOverOverlayView: UIView {
             }
         } else {
             self.setVoiceOverScrollbarAccessibilityElementActive(false, anchorTableRow: nil)
+            if self.accessibilityViewIsModal, !self.accessibilityElementsHidden, !self.isVoiceOverElementWithinOverlay(focusedElement) {
+                self.scheduleVoiceOverFocusRecoveryIfNeeded()
+            }
         }
     }
 
