@@ -1108,8 +1108,20 @@ public final class ChatVoiceOverOverlayView: UIView {
             guard UIAccessibility.isVoiceOverRunning else {
                 return nil
             }
-            guard !self.usesNativeVoiceOverAccessibility else {
-                return nil
+            if self.usesNativeVoiceOverAccessibility {
+                var elements: [Any] = [
+                    self.backButton,
+                    self.profileButton,
+                    self.titleLabel,
+                    self.tableView
+                ]
+                if !self.voicePlayerView.isHidden && !self.voicePlayerView.accessibilityElementsHidden {
+                    elements.append(self.voicePlayerView)
+                }
+                if !self.composerView.accessibilityElementsHidden {
+                    elements.append(self.composerView)
+                }
+                return elements
             }
             var elements: [Any] = [
                 self.backButton,
@@ -4778,11 +4790,15 @@ public final class ChatVoiceOverOverlayView: UIView {
         guard UIAccessibility.isVoiceOverRunning, let userInfo = notification.userInfo else {
             return
         }
-        guard !self.usesNativeVoiceOverAccessibility else {
-            return
-        }
 
         let focusedElement = userInfo[UIAccessibility.focusedElementUserInfoKey]
+
+        if self.usesNativeVoiceOverAccessibility {
+            if self.accessibilityViewIsModal, !self.accessibilityElementsHidden, !self.isVoiceOverElementWithinOverlay(focusedElement) {
+                self.scheduleVoiceOverFocusRecoveryIfNeeded()
+            }
+            return
+        }
         let isCustomScrollbarFocused: Bool = {
             guard let focusedScrollbar = focusedElement as? ChatVoiceOverOverlayScrollbarAccessibilityElement else {
                 return false
