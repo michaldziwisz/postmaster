@@ -3507,6 +3507,51 @@ public final class ChatVoiceOverOverlayView: UIView {
         return self.inputTextView
     }
 
+    private func shouldForceVoiceOverFocusRestore(to target: Any) -> Bool {
+        guard UIAccessibility.isVoiceOverRunning else {
+            return false
+        }
+        let focusedElement = UIAccessibility.focusedElement(using: .notificationVoiceOver)
+        guard let focusedElement else {
+            return true
+        }
+
+        if let targetView = target as? UIView, let focusedView = focusedElement as? UIView {
+            if focusedView === targetView {
+                return false
+            }
+            if focusedView.isDescendant(of: targetView) {
+                return false
+            }
+            if focusedView === self.inputTextView || focusedView.isDescendant(of: self.inputTextView) {
+                return true
+            }
+            if !focusedView.isDescendant(of: self) {
+                return true
+            }
+            return false
+        }
+
+        if let focusedRow = focusedElement as? ChatVoiceOverOverlayRowAccessibilityElement {
+            return focusedRow.overlay !== self
+        }
+        if let focusedScrollbar = focusedElement as? ChatVoiceOverOverlayScrollbarAccessibilityElement {
+            return focusedScrollbar.overlay !== self
+        }
+        if let focusedAccessibilityElement = focusedElement as? UIAccessibilityElement,
+           let containerView = focusedAccessibilityElement.accessibilityContainer as? UIView {
+            if let targetView = target as? UIView, containerView === targetView || containerView.isDescendant(of: targetView) {
+                return false
+            }
+            if containerView === self.inputTextView || containerView.isDescendant(of: self.inputTextView) {
+                return true
+            }
+            return !containerView.isDescendant(of: self)
+        }
+
+        return true
+    }
+
     private func hasFirstResponderDescendant() -> Bool {
         return self.findFirstResponder(in: self) != nil
     }
@@ -3555,7 +3600,7 @@ public final class ChatVoiceOverOverlayView: UIView {
                 return self.profileButton
             }()
 
-            if !self.isVoiceOverFocusWithinOverlay() {
+            if self.shouldForceVoiceOverFocusRestore(to: focusTarget) {
                 UIAccessibility.post(notification: .screenChanged, argument: focusTarget)
                 DispatchQueue.main.async {
                     UIAccessibility.post(notification: .layoutChanged, argument: focusTarget)
@@ -3576,7 +3621,7 @@ public final class ChatVoiceOverOverlayView: UIView {
                 guard self.window != nil, !self.accessibilityElementsHidden, self.accessibilityViewIsModal else {
                     return
                 }
-                guard !self.isVoiceOverFocusWithinOverlay() else {
+                guard self.shouldForceVoiceOverFocusRestore(to: focusTarget) else {
                     return
                 }
                 self.scheduleKeyboardDismissFocusRestoreIfNeeded(after: 0.0, remainingAttempts: remainingAttempts - 1)
