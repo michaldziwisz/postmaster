@@ -663,20 +663,20 @@ private extension ChatInputTextView {
            self.voiceOverOnRequestSend?() == true {
             return
         }
-        self.voiceOverInsertNewline(sender)
+        _ = self.perform(#selector(voiceOverInsertNewline(_:)), with: sender)
     }
 
     @objc(insertLineBreak:)
     func voiceOverInsertLineBreak(_ sender: Any?) {
         self.voiceOverIsPerformingExplicitLineBreak = true
-        self.voiceOverInsertLineBreak(sender)
+        _ = self.perform(#selector(voiceOverInsertLineBreak(_:)), with: sender)
         self.voiceOverIsPerformingExplicitLineBreak = false
     }
 
     @objc(insertParagraphSeparator:)
     func voiceOverInsertParagraphSeparator(_ sender: Any?) {
         self.voiceOverIsPerformingExplicitLineBreak = true
-        self.voiceOverInsertParagraphSeparator(sender)
+        _ = self.perform(#selector(voiceOverInsertParagraphSeparator(_:)), with: sender)
         self.voiceOverIsPerformingExplicitLineBreak = false
     }
 }
