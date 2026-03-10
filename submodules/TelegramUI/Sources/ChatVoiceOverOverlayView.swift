@@ -1096,15 +1096,15 @@ public final class ChatVoiceOverOverlayView: UIView {
             var elements: [Any] = [
                 self.backButton,
                 self.profileButton,
-                self.titleLabel
+                self.titleLabel,
+                self.tableAccessibilityContainerView
             ]
-            if !self.composerView.accessibilityElementsHidden {
-                elements.append(self.composerView)
-            }
             if !self.voicePlayerView.isHidden && !self.voicePlayerView.accessibilityElementsHidden {
                 elements.append(self.voicePlayerView)
             }
-            elements.append(self.tableAccessibilityContainerView)
+            if !self.composerView.accessibilityElementsHidden {
+                elements.append(self.composerView)
+            }
             return elements
         }
         set {
@@ -3491,6 +3491,22 @@ public final class ChatVoiceOverOverlayView: UIView {
         self.updateComposerPrimaryActionButtons()
     }
 
+    private func preferredComposerFocusTarget() -> Any? {
+        guard !self.composerView.accessibilityElementsHidden, self.isComposerEnabled else {
+            return nil
+        }
+        if !self.sendButton.isHidden, self.sendButton.isAccessibilityElement, self.sendButton.isEnabled {
+            return self.sendButton
+        }
+        if !self.recordButton.isHidden, self.recordButton.isAccessibilityElement, self.recordButton.isEnabled {
+            return self.recordButton
+        }
+        if self.attachButton.isAccessibilityElement, self.attachButton.isEnabled {
+            return self.attachButton
+        }
+        return self.inputTextView
+    }
+
     private func hasFirstResponderDescendant() -> Bool {
         return self.findFirstResponder(in: self) != nil
     }
@@ -3530,8 +3546,8 @@ public final class ChatVoiceOverOverlayView: UIView {
             self.setVoiceOverScrollbarAccessibilityElementActive(false, anchorTableRow: nil)
 
             let focusTarget: Any = {
-                if !self.composerView.accessibilityElementsHidden, self.isComposerEnabled {
-                    return self.inputTextView
+                if let composerTarget = self.preferredComposerFocusTarget() {
+                    return composerTarget
                 }
                 if let targetIndexPath = self.voiceOverFallbackFocusIndexPath(), let element = self.accessibilityElement(at: targetIndexPath) {
                     return element
@@ -3540,7 +3556,10 @@ public final class ChatVoiceOverOverlayView: UIView {
             }()
 
             if !self.isVoiceOverFocusWithinOverlay() {
-                UIAccessibility.post(notification: .layoutChanged, argument: focusTarget)
+                UIAccessibility.post(notification: .screenChanged, argument: focusTarget)
+                DispatchQueue.main.async {
+                    UIAccessibility.post(notification: .layoutChanged, argument: focusTarget)
+                }
             }
 
             guard remainingAttempts > 1 else {
