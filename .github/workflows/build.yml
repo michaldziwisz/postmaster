@@ -186,6 +186,9 @@ jobs:
             exit 1
           fi
           cp "${IPA_CANDIDATES[0]}" "$OUTPUT_PATH/Postmaster.ipa"
+          python3 scripts/prepare_sideload_ipa.py \
+            --input "$OUTPUT_PATH/Postmaster.ipa" \
+            --output "$OUTPUT_PATH/Postmaster.ipa"
 
           # collect dsym
           mkdir -p build/DSYMs
