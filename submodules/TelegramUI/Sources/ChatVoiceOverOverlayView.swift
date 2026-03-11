@@ -1074,6 +1074,7 @@ public final class ChatVoiceOverOverlayView: UIView {
     private var keyboardDismissFocusRestoreWorkItem: DispatchWorkItem?
     private var lastKnownKeyboardOverlap: CGFloat = 0.0
     private var voiceOverModalIsolationGraceDeadline: CFTimeInterval = 0.0
+    private var suppressNextEditingEndedFocusRestore = false
 
     private var lastVoiceOverNavigationTimestamp: CFTimeInterval = 0.0
     private var voiceOverScrollbarAccessibilityElementAnchorTableRow: Int?
@@ -1246,10 +1247,11 @@ public final class ChatVoiceOverOverlayView: UIView {
                 return false
             }
             self.setVoiceOverScrollbarAccessibilityElementActive(false, anchorTableRow: nil)
-            self.endEditing(true)
-            if !self.usesNativeVoiceOverAccessibility {
-                self.scheduleKeyboardDismissFocusRestoreIfNeeded(after: 0.08)
+            if self.usesNativeVoiceOverAccessibility {
+                self.suppressNextEditingEndedFocusRestore = true
             }
+            self.endEditing(true)
+            self.scheduleKeyboardDismissFocusRestoreIfNeeded(after: self.usesNativeVoiceOverAccessibility ? 0.05 : 0.08)
             return true
         }
         self.composerView.addSubview(self.inputTextNode.view)
@@ -1958,6 +1960,10 @@ public final class ChatVoiceOverOverlayView: UIView {
     }
 
     public func chatInputTextNodeDidFinishEditing() {
+        if self.suppressNextEditingEndedFocusRestore {
+            self.suppressNextEditingEndedFocusRestore = false
+            return
+        }
         self.scheduleKeyboardDismissFocusRestoreIfNeeded(after: self.usesNativeVoiceOverAccessibility ? 0.05 : 0.1)
     }
 
@@ -2060,8 +2066,11 @@ public final class ChatVoiceOverOverlayView: UIView {
     public override func accessibilityPerformEscape() -> Bool {
         if self.inputTextView.isFirstResponder || self.lastKnownKeyboardOverlap > 0.0 || self.hasFirstResponderDescendant() {
             self.setVoiceOverScrollbarAccessibilityElementActive(false, anchorTableRow: nil)
+            if self.usesNativeVoiceOverAccessibility {
+                self.suppressNextEditingEndedFocusRestore = true
+            }
             self.endEditing(true)
-            self.scheduleKeyboardDismissFocusRestoreIfNeeded(after: 0.08)
+            self.scheduleKeyboardDismissFocusRestoreIfNeeded(after: self.usesNativeVoiceOverAccessibility ? 0.05 : 0.08)
             return true
         }
         if let back = self.actions.back {
