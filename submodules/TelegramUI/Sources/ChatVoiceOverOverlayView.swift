@@ -1250,7 +1250,7 @@ public final class ChatVoiceOverOverlayView: UIView {
             if self.usesNativeVoiceOverAccessibility {
                 self.suppressNextEditingEndedFocusRestore = true
             }
-            self.endEditing(true)
+            _ = self.dismissKeyboardForVoiceOver()
             self.scheduleKeyboardDismissFocusRestoreIfNeeded(after: self.usesNativeVoiceOverAccessibility ? 0.05 : 0.08)
             return true
         }
@@ -2069,7 +2069,7 @@ public final class ChatVoiceOverOverlayView: UIView {
             if self.usesNativeVoiceOverAccessibility {
                 self.suppressNextEditingEndedFocusRestore = true
             }
-            self.endEditing(true)
+            _ = self.dismissKeyboardForVoiceOver()
             self.scheduleKeyboardDismissFocusRestoreIfNeeded(after: self.usesNativeVoiceOverAccessibility ? 0.05 : 0.08)
             return true
         }
@@ -3560,16 +3560,24 @@ public final class ChatVoiceOverOverlayView: UIView {
     }
 
     private func preferredPostKeyboardDismissFocusTarget() -> Any {
-        if let composerTarget = self.preferredComposerFocusTarget() {
-            return composerTarget
-        }
         if self.backButton.isAccessibilityElement {
             return self.backButton
         }
         if self.profileButton.isAccessibilityElement {
             return self.profileButton
         }
+        if let composerTarget = self.preferredComposerFocusTarget() {
+            return composerTarget
+        }
         return self.preferredVoiceOverRecoveryTarget()
+    }
+
+    @discardableResult
+    private func dismissKeyboardForVoiceOver() -> Bool {
+        if let responder = self.findFirstResponder(in: self) {
+            return responder.resignFirstResponder()
+        }
+        return self.endEditing(true)
     }
 
     private func accessibilityFocusTarget(at indexPath: IndexPath) -> Any? {
