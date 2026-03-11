@@ -341,6 +341,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
     
     private var panRecognizer: WindowPanRecognizer?
     
+    private var voiceOverOverlayController: VoiceOverNativeChatController?
     private var voiceOverOverlayView: ChatVoiceOverOverlayView?
     private var voiceOverOverlayConstraints: [NSLayoutConstraint] = []
     private var voiceOverOverlayVoicePlaybackDisposable: Disposable?
@@ -429,18 +430,13 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
             }
         }
         
-        if overlay.usesNativeVoiceOverAccessibility {
-            overlay.accessibilityViewIsModal = false
-            overlay.accessibilityElementsHidden = !resolvedIsChatOnTop
-        } else {
-            overlay.accessibilityViewIsModal = resolvedIsChatOnTop
-            overlay.accessibilityElementsHidden = !resolvedIsChatOnTop
-        }
+        overlay.accessibilityViewIsModal = resolvedIsChatOnTop
+        overlay.accessibilityElementsHidden = !resolvedIsChatOnTop
         
         // When the chat is not the top-most controller, we must restore the navigation bar so pushed
         // controllers (e.g. poll results) have a visible Back/Close button.
         if let navigationBarView = self.navigationBar?.view {
-            if resolvedIsChatOnTop && !overlay.usesNativeVoiceOverAccessibility {
+            if resolvedIsChatOnTop {
                 navigationBarView.accessibilityElementsHidden = true
                 navigationBarView.isHidden = true
                 navigationBarView.isUserInteractionEnabled = false
@@ -477,19 +473,9 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
             return
         }
         overlay.accessibilityElementsHidden = false
-        overlay.accessibilityViewIsModal = !overlay.usesNativeVoiceOverAccessibility
+        overlay.accessibilityViewIsModal = true
         if focusProfileButton {
-            if overlay.usesNativeVoiceOverAccessibility {
-                if let navigationBarView = self.navigationBar?.view {
-                    UIAccessibility.post(notification: .screenChanged, argument: navigationBarView)
-                } else if let controllerView = self.controller?.viewIfLoaded {
-                    UIAccessibility.post(notification: .screenChanged, argument: controllerView)
-                } else {
-                    overlay.voiceOverDidReturnToChat()
-                }
-            } else {
-                overlay.voiceOverFocusProfileButton()
-            }
+            overlay.voiceOverFocusProfileButton()
         } else {
             overlay.voiceOverDidReturnToChat()
         }
@@ -1628,15 +1614,30 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                     }
                 }
                 
-                let overlayContainerView = overlay.usesNativeVoiceOverAccessibility ? self.historyNodeContainer.view : self.view
-                overlayContainerView.addSubview(overlay)
-                self.voiceOverOverlayConstraints = [
-                    overlay.topAnchor.constraint(equalTo: overlayContainerView.topAnchor),
-                    overlay.leadingAnchor.constraint(equalTo: overlayContainerView.leadingAnchor),
-                    overlay.trailingAnchor.constraint(equalTo: overlayContainerView.trailingAnchor),
-                    overlay.bottomAnchor.constraint(equalTo: overlayContainerView.bottomAnchor)
-                ]
-                NSLayoutConstraint.activate(self.voiceOverOverlayConstraints)
+                if let controller = self.controller {
+                    let overlayController = VoiceOverNativeChatController(overlayView: overlay)
+                    controller.addChild(overlayController)
+                    self.view.addSubview(overlayController.view)
+                    overlayController.view.translatesAutoresizingMaskIntoConstraints = false
+                    self.voiceOverOverlayController = overlayController
+                    self.voiceOverOverlayConstraints = [
+                        overlayController.view.topAnchor.constraint(equalTo: self.view.topAnchor),
+                        overlayController.view.leadingAnchor.constraint(equalTo: self.view.leadingAnchor),
+                        overlayController.view.trailingAnchor.constraint(equalTo: self.view.trailingAnchor),
+                        overlayController.view.bottomAnchor.constraint(equalTo: self.view.bottomAnchor)
+                    ]
+                    NSLayoutConstraint.activate(self.voiceOverOverlayConstraints)
+                    overlayController.didMove(toParent: controller)
+                } else {
+                    self.view.addSubview(overlay)
+                    self.voiceOverOverlayConstraints = [
+                        overlay.topAnchor.constraint(equalTo: self.view.topAnchor),
+                        overlay.leadingAnchor.constraint(equalTo: self.view.leadingAnchor),
+                        overlay.trailingAnchor.constraint(equalTo: self.view.trailingAnchor),
+                        overlay.bottomAnchor.constraint(equalTo: self.view.bottomAnchor)
+                    ]
+                    NSLayoutConstraint.activate(self.voiceOverOverlayConstraints)
+                }
                 
                 self.voiceOverOverlayView = overlay
 
@@ -1710,8 +1711,8 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
             let isLoadingEarlier = originalView?.isLoadingEarlier ?? false
             overlay.updateLoadEarlierState(canLoadEarlier: canLoadEarlier, isLoadingEarlier: isLoadingEarlier)
             
-            if overlay.usesNativeVoiceOverAccessibility {
-                self.historyNodeContainer.view.bringSubviewToFront(overlay)
+            if let overlayController = self.voiceOverOverlayController {
+                self.view.bringSubviewToFront(overlayController.view)
             } else {
                 self.view.bringSubviewToFront(overlay)
             }
@@ -1749,42 +1750,25 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                 self.historyNode.scrollToEndOfHistory()
             }
 
-            // In native mode, the overlay only replaces the message list. Keep the real
-            // navigation bar and composer accessible, and hide only the underlying history view
-            // to avoid duplicate message elements.
-            self.historyNode.view.accessibilityElementsHidden = true
-            if overlay.usesNativeVoiceOverAccessibility {
-                self.wrappingNode.view.accessibilityElementsHidden = false
-                self.wrappingNode.view.isUserInteractionEnabled = true
-                self.panRecognizer?.isEnabled = true
-                self.navigationBar?.view.accessibilityElementsHidden = false
-                if let savedState = self.voiceOverOverlaySavedState {
-                    self.navigationBar?.view.isHidden = savedState.navigationBarIsHidden
-                    self.navigationBar?.view.isUserInteractionEnabled = savedState.navigationBarIsUserInteractionEnabled
-                } else {
-                    self.navigationBar?.view.isHidden = false
-                    self.navigationBar?.view.isUserInteractionEnabled = true
-                }
-            } else {
-                if self.voiceOverOverlaySavedState == nil, let navigationBarView = self.navigationBar?.view {
-                    self.voiceOverOverlaySavedState = VoiceOverOverlaySavedState(
-                        navigationBarIsHidden: navigationBarView.isHidden,
-                        navigationBarIsUserInteractionEnabled: navigationBarView.isUserInteractionEnabled
-                    )
-                } else if self.voiceOverOverlaySavedState == nil {
-                    self.voiceOverOverlaySavedState = VoiceOverOverlaySavedState(
-                        navigationBarIsHidden: false,
-                        navigationBarIsUserInteractionEnabled: true
-                    )
-                }
-                
-                self.wrappingNode.view.accessibilityElementsHidden = true
-                self.wrappingNode.view.isUserInteractionEnabled = false
-                self.panRecognizer?.isEnabled = false
-                self.navigationBar?.view.accessibilityElementsHidden = true
-                self.navigationBar?.view.isHidden = true
-                self.navigationBar?.view.isUserInteractionEnabled = false
+            if self.voiceOverOverlaySavedState == nil, let navigationBarView = self.navigationBar?.view {
+                self.voiceOverOverlaySavedState = VoiceOverOverlaySavedState(
+                    navigationBarIsHidden: navigationBarView.isHidden,
+                    navigationBarIsUserInteractionEnabled: navigationBarView.isUserInteractionEnabled
+                )
+            } else if self.voiceOverOverlaySavedState == nil {
+                self.voiceOverOverlaySavedState = VoiceOverOverlaySavedState(
+                    navigationBarIsHidden: false,
+                    navigationBarIsUserInteractionEnabled: true
+                )
             }
+            
+            self.historyNode.view.accessibilityElementsHidden = true
+            self.wrappingNode.view.accessibilityElementsHidden = true
+            self.wrappingNode.view.isUserInteractionEnabled = false
+            self.panRecognizer?.isEnabled = false
+            self.navigationBar?.view.accessibilityElementsHidden = true
+            self.navigationBar?.view.isHidden = true
+            self.navigationBar?.view.isUserInteractionEnabled = false
         } else {
             self.historyNode.view.accessibilityElementsHidden = false
             self.wrappingNode.view.accessibilityElementsHidden = false
@@ -1803,9 +1787,14 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
             self.historyNode.voiceOverHistoryEntriesUpdated = nil
             self.historyNode.voiceOverDidFinishLoadEarlier()
             
-            if let overlay = self.voiceOverOverlayView {
+            if let overlayController = self.voiceOverOverlayController {
+                overlayController.willMove(toParent: nil)
+                overlayController.view.removeFromSuperview()
+                overlayController.removeFromParent()
+            } else if let overlay = self.voiceOverOverlayView {
                 overlay.removeFromSuperview()
             }
+            self.voiceOverOverlayController = nil
             self.voiceOverOverlayView = nil
             self.voiceOverOverlayVoicePlaybackState = nil
             self.voiceOverOverlayVoicePlaybackDisposable?.dispose()
