@@ -432,6 +432,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
         
         overlay.accessibilityViewIsModal = resolvedIsChatOnTop
         overlay.accessibilityElementsHidden = !resolvedIsChatOnTop
+        controller.view.accessibilityViewIsModal = resolvedIsChatOnTop
         
         // When the chat is not the top-most controller, we must restore the navigation bar so pushed
         // controllers (e.g. poll results) have a visible Back/Close button.
@@ -463,6 +464,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
         }
         overlay.accessibilityViewIsModal = false
         overlay.accessibilityElementsHidden = true
+        self.controller?.view.accessibilityViewIsModal = false
     }
 
     func restoreVoiceOverOverlayAfterExternalPresentation(focusProfileButton: Bool) {
@@ -474,6 +476,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
         }
         overlay.accessibilityElementsHidden = false
         overlay.accessibilityViewIsModal = true
+        self.controller?.view.accessibilityViewIsModal = true
         if focusProfileButton {
             overlay.voiceOverFocusProfileButton()
         } else {
@@ -1748,6 +1751,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
             } else {
                 overlay.accessibilityElementsHidden = false
                 overlay.accessibilityViewIsModal = true
+                self.controller?.view.accessibilityViewIsModal = true
             }
             
             if !self.didRequestVoiceOverScrollToEnd {
@@ -1779,6 +1783,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
             self.wrappingNode.view.accessibilityElementsHidden = false
             self.wrappingNode.view.isUserInteractionEnabled = true
             self.panRecognizer?.isEnabled = true
+            self.controller?.view.accessibilityViewIsModal = false
             self.navigationBar?.view.accessibilityElementsHidden = false
             if let savedState = self.voiceOverOverlaySavedState {
                 self.navigationBar?.view.isHidden = savedState.navigationBarIsHidden
