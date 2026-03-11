@@ -1717,32 +1717,37 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                 self.view.bringSubviewToFront(overlay)
             }
 
-            if self.voiceOverOverlayTopControllerDisposable == nil, let navigationController = self.controller?.effectiveNavigationController {
-                self.voiceOverOverlayTopControllerDisposable = (navigationController.viewControllersSignal
-                |> deliverOnMainQueue).startStrict(next: { [weak self] viewControllers in
-                    self?.updateVoiceOverOverlayAccessibilityIsolation(viewControllers: viewControllers)
-                })
-            }
-            if self.voiceOverOverlayModalIsolationTimer == nil {
-                self.voiceOverOverlayModalIsolationTimer = SwiftSignalKit.Timer(timeout: 0.25, repeat: true, completion: { [weak self] in
-                    guard let self else {
-                        return
-                    }
-                    guard UIAccessibility.isVoiceOverRunning, self.voiceOverOverlayView != nil else {
-                        return
-                    }
-                    if let navigationController = self.controller?.effectiveNavigationController {
-                        self.updateVoiceOverOverlayAccessibilityIsolation(viewControllers: navigationController.viewControllers)
-                    } else {
-                        self.updateVoiceOverOverlayAccessibilityIsolation(viewControllers: [])
-                    }
-                }, queue: .mainQueue())
-                self.voiceOverOverlayModalIsolationTimer?.start()
-            }
-            if let navigationController = self.controller?.effectiveNavigationController {
-                self.updateVoiceOverOverlayAccessibilityIsolation(viewControllers: navigationController.viewControllers)
+            if self.voiceOverOverlayController == nil {
+                if self.voiceOverOverlayTopControllerDisposable == nil, let navigationController = self.controller?.effectiveNavigationController {
+                    self.voiceOverOverlayTopControllerDisposable = (navigationController.viewControllersSignal
+                    |> deliverOnMainQueue).startStrict(next: { [weak self] viewControllers in
+                        self?.updateVoiceOverOverlayAccessibilityIsolation(viewControllers: viewControllers)
+                    })
+                }
+                if self.voiceOverOverlayModalIsolationTimer == nil {
+                    self.voiceOverOverlayModalIsolationTimer = SwiftSignalKit.Timer(timeout: 0.25, repeat: true, completion: { [weak self] in
+                        guard let self else {
+                            return
+                        }
+                        guard UIAccessibility.isVoiceOverRunning, self.voiceOverOverlayView != nil else {
+                            return
+                        }
+                        if let navigationController = self.controller?.effectiveNavigationController {
+                            self.updateVoiceOverOverlayAccessibilityIsolation(viewControllers: navigationController.viewControllers)
+                        } else {
+                            self.updateVoiceOverOverlayAccessibilityIsolation(viewControllers: [])
+                        }
+                    }, queue: .mainQueue())
+                    self.voiceOverOverlayModalIsolationTimer?.start()
+                }
+                if let navigationController = self.controller?.effectiveNavigationController {
+                    self.updateVoiceOverOverlayAccessibilityIsolation(viewControllers: navigationController.viewControllers)
+                } else {
+                    self.updateVoiceOverOverlayAccessibilityIsolation(viewControllers: [])
+                }
             } else {
-                self.updateVoiceOverOverlayAccessibilityIsolation(viewControllers: [])
+                overlay.accessibilityElementsHidden = false
+                overlay.accessibilityViewIsModal = true
             }
             
             if !self.didRequestVoiceOverScrollToEnd {
