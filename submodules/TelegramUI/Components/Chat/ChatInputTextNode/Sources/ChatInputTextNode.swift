@@ -281,15 +281,11 @@ open class ChatInputTextNode: ASDisplayNode {
         }
     }
 
-    public init(disableTiling: Bool = false, textViewFactory: ((Bool) -> ChatInputTextView)? = nil) {
+    public init(disableTiling: Bool = false) {
         super.init()
 
         self.setViewBlock({
-            if let textViewFactory {
-                return textViewFactory(disableTiling)
-            } else {
-                return ChatInputTextView(disableTiling: disableTiling)
-            }
+            return ChatInputTextView(disableTiling: disableTiling)
         })
     }
     
