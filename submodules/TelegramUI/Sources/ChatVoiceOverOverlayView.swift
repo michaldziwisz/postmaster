@@ -967,7 +967,7 @@ public final class ChatVoiceOverOverlayView: UIView {
         var kind: Kind
     }
 
-    fileprivate let usesNativeVoiceOverAccessibility: Bool = true
+    let usesNativeVoiceOverAccessibility: Bool = true
 
     private let topBarView = UIView()
     private let backButton = UIButton(type: .system)
@@ -1008,6 +1008,7 @@ public final class ChatVoiceOverOverlayView: UIView {
 
     private var composerBottomConstraint: NSLayoutConstraint?
     private var composerHeightConstraint: NSLayoutConstraint?
+    private var topBarHeightConstraint: NSLayoutConstraint?
     private var keyboardObservers: [NSObjectProtocol] = []
     private var accessibilityObservers: [NSObjectProtocol] = []
 
@@ -1264,6 +1265,8 @@ public final class ChatVoiceOverOverlayView: UIView {
         self.composerBottomConstraint = composerBottom
         let composerHeight = self.composerView.heightAnchor.constraint(equalToConstant: 64.0)
         self.composerHeightConstraint = composerHeight
+        let topBarHeight = self.topBarView.heightAnchor.constraint(equalToConstant: 56.0)
+        self.topBarHeightConstraint = topBarHeight
 
         let voicePlayerHeightConstraint = self.voicePlayerView.heightAnchor.constraint(equalToConstant: 0.0)
         self.voicePlayerHeightConstraint = voicePlayerHeightConstraint
@@ -1272,6 +1275,7 @@ public final class ChatVoiceOverOverlayView: UIView {
             self.topBarView.topAnchor.constraint(equalTo: self.safeAreaLayoutGuide.topAnchor),
             self.topBarView.leadingAnchor.constraint(equalTo: self.leadingAnchor),
             self.topBarView.trailingAnchor.constraint(equalTo: self.trailingAnchor),
+            topBarHeight,
 
             self.backButton.leadingAnchor.constraint(equalTo: self.topBarView.leadingAnchor, constant: 12.0),
             self.backButton.centerYAnchor.constraint(equalTo: self.titleLabel.centerYAnchor),
@@ -1351,6 +1355,7 @@ public final class ChatVoiceOverOverlayView: UIView {
 
         self.setupKeyboardObservers()
         self.setupAccessibilityObservers()
+        self.updateNativeChromeMode()
     }
 
     required public init?(coder: NSCoder) {
@@ -1375,6 +1380,7 @@ public final class ChatVoiceOverOverlayView: UIView {
         } else {
             self.isComposerEnabled = true
         }
+        self.updateNativeChromeMode()
 
         self.backgroundColor = state.theme.list.plainBackgroundColor
         self.topBarView.backgroundColor = state.theme.rootController.navigationBar.opaqueBackgroundColor
@@ -1599,6 +1605,20 @@ public final class ChatVoiceOverOverlayView: UIView {
     }
 
     private func updateComposerPrimaryActionButtons() {
+        if self.usesNativeVoiceOverAccessibility {
+            self.sendButton.isHidden = true
+            self.sendButton.isAccessibilityElement = false
+            self.sendButton.accessibilityElementsHidden = true
+            self.sendButton.isEnabled = false
+
+            self.recordButton.isHidden = true
+            self.recordButton.isAccessibilityElement = false
+            self.recordButton.accessibilityElementsHidden = true
+
+            self.updateComposerAccessibilityVisibility()
+            return
+        }
+
         let isRecording = self.interfaceState?.inputTextPanelState.mediaRecordingState != nil
         let hasDraftText = self.hasComposerDraftText()
         let shouldShowSend = self.isComposerEnabled && !isRecording && hasDraftText
@@ -1614,6 +1634,37 @@ public final class ChatVoiceOverOverlayView: UIView {
         self.recordButton.accessibilityElementsHidden = !shouldShowRecord
 
         self.updateComposerAccessibilityVisibility()
+    }
+
+    private func updateNativeChromeMode() {
+        guard self.usesNativeVoiceOverAccessibility else {
+            self.topBarHeightConstraint?.constant = 56.0
+            self.topBarView.isHidden = false
+            self.backButton.isAccessibilityElement = true
+            self.profileButton.isAccessibilityElement = true
+            self.titleLabel.isAccessibilityElement = true
+            self.composerHeightConstraint?.constant = 64.0
+            self.composerView.isHidden = false
+            self.composerView.isUserInteractionEnabled = self.isComposerEnabled
+            self.attachButton.isAccessibilityElement = true
+            self.inputTextView.isAccessibilityElement = true
+            return
+        }
+
+        self.topBarHeightConstraint?.constant = 0.0
+        self.topBarView.isHidden = true
+        self.topBarView.isUserInteractionEnabled = false
+        self.backButton.isAccessibilityElement = false
+        self.profileButton.isAccessibilityElement = false
+        self.titleLabel.isAccessibilityElement = false
+
+        self.composerHeightConstraint?.constant = 0.0
+        self.composerView.isHidden = true
+        self.composerView.isUserInteractionEnabled = false
+        self.attachButton.isAccessibilityElement = false
+        self.inputTextView.isAccessibilityElement = false
+        self.sendButton.isAccessibilityElement = false
+        self.recordButton.isAccessibilityElement = false
     }
 
     private func makeRows(from entries: [ChatHistoryEntry]) -> [Row] {
@@ -2015,6 +2066,10 @@ public final class ChatVoiceOverOverlayView: UIView {
 
     func voiceOverFocusProfileButton() {
         guard UIAccessibility.isVoiceOverRunning else {
+            return
+        }
+        guard !self.usesNativeVoiceOverAccessibility else {
+            self.voiceOverDidReturnToChat()
             return
         }
         self.setVoiceOverScrollbarAccessibilityElementActive(false, anchorTableRow: nil)
@@ -4863,10 +4918,10 @@ public final class ChatVoiceOverOverlayView: UIView {
 
     private func updateComposerAccessibilityVisibility() {
         let isScrollbarActive = !self.usesNativeVoiceOverAccessibility && (self.voiceOverScrollbarAccessibilityElementAnchorTableRow != nil)
-        self.composerView.accessibilityElementsHidden = isScrollbarActive
+        self.composerView.accessibilityElementsHidden = self.usesNativeVoiceOverAccessibility || isScrollbarActive
         self.voicePlayerView.accessibilityElementsHidden = isScrollbarActive
         if self.usesNativeVoiceOverAccessibility {
-            self.composerView.accessibilityElements = nil
+            self.composerView.accessibilityElements = []
             self.voicePlayerView.accessibilityElements = nil
         } else if self.isComposerEnabled {
             var elements: [Any] = [
