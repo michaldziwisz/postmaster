@@ -1247,7 +1247,9 @@ public final class ChatVoiceOverOverlayView: UIView {
             }
             self.setVoiceOverScrollbarAccessibilityElementActive(false, anchorTableRow: nil)
             self.endEditing(true)
-            self.scheduleKeyboardDismissFocusRestoreIfNeeded(after: 0.08)
+            if !self.usesNativeVoiceOverAccessibility {
+                self.scheduleKeyboardDismissFocusRestoreIfNeeded(after: 0.08)
+            }
             return true
         }
         self.composerView.addSubview(self.inputTextNode.view)
@@ -1956,7 +1958,7 @@ public final class ChatVoiceOverOverlayView: UIView {
     }
 
     public func chatInputTextNodeDidFinishEditing() {
-        self.scheduleKeyboardDismissFocusRestoreIfNeeded(after: 0.1)
+        self.scheduleKeyboardDismissFocusRestoreIfNeeded(after: self.usesNativeVoiceOverAccessibility ? 0.05 : 0.1)
     }
 
     public func chatInputTextNodeDidUpdateText() {
@@ -3639,6 +3641,36 @@ public final class ChatVoiceOverOverlayView: UIView {
             return
         }
 
+        if self.usesNativeVoiceOverAccessibility {
+            self.keyboardDismissFocusRestoreWorkItem?.cancel()
+
+            let workItem = DispatchWorkItem { [weak self] in
+                guard let self else {
+                    return
+                }
+                self.keyboardDismissFocusRestoreWorkItem = nil
+
+                guard UIAccessibility.isVoiceOverRunning else {
+                    return
+                }
+                guard self.window != nil, !self.accessibilityElementsHidden else {
+                    return
+                }
+
+                self.setVoiceOverScrollbarAccessibilityElementActive(false, anchorTableRow: nil)
+
+                let focusTarget: Any = self.inputTextView.isAccessibilityElement ? self.inputTextView : self.preferredVoiceOverRecoveryTarget()
+                UIAccessibility.post(notification: .screenChanged, argument: focusTarget)
+                DispatchQueue.main.async {
+                    UIAccessibility.post(notification: .layoutChanged, argument: focusTarget)
+                }
+            }
+
+            self.keyboardDismissFocusRestoreWorkItem = workItem
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: workItem)
+            return
+        }
+
         self.extendVoiceOverModalIsolationGrace(max(1.2, delay + 1.0))
 
         self.keyboardDismissFocusRestoreWorkItem?.cancel()
@@ -3694,6 +3726,9 @@ public final class ChatVoiceOverOverlayView: UIView {
 
     private func scheduleVoiceOverFocusRecoveryIfNeeded() {
         guard UIAccessibility.isVoiceOverRunning else {
+            return
+        }
+        guard !self.usesNativeVoiceOverAccessibility else {
             return
         }
         guard self.window != nil, !self.accessibilityElementsHidden, self.accessibilityViewIsModal else {
@@ -4752,15 +4787,17 @@ public final class ChatVoiceOverOverlayView: UIView {
         let frameToken = nc.addObserver(forName: UIResponder.keyboardWillChangeFrameNotification, object: nil, queue: .main) { [weak self] notification in
             self?.handleKeyboard(notification: notification)
         }
-        let willHideToken = nc.addObserver(forName: UIResponder.keyboardWillHideNotification, object: nil, queue: .main) { [weak self] _ in
-            self?.scheduleKeyboardDismissFocusRestoreIfNeeded(after: 0.12)
-        }
-        let didHideToken = nc.addObserver(forName: UIResponder.keyboardDidHideNotification, object: nil, queue: .main) { [weak self] _ in
-            self?.scheduleKeyboardDismissFocusRestoreIfNeeded(after: 0.05)
-        }
         self.keyboardObservers.append(frameToken)
-        self.keyboardObservers.append(willHideToken)
-        self.keyboardObservers.append(didHideToken)
+        if !self.usesNativeVoiceOverAccessibility {
+            let willHideToken = nc.addObserver(forName: UIResponder.keyboardWillHideNotification, object: nil, queue: .main) { [weak self] _ in
+                self?.scheduleKeyboardDismissFocusRestoreIfNeeded(after: 0.12)
+            }
+            let didHideToken = nc.addObserver(forName: UIResponder.keyboardDidHideNotification, object: nil, queue: .main) { [weak self] _ in
+                self?.scheduleKeyboardDismissFocusRestoreIfNeeded(after: 0.05)
+            }
+            self.keyboardObservers.append(willHideToken)
+            self.keyboardObservers.append(didHideToken)
+        }
     }
 
     private func setupAccessibilityObservers() {
@@ -4784,9 +4821,6 @@ public final class ChatVoiceOverOverlayView: UIView {
         let focusedElement = userInfo[UIAccessibility.focusedElementUserInfoKey]
 
         if self.usesNativeVoiceOverAccessibility {
-            if self.accessibilityViewIsModal, !self.accessibilityElementsHidden, !self.isVoiceOverElementWithinOverlay(focusedElement) {
-                self.scheduleVoiceOverFocusRecoveryIfNeeded()
-            }
             return
         }
         let isCustomScrollbarFocused: Bool = {
@@ -4946,7 +4980,7 @@ public final class ChatVoiceOverOverlayView: UIView {
         if overlap > 0.0 {
             self.keyboardDismissFocusRestoreWorkItem?.cancel()
             self.keyboardDismissFocusRestoreWorkItem = nil
-        } else if previousOverlap > 0.0 {
+        } else if previousOverlap > 0.0 && !self.usesNativeVoiceOverAccessibility {
             self.scheduleKeyboardDismissFocusRestoreIfNeeded(after: max(0.1, duration + 0.05))
         }
     }
