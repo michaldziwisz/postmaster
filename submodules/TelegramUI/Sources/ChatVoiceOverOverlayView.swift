@@ -3559,6 +3559,19 @@ public final class ChatVoiceOverOverlayView: UIView {
         return self.profileButton
     }
 
+    private func preferredPostKeyboardDismissFocusTarget() -> Any {
+        if let composerTarget = self.preferredComposerFocusTarget() {
+            return composerTarget
+        }
+        if self.backButton.isAccessibilityElement {
+            return self.backButton
+        }
+        if self.profileButton.isAccessibilityElement {
+            return self.profileButton
+        }
+        return self.preferredVoiceOverRecoveryTarget()
+    }
+
     private func accessibilityFocusTarget(at indexPath: IndexPath) -> Any? {
         if self.usesNativeVoiceOverAccessibility {
             if self.tableView.indexPathsForVisibleRows?.contains(indexPath) != true {
@@ -3668,10 +3681,30 @@ public final class ChatVoiceOverOverlayView: UIView {
 
                 self.setVoiceOverScrollbarAccessibilityElementActive(false, anchorTableRow: nil)
 
-                let focusTarget: Any = self.inputTextView.isAccessibilityElement ? self.inputTextView : self.preferredVoiceOverRecoveryTarget()
+                let focusTarget = self.preferredPostKeyboardDismissFocusTarget()
                 UIAccessibility.post(notification: .screenChanged, argument: focusTarget)
                 DispatchQueue.main.async {
                     UIAccessibility.post(notification: .layoutChanged, argument: focusTarget)
+                }
+
+                guard remainingAttempts > 1 else {
+                    return
+                }
+
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
+                    guard let self else {
+                        return
+                    }
+                    guard UIAccessibility.isVoiceOverRunning else {
+                        return
+                    }
+                    guard self.window != nil, !self.accessibilityElementsHidden else {
+                        return
+                    }
+                    if self.isVoiceOverFocusWithinOverlay() {
+                        return
+                    }
+                    self.scheduleKeyboardDismissFocusRestoreIfNeeded(after: 0.0, remainingAttempts: remainingAttempts - 1)
                 }
             }
 
