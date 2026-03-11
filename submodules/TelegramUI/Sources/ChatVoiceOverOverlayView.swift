@@ -1103,49 +1103,13 @@ public final class ChatVoiceOverOverlayView: UIView {
         return self.inputTextNode.textView
     }
 
-    private func composerAccessibilityElementsList() -> [Any] {
-        guard !self.composerView.accessibilityElementsHidden, self.isComposerEnabled else {
-            return []
-        }
-        var elements: [Any] = [
-            self.attachButton,
-            self.inputTextView
-        ]
-        if !self.sendButton.isHidden && self.sendButton.isAccessibilityElement {
-            elements.append(self.sendButton)
-        }
-        if !self.recordButton.isHidden && self.recordButton.isAccessibilityElement {
-            elements.append(self.recordButton)
-        }
-        return elements
-    }
-
-    private func voicePlayerAccessibilityElementsList() -> [Any] {
-        guard !self.voicePlayerView.isHidden, !self.voicePlayerView.accessibilityElementsHidden else {
-            return []
-        }
-        return [
-            self.voicePlayerPlayPauseButton,
-            self.voicePlayerPositionSlider,
-            self.voicePlayerSpeedButton
-        ]
-    }
-
     public override var accessibilityElements: [Any]? {
         get {
             guard UIAccessibility.isVoiceOverRunning else {
                 return nil
             }
             if self.usesNativeVoiceOverAccessibility {
-                var elements: [Any] = [
-                    self.backButton,
-                    self.profileButton,
-                    self.titleLabel,
-                    self.tableView
-                ]
-                elements.append(contentsOf: self.voicePlayerAccessibilityElementsList())
-                elements.append(contentsOf: self.composerAccessibilityElementsList())
-                return elements
+                return nil
             }
             var elements: [Any] = [
                 self.backButton,
@@ -1234,12 +1198,15 @@ public final class ChatVoiceOverOverlayView: UIView {
         self.addSubview(self.tableAccessibilityContainerView)
 
         self.composerView.translatesAutoresizingMaskIntoConstraints = false
+        self.composerView.isAccessibilityElement = false
+        self.composerView.shouldGroupAccessibilityChildren = false
         self.addSubview(self.composerView)
 
         self.voicePlayerView.translatesAutoresizingMaskIntoConstraints = false
         self.voicePlayerView.isHidden = true
         self.voicePlayerView.isUserInteractionEnabled = false
         self.voicePlayerView.isAccessibilityElement = false
+        self.voicePlayerView.shouldGroupAccessibilityChildren = false
         self.addSubview(self.voicePlayerView)
 
         self.voicePlayerPlayPauseButton.translatesAutoresizingMaskIntoConstraints = false
@@ -4898,7 +4865,10 @@ public final class ChatVoiceOverOverlayView: UIView {
         let isScrollbarActive = !self.usesNativeVoiceOverAccessibility && (self.voiceOverScrollbarAccessibilityElementAnchorTableRow != nil)
         self.composerView.accessibilityElementsHidden = isScrollbarActive
         self.voicePlayerView.accessibilityElementsHidden = isScrollbarActive
-        if self.isComposerEnabled {
+        if self.usesNativeVoiceOverAccessibility {
+            self.composerView.accessibilityElements = nil
+            self.voicePlayerView.accessibilityElements = nil
+        } else if self.isComposerEnabled {
             var elements: [Any] = [
                 self.attachButton,
                 self.inputTextView as Any
