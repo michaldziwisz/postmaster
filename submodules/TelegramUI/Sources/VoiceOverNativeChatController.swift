@@ -1,5 +1,57 @@
 import UIKit
 
+private final class VoiceOverNativeChatRootView: UIView {
+    var orderedPrefixElements: [Any] = []
+    weak var contentAccessibilityContainer: UIView?
+
+    override var accessibilityElements: [Any]? {
+        get {
+            return nil
+        }
+        set {
+        }
+    }
+
+    override func accessibilityElementCount() -> Int {
+        guard UIAccessibility.isVoiceOverRunning else {
+            return super.accessibilityElementCount()
+        }
+        return self.orderedPrefixElements.count + self.contentElementCount()
+    }
+
+    override func accessibilityElement(at index: Int) -> Any? {
+        guard UIAccessibility.isVoiceOverRunning else {
+            return super.accessibilityElement(at: index)
+        }
+        if index < self.orderedPrefixElements.count {
+            return self.orderedPrefixElements[index]
+        }
+        let contentIndex = index - self.orderedPrefixElements.count
+        guard contentIndex >= 0 else {
+            return nil
+        }
+        return self.contentAccessibilityContainer?.accessibilityElement(at: contentIndex)
+    }
+
+    override func index(ofAccessibilityElement element: Any) -> Int {
+        guard UIAccessibility.isVoiceOverRunning else {
+            return super.index(ofAccessibilityElement: element)
+        }
+        if let prefixIndex = self.orderedPrefixElements.firstIndex(where: { ($0 as AnyObject) === (element as AnyObject) }) {
+            return prefixIndex
+        }
+        let contentIndex = self.contentAccessibilityContainer?.index(ofAccessibilityElement: element) ?? NSNotFound
+        if contentIndex != NSNotFound {
+            return self.orderedPrefixElements.count + contentIndex
+        }
+        return NSNotFound
+    }
+
+    private func contentElementCount() -> Int {
+        return self.contentAccessibilityContainer?.accessibilityElementCount() ?? 0
+    }
+}
+
 final class VoiceOverNativeChatController: UIViewController {
     let overlayView: ChatVoiceOverOverlayView
 
@@ -22,11 +74,12 @@ final class VoiceOverNativeChatController: UIViewController {
     }
 
     override func loadView() {
-        let view = UIView()
+        let view = VoiceOverNativeChatRootView()
         view.backgroundColor = .clear
         view.isAccessibilityElement = false
         view.accessibilityViewIsModal = true
         view.shouldGroupAccessibilityChildren = false
+        view.contentAccessibilityContainer = self.overlayView
         self.view = view
 
         self.headerView.translatesAutoresizingMaskIntoConstraints = false
@@ -123,11 +176,6 @@ final class VoiceOverNativeChatController: UIViewController {
         self.backButton.addTarget(self, action: #selector(self.backPressed), for: .touchUpInside)
         self.titleButton.addTarget(self, action: #selector(self.infoPressed), for: .touchUpInside)
         self.infoButton.addTarget(self, action: #selector(self.infoPressed), for: .touchUpInside)
-        self.headerView.accessibilityElements = [
-            self.backButton,
-            self.titleButton,
-            self.infoButton
-        ]
 
         self.applyNavigationState(ChatVoiceOverOverlayView.NativeNavigationState(
             title: "",
@@ -159,6 +207,12 @@ final class VoiceOverNativeChatController: UIViewController {
         self.infoButton.setTitle(state.infoLabel, for: .normal)
         self.infoButton.accessibilityLabel = state.infoLabel
         self.infoButton.accessibilityHint = state.infoHint
+
+        (self.view as? VoiceOverNativeChatRootView)?.orderedPrefixElements = [
+            self.backButton,
+            self.titleButton,
+            self.infoButton
+        ]
     }
 
     @objc private func backPressed() {
