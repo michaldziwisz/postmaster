@@ -78,20 +78,26 @@ final class VoiceOverNativeChatController: UIViewController {
             self.headerView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
             self.headerView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             self.headerView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            self.headerView.heightAnchor.constraint(greaterThanOrEqualToConstant: 56.0),
+            self.headerView.heightAnchor.constraint(equalToConstant: 56.0),
 
             self.backButton.leadingAnchor.constraint(equalTo: self.headerView.leadingAnchor, constant: 8.0),
+            self.backButton.topAnchor.constraint(greaterThanOrEqualTo: self.headerView.topAnchor, constant: 6.0),
             self.backButton.centerYAnchor.constraint(equalTo: self.headerView.centerYAnchor),
+            self.backButton.bottomAnchor.constraint(lessThanOrEqualTo: self.headerView.bottomAnchor, constant: -6.0),
             self.backButton.heightAnchor.constraint(greaterThanOrEqualToConstant: 44.0),
 
             self.infoButton.trailingAnchor.constraint(equalTo: self.headerView.trailingAnchor, constant: -8.0),
+            self.infoButton.topAnchor.constraint(greaterThanOrEqualTo: self.headerView.topAnchor, constant: 6.0),
             self.infoButton.centerYAnchor.constraint(equalTo: self.headerView.centerYAnchor),
+            self.infoButton.bottomAnchor.constraint(lessThanOrEqualTo: self.headerView.bottomAnchor, constant: -6.0),
             self.infoButton.heightAnchor.constraint(greaterThanOrEqualToConstant: 44.0),
 
             self.titleButton.leadingAnchor.constraint(greaterThanOrEqualTo: self.backButton.trailingAnchor, constant: 8.0),
             self.titleButton.trailingAnchor.constraint(lessThanOrEqualTo: self.infoButton.leadingAnchor, constant: -8.0),
+            self.titleButton.topAnchor.constraint(greaterThanOrEqualTo: self.headerView.topAnchor, constant: 6.0),
             self.titleButton.centerXAnchor.constraint(equalTo: self.headerView.centerXAnchor),
             self.titleButton.centerYAnchor.constraint(equalTo: self.headerView.centerYAnchor),
+            self.titleButton.bottomAnchor.constraint(lessThanOrEqualTo: self.headerView.bottomAnchor, constant: -6.0),
             self.titleButton.heightAnchor.constraint(greaterThanOrEqualToConstant: 44.0),
 
             self.headerSeparatorView.leadingAnchor.constraint(equalTo: self.headerView.leadingAnchor),
