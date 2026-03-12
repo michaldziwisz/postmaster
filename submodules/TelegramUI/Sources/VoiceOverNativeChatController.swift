@@ -26,6 +26,7 @@ final class VoiceOverNativeChatController: UIViewController {
         view.backgroundColor = .clear
         view.isAccessibilityElement = false
         view.accessibilityViewIsModal = true
+        view.shouldGroupAccessibilityChildren = false
         self.view = view
 
         self.headerView.translatesAutoresizingMaskIntoConstraints = false
@@ -67,6 +68,7 @@ final class VoiceOverNativeChatController: UIViewController {
         self.contentView.translatesAutoresizingMaskIntoConstraints = false
         self.contentView.backgroundColor = .clear
         self.contentView.isAccessibilityElement = false
+        self.contentView.shouldGroupAccessibilityChildren = false
         view.addSubview(self.contentView)
 
         self.overlayView.translatesAutoresizingMaskIntoConstraints = false
@@ -115,6 +117,11 @@ final class VoiceOverNativeChatController: UIViewController {
         self.backButton.addTarget(self, action: #selector(self.backPressed), for: .touchUpInside)
         self.titleButton.addTarget(self, action: #selector(self.infoPressed), for: .touchUpInside)
         self.infoButton.addTarget(self, action: #selector(self.infoPressed), for: .touchUpInside)
+        self.headerView.accessibilityElements = [
+            self.backButton,
+            self.titleButton,
+            self.infoButton
+        ]
 
         self.applyNavigationState(ChatVoiceOverOverlayView.NativeNavigationState(
             title: "",
@@ -146,13 +153,6 @@ final class VoiceOverNativeChatController: UIViewController {
         self.infoButton.setTitle(state.infoLabel, for: .normal)
         self.infoButton.accessibilityLabel = state.infoLabel
         self.infoButton.accessibilityHint = state.infoHint
-
-        self.view.accessibilityElements = [
-            self.backButton,
-            self.titleButton,
-            self.infoButton,
-            self.overlayView as Any
-        ]
     }
 
     @objc private func backPressed() {
