@@ -1101,6 +1101,7 @@ public final class ChatVoiceOverOverlayView: UIView {
     public var onNativeNavigationStateUpdated: ((NativeNavigationState) -> Void)?
     public var externalNavigationFocusTargetProvider: (() -> Any?)?
     public var externalProfileFocusTargetProvider: (() -> Any?)?
+    public var externalNativeKeyboardEscapeHandler: (() -> Bool)?
 
     private static let maxLoadEarlierNoProgressCount: Int = 200
     private static let loadEarlierTimeout: TimeInterval = 12.0
@@ -1261,6 +1262,9 @@ public final class ChatVoiceOverOverlayView: UIView {
         self.inputTextView.voiceOverOnPerformEscape = { [weak self] in
             guard let self else {
                 return false
+            }
+            if self.usesNativeVoiceOverAccessibility, self.externalNativeKeyboardEscapeHandler?() == true {
+                return true
             }
             guard self.inputTextView.isFirstResponder || self.lastKnownKeyboardOverlap > 0.0 || self.hasFirstResponderDescendant() else {
                 return false
@@ -3649,6 +3653,30 @@ public final class ChatVoiceOverOverlayView: UIView {
             return responder.resignFirstResponder()
         }
         return self.endEditing(true)
+    }
+
+    func shouldHandleVoiceOverKeyboardEscapeExternally() -> Bool {
+        return self.inputTextView.isFirstResponder || self.lastKnownKeyboardOverlap > 0.0 || self.hasFirstResponderDescendant()
+    }
+
+    func dismissKeyboardForExternalVoiceOverEscape() -> Bool {
+        self.setVoiceOverScrollbarAccessibilityElementActive(false, anchorTableRow: nil)
+        self.keyboardDismissFocusRestoreWorkItem?.cancel()
+        self.keyboardDismissFocusRestoreWorkItem = nil
+        self.nativeKeyboardDismissFocusContainmentDeadline = 0.0
+        self.suppressNextEditingEndedFocusRestore = true
+        return self.dismissKeyboardForVoiceOver()
+    }
+
+    func preferredNativeControllerKeyboardDismissFocusTarget() -> Any {
+        if let composerTarget = self.preferredComposerFocusTarget() {
+            return composerTarget
+        }
+        if let targetIndexPath = self.voiceOverFallbackFocusIndexPath(),
+           let target = self.accessibilityFocusTarget(at: targetIndexPath) {
+            return target
+        }
+        return self.tableView
     }
 
     private func accessibilityFocusTarget(at indexPath: IndexPath) -> Any? {

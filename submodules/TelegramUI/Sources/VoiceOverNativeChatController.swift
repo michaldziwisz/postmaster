@@ -9,6 +9,8 @@ final class VoiceOverNativeChatController: UIViewController {
     private let infoButton = UIButton(type: .system)
     private let headerSeparatorView = UIView()
     private let contentView = UIView()
+    private var accessibilityObservers: [NSObjectProtocol] = []
+    private var keyboardDismissVoiceOverContainmentDeadline: CFTimeInterval = 0.0
 
     init(overlayView: ChatVoiceOverOverlayView) {
         self.overlayView = overlayView
@@ -140,6 +142,19 @@ final class VoiceOverNativeChatController: UIViewController {
         self.overlayView.externalProfileFocusTargetProvider = { [weak self] in
             return self?.titleButton
         }
+        self.overlayView.externalNativeKeyboardEscapeHandler = { [weak self] in
+            return self?.handleVoiceOverKeyboardEscape() ?? false
+        }
+
+        let focusToken = NotificationCenter.default.addObserver(forName: UIAccessibility.elementFocusedNotification, object: nil, queue: .main) { [weak self] notification in
+            self?.handleVoiceOverElementFocused(notification)
+        }
+        self.accessibilityObservers.append(focusToken)
+    }
+
+    deinit {
+        let notificationCenter = NotificationCenter.default
+        self.accessibilityObservers.forEach { notificationCenter.removeObserver($0) }
     }
 
     private func applyNavigationState(_ state: ChatVoiceOverOverlayView.NativeNavigationState) {
@@ -177,10 +192,110 @@ final class VoiceOverNativeChatController: UIViewController {
     }
 
     override func accessibilityPerformEscape() -> Bool {
+        if self.handleVoiceOverKeyboardEscape() {
+            return true
+        }
         if self.overlayView.accessibilityPerformEscape() {
             return true
         }
         self.backPressed()
         return true
+    }
+
+    private func handleVoiceOverKeyboardEscape() -> Bool {
+        guard self.overlayView.shouldHandleVoiceOverKeyboardEscapeExternally() else {
+            return false
+        }
+        self.extendKeyboardDismissVoiceOverContainment(6.0)
+        guard self.overlayView.dismissKeyboardForExternalVoiceOverEscape() else {
+            return false
+        }
+        self.scheduleKeyboardDismissFocusRestore(after: 0.05, remainingAttempts: 8)
+        return true
+    }
+
+    private func scheduleKeyboardDismissFocusRestore(after delay: TimeInterval, remainingAttempts: Int) {
+        guard UIAccessibility.isVoiceOverRunning, remainingAttempts > 0 else {
+            return
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+            guard let self else {
+                return
+            }
+            guard self.shouldContainVoiceOverFocusAfterKeyboardDismiss else {
+                return
+            }
+            self.restoreVoiceOverFocusAfterKeyboardDismissIfNeeded()
+            self.scheduleKeyboardDismissFocusRestore(after: 0.35, remainingAttempts: remainingAttempts - 1)
+        }
+    }
+
+    private func restoreVoiceOverFocusAfterKeyboardDismissIfNeeded() {
+        let target = self.preferredKeyboardDismissFocusTarget()
+        guard self.shouldRestoreVoiceOverFocus(to: target) else {
+            return
+        }
+        UIAccessibility.post(notification: .screenChanged, argument: target)
+        DispatchQueue.main.async {
+            UIAccessibility.post(notification: .layoutChanged, argument: target)
+        }
+    }
+
+    private func preferredKeyboardDismissFocusTarget() -> Any {
+        return self.overlayView.preferredNativeControllerKeyboardDismissFocusTarget()
+    }
+
+    private var shouldContainVoiceOverFocusAfterKeyboardDismiss: Bool {
+        guard UIAccessibility.isVoiceOverRunning else {
+            return false
+        }
+        return CACurrentMediaTime() < self.keyboardDismissVoiceOverContainmentDeadline
+    }
+
+    private func extendKeyboardDismissVoiceOverContainment(_ duration: TimeInterval) {
+        let deadline = CACurrentMediaTime() + max(0.0, duration)
+        if deadline > self.keyboardDismissVoiceOverContainmentDeadline {
+            self.keyboardDismissVoiceOverContainmentDeadline = deadline
+        }
+    }
+
+    private func handleVoiceOverElementFocused(_ notification: Notification) {
+        guard self.shouldContainVoiceOverFocusAfterKeyboardDismiss else {
+            return
+        }
+        let focusedElement = notification.userInfo?[UIAccessibility.focusedElementUserInfoKey]
+        if self.isVoiceOverElementWithinNativeChat(focusedElement) {
+            return
+        }
+        self.restoreVoiceOverFocusAfterKeyboardDismissIfNeeded()
+    }
+
+    private func shouldRestoreVoiceOverFocus(to target: Any) -> Bool {
+        let focusedElement = UIAccessibility.focusedElement(using: .notificationVoiceOver)
+        guard let focusedElement else {
+            return true
+        }
+        if self.isSameVoiceOverElement(focusedElement, target) {
+            return false
+        }
+        return !self.isVoiceOverElementWithinNativeChat(focusedElement)
+    }
+
+    private func isSameVoiceOverElement(_ lhs: Any, _ rhs: Any) -> Bool {
+        return (lhs as AnyObject) === (rhs as AnyObject)
+    }
+
+    private func isVoiceOverElementWithinNativeChat(_ element: Any?) -> Bool {
+        guard let element else {
+            return false
+        }
+        if let view = element as? UIView {
+            return view.isDescendant(of: self.view)
+        }
+        if let accessibilityElement = element as? UIAccessibilityElement,
+           let containerView = accessibilityElement.accessibilityContainer as? UIView {
+            return containerView.isDescendant(of: self.view)
+        }
+        return false
     }
 }
