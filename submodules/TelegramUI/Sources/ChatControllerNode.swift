@@ -392,10 +392,14 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
         
         var resolvedIsChatOnTop = isChatOnTop
 
+        if usesNativeVoiceOverChat, overlay.shouldPreserveModalIsolationDuringFocusRecovery {
+            resolvedIsChatOnTop = true
+        }
+
         // Pushed controllers update `viewControllers`, but modals do not. If the chat (or its
         // navigation controller) is presenting a modal, VoiceOver must not stay trapped inside
         // the chat overlay view.
-        if resolvedIsChatOnTop {
+        if resolvedIsChatOnTop && !(usesNativeVoiceOverChat && overlay.shouldPreserveModalIsolationDuringFocusRecovery) {
             if controller.presentedViewController != nil {
                 resolvedIsChatOnTop = false
             } else if let navigationController = controller.navigationController, navigationController.presentedViewController != nil {
@@ -406,7 +410,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
         // When the chat shows overlay controllers using a `PresentationContext` (e.g. media gallery),
         // it doesn't appear in `presentedViewController` or `viewControllers`. Hide the overlay so
         // VoiceOver can interact with the presented UI.
-        if resolvedIsChatOnTop, !controller.galleryPresentationContext.controllers.isEmpty {
+        if resolvedIsChatOnTop, !(usesNativeVoiceOverChat && overlay.shouldPreserveModalIsolationDuringFocusRecovery), !controller.galleryPresentationContext.controllers.isEmpty {
             resolvedIsChatOnTop = false
         }
 

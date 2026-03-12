@@ -3694,7 +3694,13 @@ public final class ChatVoiceOverOverlayView: UIView {
         guard UIAccessibility.isVoiceOverRunning else {
             return false
         }
-        return CACurrentMediaTime() < self.voiceOverModalIsolationGraceDeadline
+        if CACurrentMediaTime() < self.voiceOverModalIsolationGraceDeadline {
+            return true
+        }
+        if self.usesNativeVoiceOverAccessibility, CACurrentMediaTime() < self.nativeKeyboardDismissFocusContainmentDeadline {
+            return true
+        }
+        return false
     }
 
     private func extendVoiceOverModalIsolationGrace(_ duration: TimeInterval) {
