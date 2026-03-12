@@ -438,7 +438,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
         
         overlay.accessibilityViewIsModal = usesNativeVoiceOverChat ? false : resolvedIsChatOnTop
         overlay.accessibilityElementsHidden = !resolvedIsChatOnTop
-        self.setVoiceOverModalStateOnControllerHierarchy(usesNativeVoiceOverChat ? false : resolvedIsChatOnTop)
+        self.setVoiceOverModalStateOnControllerHierarchy(resolvedIsChatOnTop)
         self.voiceOverOverlayController?.setAccessibilityModalState(resolvedIsChatOnTop)
         
         // When the chat is not the top-most controller, we must restore the navigation bar so pushed
@@ -500,7 +500,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
         overlay.accessibilityElementsHidden = false
         overlay.accessibilityViewIsModal = overlay.usesNativeVoiceOverAccessibility ? false : true
         self.voiceOverOverlayController?.setAccessibilityModalState(true)
-        self.setVoiceOverModalStateOnControllerHierarchy(overlay.usesNativeVoiceOverAccessibility ? false : true)
+        self.setVoiceOverModalStateOnControllerHierarchy(true)
         if focusProfileButton {
             overlay.voiceOverFocusProfileButton()
         } else {
@@ -1776,7 +1776,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                 overlay.accessibilityElementsHidden = false
                 overlay.accessibilityViewIsModal = overlay.usesNativeVoiceOverAccessibility ? false : true
                 self.voiceOverOverlayController?.setAccessibilityModalState(true)
-                self.setVoiceOverModalStateOnControllerHierarchy(overlay.usesNativeVoiceOverAccessibility ? false : true)
+                self.setVoiceOverModalStateOnControllerHierarchy(true)
             }
             
             if !self.didRequestVoiceOverScrollToEnd {
