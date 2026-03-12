@@ -973,6 +973,7 @@ public final class ChatVoiceOverOverlayView: UIView {
     private let backButton = UIButton(type: .system)
     private let titleLabel = UILabel()
     private let profileButton = UIButton(type: .system)
+    private var topBarHeightConstraint: NSLayoutConstraint?
 
     private let tableView = ChatVoiceOverOverlayTableView(frame: .zero, style: .plain)
     private let tableAccessibilityContainerView = ChatVoiceOverOverlayAccessibilityContainerView()
@@ -1274,10 +1275,14 @@ public final class ChatVoiceOverOverlayView: UIView {
         let voicePlayerHeightConstraint = self.voicePlayerView.heightAnchor.constraint(equalToConstant: 0.0)
         self.voicePlayerHeightConstraint = voicePlayerHeightConstraint
 
+        let topBarHeightConstraint = self.topBarView.heightAnchor.constraint(equalToConstant: self.usesNativeVoiceOverAccessibility ? 0.0 : 54.0)
+        self.topBarHeightConstraint = topBarHeightConstraint
+
         NSLayoutConstraint.activate([
             self.topBarView.topAnchor.constraint(equalTo: self.safeAreaLayoutGuide.topAnchor),
             self.topBarView.leadingAnchor.constraint(equalTo: self.leadingAnchor),
             self.topBarView.trailingAnchor.constraint(equalTo: self.trailingAnchor),
+            topBarHeightConstraint,
 
             self.backButton.leadingAnchor.constraint(equalTo: self.topBarView.leadingAnchor, constant: 12.0),
             self.backButton.centerYAnchor.constraint(equalTo: self.titleLabel.centerYAnchor),
@@ -1354,6 +1359,14 @@ public final class ChatVoiceOverOverlayView: UIView {
         self.composerView.setContentCompressionResistancePriority(.required, for: .vertical)
         self.tableView.setContentHuggingPriority(.defaultLow, for: .vertical)
         self.tableView.setContentCompressionResistancePriority(.defaultLow, for: .vertical)
+
+        if self.usesNativeVoiceOverAccessibility {
+            self.topBarView.isHidden = true
+            self.topBarView.accessibilityElementsHidden = true
+            self.backButton.isAccessibilityElement = false
+            self.profileButton.isAccessibilityElement = false
+            self.titleLabel.isAccessibilityElement = false
+        }
 
         self.setupKeyboardObservers()
         self.setupAccessibilityObservers()
@@ -2031,7 +2044,12 @@ public final class ChatVoiceOverOverlayView: UIView {
             return
         }
         self.setVoiceOverScrollbarAccessibilityElementActive(false, anchorTableRow: nil)
-        UIAccessibility.post(notification: .screenChanged, argument: self.profileButton)
+        if self.usesNativeVoiceOverAccessibility {
+            let target = self.preferredComposerFocusTarget() ?? self.tableView
+            UIAccessibility.post(notification: .screenChanged, argument: target)
+        } else {
+            UIAccessibility.post(notification: .screenChanged, argument: self.profileButton)
+        }
     }
 
     @objc private func attachPressed() {

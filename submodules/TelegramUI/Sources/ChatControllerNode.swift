@@ -376,8 +376,9 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
         guard let overlay = self.voiceOverOverlayView else {
             return
         }
+        let usesNativeVoiceOverChat = overlay.usesNativeVoiceOverAccessibility
         guard let controller = self.controller else {
-            overlay.accessibilityViewIsModal = true
+            overlay.accessibilityViewIsModal = !usesNativeVoiceOverChat
             overlay.accessibilityElementsHidden = false
             return
         }
@@ -435,14 +436,23 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
             }
         }
         
-        overlay.accessibilityViewIsModal = resolvedIsChatOnTop
+        overlay.accessibilityViewIsModal = usesNativeVoiceOverChat ? false : resolvedIsChatOnTop
         overlay.accessibilityElementsHidden = !resolvedIsChatOnTop
-        self.setVoiceOverModalStateOnControllerHierarchy(resolvedIsChatOnTop)
+        self.setVoiceOverModalStateOnControllerHierarchy(usesNativeVoiceOverChat ? false : resolvedIsChatOnTop)
         
         // When the chat is not the top-most controller, we must restore the navigation bar so pushed
         // controllers (e.g. poll results) have a visible Back/Close button.
         if let navigationBarView = self.navigationBar?.view {
-            if resolvedIsChatOnTop {
+            if usesNativeVoiceOverChat {
+                navigationBarView.accessibilityElementsHidden = false
+                if let savedState = self.voiceOverOverlaySavedState {
+                    navigationBarView.isHidden = savedState.navigationBarIsHidden
+                    navigationBarView.isUserInteractionEnabled = savedState.navigationBarIsUserInteractionEnabled
+                } else {
+                    navigationBarView.isHidden = false
+                    navigationBarView.isUserInteractionEnabled = true
+                }
+            } else if resolvedIsChatOnTop {
                 navigationBarView.accessibilityElementsHidden = true
                 navigationBarView.isHidden = true
                 navigationBarView.isUserInteractionEnabled = false
@@ -480,8 +490,8 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
             return
         }
         overlay.accessibilityElementsHidden = false
-        overlay.accessibilityViewIsModal = true
-        self.setVoiceOverModalStateOnControllerHierarchy(true)
+        overlay.accessibilityViewIsModal = overlay.usesNativeVoiceOverAccessibility ? false : true
+        self.setVoiceOverModalStateOnControllerHierarchy(overlay.usesNativeVoiceOverAccessibility ? false : true)
         if focusProfileButton {
             overlay.voiceOverFocusProfileButton()
         } else {
@@ -1755,8 +1765,8 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                 }
             } else {
                 overlay.accessibilityElementsHidden = false
-                overlay.accessibilityViewIsModal = true
-                self.setVoiceOverModalStateOnControllerHierarchy(true)
+                overlay.accessibilityViewIsModal = overlay.usesNativeVoiceOverAccessibility ? false : true
+                self.setVoiceOverModalStateOnControllerHierarchy(overlay.usesNativeVoiceOverAccessibility ? false : true)
             }
             
             if !self.didRequestVoiceOverScrollToEnd {
@@ -1780,9 +1790,20 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
             self.wrappingNode.view.accessibilityElementsHidden = true
             self.wrappingNode.view.isUserInteractionEnabled = false
             self.panRecognizer?.isEnabled = false
-            self.navigationBar?.view.accessibilityElementsHidden = true
-            self.navigationBar?.view.isHidden = true
-            self.navigationBar?.view.isUserInteractionEnabled = false
+            if overlay.usesNativeVoiceOverAccessibility {
+                self.navigationBar?.view.accessibilityElementsHidden = false
+                if let savedState = self.voiceOverOverlaySavedState {
+                    self.navigationBar?.view.isHidden = savedState.navigationBarIsHidden
+                    self.navigationBar?.view.isUserInteractionEnabled = savedState.navigationBarIsUserInteractionEnabled
+                } else {
+                    self.navigationBar?.view.isHidden = false
+                    self.navigationBar?.view.isUserInteractionEnabled = true
+                }
+            } else {
+                self.navigationBar?.view.accessibilityElementsHidden = true
+                self.navigationBar?.view.isHidden = true
+                self.navigationBar?.view.isUserInteractionEnabled = false
+            }
         } else {
             self.historyNode.view.accessibilityElementsHidden = false
             self.wrappingNode.view.accessibilityElementsHidden = false
