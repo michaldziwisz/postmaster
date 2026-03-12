@@ -859,6 +859,20 @@ private final class ChatVoiceOverOverlayRowAccessibilityElement: UIAccessibility
 }
 
 public final class ChatVoiceOverOverlayView: UIView {
+    public struct NativeNavigationState {
+        public let title: String
+        public let backTitle: String
+        public let infoLabel: String
+        public let infoHint: String?
+
+        public init(title: String, backTitle: String, infoLabel: String, infoHint: String?) {
+            self.title = title
+            self.backTitle = backTitle
+            self.infoLabel = infoLabel
+            self.infoHint = infoHint
+        }
+    }
+
     public struct MessageTextActionItem: Equatable {
         public let action: TelegramTextAttributesVoiceOver.Action
         public let title: String
@@ -1084,6 +1098,9 @@ public final class ChatVoiceOverOverlayView: UIView {
     private var messageTextActionItemsCache: [MessageId: [MessageTextActionItem]] = [:]
 
     public var actions = Actions()
+    public var onNativeNavigationStateUpdated: ((NativeNavigationState) -> Void)?
+    public var externalNavigationFocusTargetProvider: (() -> Any?)?
+    public var externalProfileFocusTargetProvider: (() -> Any?)?
 
     private static let maxLoadEarlierNoProgressCount: Int = 200
     private static let loadEarlierTimeout: TimeInterval = 12.0
@@ -1448,6 +1465,12 @@ public final class ChatVoiceOverOverlayView: UIView {
         self.updateRecordButton(state: state)
         self.updateTitle(state: state)
         self.updateVoicePlayerControls()
+        self.onNativeNavigationStateUpdated?(NativeNavigationState(
+            title: self.titleLabel.text ?? "",
+            backTitle: state.strings.Common_Back,
+            infoLabel: state.strings.KeyCommand_ChatInfo,
+            infoHint: state.strings.VoiceOver_Chat_OpenHint
+        ))
         if previousActiveTranslationLanguage != self.activeTranslationLanguage(for: state) {
             self.messageTextActionItemsCache.removeAll(keepingCapacity: true)
             self.tableView.reloadData()
@@ -1842,7 +1865,13 @@ public final class ChatVoiceOverOverlayView: UIView {
         }
 
         cell.textLabel?.text = title
+        cell.textLabel?.font = UIFont.preferredFont(forTextStyle: .headline)
+        cell.textLabel?.adjustsFontForContentSizeCategory = true
+        cell.textLabel?.numberOfLines = 0
+        cell.textLabel?.textAlignment = .center
         cell.detailTextLabel?.text = nil
+        cell.contentView.directionalLayoutMargins = NSDirectionalEdgeInsets(top: 20.0, leading: 24.0, bottom: 20.0, trailing: 24.0)
+        cell.separatorInset = UIEdgeInsets(top: 0.0, left: 24.0, bottom: 0.0, right: 24.0)
 
         if let state = self.interfaceState {
             cell.backgroundColor = state.theme.list.plainBackgroundColor
@@ -1900,7 +1929,7 @@ public final class ChatVoiceOverOverlayView: UIView {
 
     public func tableView(_ tableView: UITableView, estimatedHeightForRowAt indexPath: IndexPath) -> CGFloat {
         if self.shouldShowLoadEarlierRow, indexPath.row == 0 {
-            return 64.0
+            return 96.0
         }
 
         let rowIndex = indexPath.row - self.loadEarlierRowOffset
@@ -1923,6 +1952,13 @@ public final class ChatVoiceOverOverlayView: UIView {
                 return 88.0
             }
         }
+    }
+
+    public func tableView(_ tableView: UITableView, heightForRowAt indexPath: IndexPath) -> CGFloat {
+        if self.shouldShowLoadEarlierRow, indexPath.row == 0 {
+            return 96.0
+        }
+        return UITableView.automaticDimension
     }
 
     public func scrollViewDidScroll(_ scrollView: UIScrollView) {
@@ -2044,6 +2080,10 @@ public final class ChatVoiceOverOverlayView: UIView {
             return
         }
         self.setVoiceOverScrollbarAccessibilityElementActive(false, anchorTableRow: nil)
+        if let externalTarget = self.externalProfileFocusTargetProvider?() {
+            UIAccessibility.post(notification: .screenChanged, argument: externalTarget)
+            return
+        }
         if self.usesNativeVoiceOverAccessibility {
             let target = self.preferredComposerFocusTarget() ?? self.tableView
             UIAccessibility.post(notification: .screenChanged, argument: target)
@@ -3575,6 +3615,9 @@ public final class ChatVoiceOverOverlayView: UIView {
     }
 
     private func preferredVoiceOverRecoveryTarget() -> Any {
+        if let externalTarget = self.externalNavigationFocusTargetProvider?() {
+            return externalTarget
+        }
         if let composerTarget = self.preferredComposerFocusTarget() {
             return composerTarget
         }
@@ -3585,6 +3628,9 @@ public final class ChatVoiceOverOverlayView: UIView {
     }
 
     private func preferredPostKeyboardDismissFocusTarget() -> Any {
+        if let externalTarget = self.externalNavigationFocusTargetProvider?() {
+            return externalTarget
+        }
         if self.backButton.isAccessibilityElement {
             return self.backButton
         }

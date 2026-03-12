@@ -439,18 +439,25 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
         overlay.accessibilityViewIsModal = usesNativeVoiceOverChat ? false : resolvedIsChatOnTop
         overlay.accessibilityElementsHidden = !resolvedIsChatOnTop
         self.setVoiceOverModalStateOnControllerHierarchy(usesNativeVoiceOverChat ? false : resolvedIsChatOnTop)
+        self.voiceOverOverlayController?.setAccessibilityModalState(resolvedIsChatOnTop)
         
         // When the chat is not the top-most controller, we must restore the navigation bar so pushed
         // controllers (e.g. poll results) have a visible Back/Close button.
         if let navigationBarView = self.navigationBar?.view {
             if usesNativeVoiceOverChat {
-                navigationBarView.accessibilityElementsHidden = false
-                if let savedState = self.voiceOverOverlaySavedState {
-                    navigationBarView.isHidden = savedState.navigationBarIsHidden
-                    navigationBarView.isUserInteractionEnabled = savedState.navigationBarIsUserInteractionEnabled
+                if resolvedIsChatOnTop, self.voiceOverOverlayController != nil {
+                    navigationBarView.accessibilityElementsHidden = true
+                    navigationBarView.isHidden = true
+                    navigationBarView.isUserInteractionEnabled = false
                 } else {
-                    navigationBarView.isHidden = false
-                    navigationBarView.isUserInteractionEnabled = true
+                    navigationBarView.accessibilityElementsHidden = false
+                    if let savedState = self.voiceOverOverlaySavedState {
+                        navigationBarView.isHidden = savedState.navigationBarIsHidden
+                        navigationBarView.isUserInteractionEnabled = savedState.navigationBarIsUserInteractionEnabled
+                    } else {
+                        navigationBarView.isHidden = false
+                        navigationBarView.isUserInteractionEnabled = true
+                    }
                 }
             } else if resolvedIsChatOnTop {
                 navigationBarView.accessibilityElementsHidden = true
@@ -479,6 +486,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
         }
         overlay.accessibilityViewIsModal = false
         overlay.accessibilityElementsHidden = true
+        self.voiceOverOverlayController?.setAccessibilityModalState(false)
         self.setVoiceOverModalStateOnControllerHierarchy(false)
     }
 
@@ -491,6 +499,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
         }
         overlay.accessibilityElementsHidden = false
         overlay.accessibilityViewIsModal = overlay.usesNativeVoiceOverAccessibility ? false : true
+        self.voiceOverOverlayController?.setAccessibilityModalState(true)
         self.setVoiceOverModalStateOnControllerHierarchy(overlay.usesNativeVoiceOverAccessibility ? false : true)
         if focusProfileButton {
             overlay.voiceOverFocusProfileButton()
@@ -1766,6 +1775,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
             } else {
                 overlay.accessibilityElementsHidden = false
                 overlay.accessibilityViewIsModal = overlay.usesNativeVoiceOverAccessibility ? false : true
+                self.voiceOverOverlayController?.setAccessibilityModalState(true)
                 self.setVoiceOverModalStateOnControllerHierarchy(overlay.usesNativeVoiceOverAccessibility ? false : true)
             }
             
@@ -1791,13 +1801,19 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
             self.wrappingNode.view.isUserInteractionEnabled = false
             self.panRecognizer?.isEnabled = false
             if overlay.usesNativeVoiceOverAccessibility {
-                self.navigationBar?.view.accessibilityElementsHidden = false
-                if let savedState = self.voiceOverOverlaySavedState {
-                    self.navigationBar?.view.isHidden = savedState.navigationBarIsHidden
-                    self.navigationBar?.view.isUserInteractionEnabled = savedState.navigationBarIsUserInteractionEnabled
+                if self.voiceOverOverlayController != nil {
+                    self.navigationBar?.view.accessibilityElementsHidden = true
+                    self.navigationBar?.view.isHidden = true
+                    self.navigationBar?.view.isUserInteractionEnabled = false
                 } else {
-                    self.navigationBar?.view.isHidden = false
-                    self.navigationBar?.view.isUserInteractionEnabled = true
+                    self.navigationBar?.view.accessibilityElementsHidden = false
+                    if let savedState = self.voiceOverOverlaySavedState {
+                        self.navigationBar?.view.isHidden = savedState.navigationBarIsHidden
+                        self.navigationBar?.view.isUserInteractionEnabled = savedState.navigationBarIsUserInteractionEnabled
+                    } else {
+                        self.navigationBar?.view.isHidden = false
+                        self.navigationBar?.view.isUserInteractionEnabled = true
+                    }
                 }
             } else {
                 self.navigationBar?.view.accessibilityElementsHidden = true
