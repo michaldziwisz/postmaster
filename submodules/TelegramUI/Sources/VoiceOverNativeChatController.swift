@@ -206,10 +206,12 @@ final class VoiceOverNativeChatController: UIViewController {
         guard self.overlayView.shouldHandleVoiceOverKeyboardEscapeExternally() else {
             return false
         }
-        self.extendKeyboardDismissVoiceOverContainment(6.0)
+        self.extendKeyboardDismissVoiceOverContainment(8.0)
         guard self.overlayView.dismissKeyboardForExternalVoiceOverEscape() else {
             return false
         }
+        let immediateTarget = self.preferredKeyboardDismissFocusTarget()
+        UIAccessibility.post(notification: .layoutChanged, argument: immediateTarget)
         self.scheduleKeyboardDismissFocusRestore(after: 0.05, remainingAttempts: 8)
         return true
     }
@@ -242,7 +244,7 @@ final class VoiceOverNativeChatController: UIViewController {
     }
 
     private func preferredKeyboardDismissFocusTarget() -> Any {
-        return self.overlayView.preferredNativeControllerKeyboardDismissFocusTarget()
+        return self.backButton
     }
 
     private var shouldContainVoiceOverFocusAfterKeyboardDismiss: Bool {
