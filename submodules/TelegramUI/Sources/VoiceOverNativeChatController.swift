@@ -279,13 +279,12 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate 
         self.infoButton.accessibilityLabel = state.infoLabel
         self.infoButton.accessibilityHint = state.infoHint
 
-        self.view.accessibilityElements = [
+        self.headerView.accessibilityElements = [
             self.backButton,
             self.titleButton,
-            self.infoButton,
-            self.overlayView as Any,
-            self.composerView
+            self.infoButton
         ]
+        self.view.accessibilityElements = nil
     }
 
     private func applyComposerState(_ state: ChatVoiceOverOverlayView.NativeComposerState) {
