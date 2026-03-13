@@ -1263,8 +1263,8 @@ public final class ChatVoiceOverOverlayView: UIView {
             guard let self else {
                 return false
             }
-            if self.usesNativeVoiceOverAccessibility, self.externalNativeKeyboardEscapeHandler != nil {
-                return false
+            if self.usesNativeVoiceOverAccessibility, let externalHandler = self.externalNativeKeyboardEscapeHandler {
+                return externalHandler()
             }
             guard self.inputTextView.isFirstResponder || self.lastKnownKeyboardOverlap > 0.0 || self.hasFirstResponderDescendant() else {
                 return false
@@ -2132,8 +2132,8 @@ public final class ChatVoiceOverOverlayView: UIView {
     }
 
     public override func accessibilityPerformEscape() -> Bool {
-        if self.usesNativeVoiceOverAccessibility, self.externalNativeKeyboardEscapeHandler != nil {
-            return false
+        if self.usesNativeVoiceOverAccessibility, let externalHandler = self.externalNativeKeyboardEscapeHandler {
+            return externalHandler()
         }
         if self.inputTextView.isFirstResponder || self.lastKnownKeyboardOverlap > 0.0 || self.hasFirstResponderDescendant() {
             self.setVoiceOverScrollbarAccessibilityElementActive(false, anchorTableRow: nil)
