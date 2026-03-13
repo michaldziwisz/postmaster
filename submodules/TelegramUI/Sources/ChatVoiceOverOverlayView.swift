@@ -859,6 +859,28 @@ private final class ChatVoiceOverOverlayRowAccessibilityElement: UIAccessibility
 }
 
 public final class ChatVoiceOverOverlayView: UIView {
+    public struct NativeComposerState {
+        public let isEnabled: Bool
+        public let isRecording: Bool
+        public let canRecord: Bool
+        public let attachLabel: String
+        public let sendLabel: String
+        public let recordLabel: String
+        public let recordHint: String?
+        public let inputLabel: String
+
+        public init(isEnabled: Bool, isRecording: Bool, canRecord: Bool, attachLabel: String, sendLabel: String, recordLabel: String, recordHint: String?, inputLabel: String) {
+            self.isEnabled = isEnabled
+            self.isRecording = isRecording
+            self.canRecord = canRecord
+            self.attachLabel = attachLabel
+            self.sendLabel = sendLabel
+            self.recordLabel = recordLabel
+            self.recordHint = recordHint
+            self.inputLabel = inputLabel
+        }
+    }
+
     public struct NativeNavigationState {
         public let title: String
         public let backTitle: String
@@ -1081,6 +1103,7 @@ public final class ChatVoiceOverOverlayView: UIView {
     private var shouldFollowLatest: Bool = true
 
     private var isComposerEnabled: Bool = true
+    private var isComposerHostedExternally: Bool = false
 
     private var lastEntriesApplyTimestamp: CFTimeInterval = 0.0
     private var lastApplyWasStableIdsOnly: Bool = false
@@ -1099,6 +1122,7 @@ public final class ChatVoiceOverOverlayView: UIView {
 
     public var actions = Actions()
     public var onNativeNavigationStateUpdated: ((NativeNavigationState) -> Void)?
+    public var onNativeComposerStateUpdated: ((NativeComposerState) -> Void)?
     public var externalNavigationFocusTargetProvider: (() -> Any?)?
     public var externalProfileFocusTargetProvider: (() -> Any?)?
     public var externalNativeKeyboardEscapeHandler: (() -> Bool)?
@@ -1475,6 +1499,7 @@ public final class ChatVoiceOverOverlayView: UIView {
             infoLabel: state.strings.KeyCommand_ChatInfo,
             infoHint: state.strings.VoiceOver_Chat_OpenHint
         ))
+        self.onNativeComposerStateUpdated?(self.currentNativeComposerState(for: state))
         if previousActiveTranslationLanguage != self.activeTranslationLanguage(for: state) {
             self.messageTextActionItemsCache.removeAll(keepingCapacity: true)
             self.tableView.reloadData()
@@ -1660,6 +1685,41 @@ public final class ChatVoiceOverOverlayView: UIView {
         self.recordButton.accessibilityElementsHidden = !shouldShowRecord
 
         self.updateComposerAccessibilityVisibility()
+        self.onNativeComposerStateUpdated?(self.currentNativeComposerState())
+    }
+
+    func setNativeComposerHostedExternally(_ hostedExternally: Bool) {
+        guard self.isComposerHostedExternally != hostedExternally else {
+            return
+        }
+        self.isComposerHostedExternally = hostedExternally
+        self.composerHeightConstraint?.constant = hostedExternally ? 0.0 : 64.0
+        self.composerView.isHidden = hostedExternally
+        self.composerView.accessibilityElementsHidden = hostedExternally
+        self.composerView.isUserInteractionEnabled = !hostedExternally && self.isComposerEnabled
+        if hostedExternally, self.inputTextView.isFirstResponder {
+            self.inputTextView.resignFirstResponder()
+        }
+    }
+
+    func currentNativeComposerState() -> NativeComposerState {
+        return self.currentNativeComposerState(for: self.interfaceState)
+    }
+
+    private func currentNativeComposerState(for state: ChatPresentationInterfaceState?) -> NativeComposerState {
+        let strings = state?.strings ?? defaultPresentationStrings
+        let isRecording = state?.inputTextPanelState.mediaRecordingState != nil
+        let canRecord = (state?.voiceMessagesAvailable ?? true) && self.isComposerEnabled
+        return NativeComposerState(
+            isEnabled: self.isComposerEnabled,
+            isRecording: isRecording,
+            canRecord: canRecord,
+            attachLabel: strings.VoiceOver_AttachMedia,
+            sendLabel: strings.MediaPicker_Send,
+            recordLabel: isRecording ? strings.VoiceOver_Camera_StopVideoRecording : strings.VoiceOver_Chat_RecordModeVoiceMessage,
+            recordHint: isRecording ? nil : strings.VoiceOver_Chat_RecordModeVoiceMessageInfo,
+            inputLabel: strings.Conversation_InputTextPlaceholder
+        )
     }
     private func makeRows(from entries: [ChatHistoryEntry]) -> [Row] {
         var result: [Row] = []
@@ -5100,7 +5160,7 @@ public final class ChatVoiceOverOverlayView: UIView {
 
     private func updateComposerAccessibilityVisibility() {
         let isScrollbarActive = !self.usesNativeVoiceOverAccessibility && (self.voiceOverScrollbarAccessibilityElementAnchorTableRow != nil)
-        self.composerView.accessibilityElementsHidden = isScrollbarActive
+        self.composerView.accessibilityElementsHidden = self.isComposerHostedExternally || isScrollbarActive
         self.voicePlayerView.accessibilityElementsHidden = isScrollbarActive
         if self.usesNativeVoiceOverAccessibility {
             self.composerView.accessibilityElements = nil
