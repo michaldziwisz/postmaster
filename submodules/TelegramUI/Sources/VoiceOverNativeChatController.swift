@@ -233,6 +233,7 @@ final class VoiceOverNativeChatController: UIViewController {
     }
 
     private func restoreVoiceOverFocusAfterKeyboardDismissIfNeeded() {
+        self.reinforceNativeChatAccessibilityContainment()
         let target = self.preferredKeyboardDismissFocusTarget()
         guard self.shouldRestoreVoiceOverFocus(to: target) else {
             return
@@ -245,6 +246,19 @@ final class VoiceOverNativeChatController: UIViewController {
 
     private func preferredKeyboardDismissFocusTarget() -> Any {
         return self.backButton
+    }
+
+    private func reinforceNativeChatAccessibilityContainment() {
+        self.view.accessibilityViewIsModal = true
+        self.view.accessibilityElementsHidden = false
+        self.view.accessibilityElements = [
+            self.backButton,
+            self.titleButton,
+            self.infoButton,
+            self.overlayView as Any
+        ]
+        self.parent?.viewIfLoaded?.accessibilityViewIsModal = true
+        self.navigationController?.viewIfLoaded?.accessibilityViewIsModal = true
     }
 
     private var shouldContainVoiceOverFocusAfterKeyboardDismiss: Bool {
