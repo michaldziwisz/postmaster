@@ -3663,12 +3663,20 @@ public final class ChatVoiceOverOverlayView: UIView {
     }
 
     func dismissKeyboardForExternalVoiceOverEscape() -> Bool {
+        let shouldHandleDismiss = self.inputTextView.isFirstResponder || self.lastKnownKeyboardOverlap > 0.0 || self.hasFirstResponderDescendant()
+        guard shouldHandleDismiss else {
+            return false
+        }
         self.setVoiceOverScrollbarAccessibilityElementActive(false, anchorTableRow: nil)
         self.keyboardDismissFocusRestoreWorkItem?.cancel()
         self.keyboardDismissFocusRestoreWorkItem = nil
         self.nativeKeyboardDismissFocusContainmentDeadline = 0.0
         self.suppressNextEditingEndedFocusRestore = true
-        return self.dismissKeyboardForVoiceOver()
+        _ = self.dismissKeyboardForVoiceOver()
+        if self.inputTextView.isFirstResponder || self.hasFirstResponderDescendant() {
+            _ = self.endEditing(true)
+        }
+        return true
     }
 
     func preferredNativeControllerKeyboardDismissFocusTarget() -> Any {
