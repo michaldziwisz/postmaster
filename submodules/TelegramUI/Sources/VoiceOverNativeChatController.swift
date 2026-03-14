@@ -580,7 +580,9 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate,
 
         if bottomInset > 0.0 {
             self.cancelPendingKeyboardFocusRestore()
-            self.shouldRestoreFocusAfterKeyboardHide = false
+            if self.inputTextView.isFirstResponder {
+                self.shouldRestoreFocusAfterKeyboardHide = false
+            }
         }
 
         guard bottomInset != self.lastKnownKeyboardBottomInset else {
