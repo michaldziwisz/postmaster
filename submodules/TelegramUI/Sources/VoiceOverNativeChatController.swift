@@ -245,6 +245,9 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate 
         self.overlayView.onNativeComposerStateUpdated = { [weak self] state in
             self?.applyComposerState(state)
         }
+        self.overlayView.onNativeMessageListAccessibilityUpdated = { [weak self] in
+            self?.refreshAccessibilityContainers()
+        }
         self.overlayView.externalNavigationFocusTargetProvider = { [weak self] in
             return self?.backButton
         }
@@ -506,10 +509,32 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate 
     }
 
     private func refreshAccessibilityContainers() {
-        self.view.accessibilityElements = nil
+        var rootElements: [Any] = [
+            self.backButton,
+            self.titleButton,
+            self.infoButton
+        ]
+        rootElements.append(contentsOf: self.nativeVisibleMessageAccessibilityElements())
+        rootElements.append(contentsOf: self.overlayView.nativeSupplementaryAccessibilityContainers)
+        rootElements.append(self.attachButton)
+        rootElements.append(self.inputTextView)
+        rootElements.append(self.primaryActionButton)
+        self.view.accessibilityElements = rootElements
         self.headerView.accessibilityElements = nil
         self.contentView.accessibilityElements = nil
         self.composerView.accessibilityElements = nil
+    }
+
+    private func nativeVisibleMessageAccessibilityElements() -> [Any] {
+        guard let tableView = self.overlayView.nativeMessageListAccessibilityContainer as? UITableView else {
+            return []
+        }
+        let visibleIndexPaths = (tableView.indexPathsForVisibleRows ?? []).sorted()
+        let visibleCells = visibleIndexPaths.compactMap { tableView.cellForRow(at: $0) }
+        if !visibleCells.isEmpty {
+            return visibleCells
+        }
+        return [tableView]
     }
 
     private func setupKeyboardObservers() {

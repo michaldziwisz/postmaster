@@ -1123,6 +1123,7 @@ public final class ChatVoiceOverOverlayView: UIView {
     public var actions = Actions()
     public var onNativeNavigationStateUpdated: ((NativeNavigationState) -> Void)?
     public var onNativeComposerStateUpdated: ((NativeComposerState) -> Void)?
+    public var onNativeMessageListAccessibilityUpdated: (() -> Void)?
     public var externalNavigationFocusTargetProvider: (() -> Any?)?
     public var externalProfileFocusTargetProvider: (() -> Any?)?
     public var externalNativeKeyboardEscapeHandler: (() -> Bool)?
@@ -1552,6 +1553,7 @@ public final class ChatVoiceOverOverlayView: UIView {
     func updateEntries(_ entries: [ChatHistoryEntry]) {
         self.pendingEntries = entries
         self.schedulePendingEntriesApplyIfNeeded()
+        self.notifyNativeMessageListAccessibilityUpdated()
     }
 
     public func updateLoadEarlierState(canLoadEarlier: Bool, isLoadingEarlier: Bool) {
@@ -1582,6 +1584,16 @@ public final class ChatVoiceOverOverlayView: UIView {
         }
 
         self.invalidateAccessibilityElements()
+        self.notifyNativeMessageListAccessibilityUpdated()
+    }
+
+    private func notifyNativeMessageListAccessibilityUpdated() {
+        guard self.usesNativeVoiceOverAccessibility else {
+            return
+        }
+        DispatchQueue.main.async { [weak self] in
+            self?.onNativeMessageListAccessibilityUpdated?()
+        }
     }
 
     private func schedulePendingEntriesApplyIfNeeded() {
@@ -2042,6 +2054,7 @@ public final class ChatVoiceOverOverlayView: UIView {
             self.loadEarlierNoProgressCount = 0
         }
         self.requestVisibleTranslationsIfNeeded()
+        self.notifyNativeMessageListAccessibilityUpdated()
     }
 
     public func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
@@ -2053,6 +2066,7 @@ public final class ChatVoiceOverOverlayView: UIView {
             self.applyPendingEntriesIfPossible()
             self.maybeEnsureAtLatestIfNeeded()
             self.requestVisibleTranslationsIfNeeded()
+            self.notifyNativeMessageListAccessibilityUpdated()
         }
     }
 
@@ -2064,6 +2078,7 @@ public final class ChatVoiceOverOverlayView: UIView {
         self.applyPendingEntriesIfPossible()
         self.maybeEnsureAtLatestIfNeeded()
         self.requestVisibleTranslationsIfNeeded()
+        self.notifyNativeMessageListAccessibilityUpdated()
     }
 
     public func scrollViewDidEndScrollingAnimation(_ scrollView: UIScrollView) {
