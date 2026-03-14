@@ -550,7 +550,7 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate 
     }
 
     private func handleKeyboardFrameNotification(_ notification: Notification) {
-        let view = self.view
+        let view = self.view!
         guard view.window != nil else {
             return
         }
@@ -559,13 +559,13 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate 
         }
 
         let duration = (userInfo[UIResponder.keyboardAnimationDurationUserInfoKey] as? NSNumber)?.doubleValue ?? 0.25
-        let curveRaw = (userInfo[UIResponder.keyboardAnimationCurveUserInfoKey] as? NSNumber)?.uintValue ?? UIView.AnimationCurve.easeInOut.rawValue
+        let curveRaw = (userInfo[UIResponder.keyboardAnimationCurveUserInfoKey] as? NSNumber)?.uintValue ?? UInt(UIView.AnimationCurve.easeInOut.rawValue)
         let curve = UIView.AnimationOptions(rawValue: curveRaw << 16)
 
         let endFrameScreen = (userInfo[UIResponder.keyboardFrameEndUserInfoKey] as? NSValue)?.cgRectValue ?? .zero
         let endFrameInView = view.convert(endFrameScreen, from: nil)
-        let overlap = max(0.0, view.bounds.maxY - endFrameInView.minY)
-        let bottomInset = max(0.0, overlap - view.safeAreaInsets.bottom)
+        let overlap = max(CGFloat(0.0), view.bounds.maxY - endFrameInView.minY)
+        let bottomInset = max(CGFloat(0.0), overlap - view.safeAreaInsets.bottom)
 
         self.composerBottomConstraint?.constant = -bottomInset
         UIView.animate(withDuration: duration, delay: 0.0, options: [curve, .beginFromCurrentState, .allowUserInteraction]) {
