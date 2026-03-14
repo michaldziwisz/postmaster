@@ -283,11 +283,7 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate 
         self.infoButton.accessibilityLabel = state.infoLabel
         self.infoButton.accessibilityHint = state.infoHint
 
-        self.headerView.accessibilityElements = [
-            self.backButton,
-            self.titleButton,
-            self.infoButton
-        ]
+        self.headerView.accessibilityElements = nil
         self.refreshAccessibilityContainers()
     }
 
@@ -326,11 +322,7 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate 
         self.inputTextView.accessibilityLabel = state.inputLabel
         self.inputTextView.accessibilityHint = nil
 
-        self.composerView.accessibilityElements = [
-            self.attachButton,
-            self.inputTextView,
-            self.primaryActionButton
-        ]
+        self.composerView.accessibilityElements = nil
         self.refreshAccessibilityContainers()
     }
 
@@ -514,17 +506,10 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate 
     }
 
     private func refreshAccessibilityContainers() {
-        var rootElements: [Any] = [
-            self.backButton,
-            self.titleButton,
-            self.infoButton,
-            self.overlayView.nativeMessageListAccessibilityContainer
-        ]
-        rootElements.append(contentsOf: self.overlayView.nativeSupplementaryAccessibilityContainers)
-        rootElements.append(self.attachButton)
-        rootElements.append(self.inputTextView)
-        rootElements.append(self.primaryActionButton)
-        self.view.accessibilityElements = rootElements
+        self.view.accessibilityElements = nil
+        self.headerView.accessibilityElements = nil
+        self.contentView.accessibilityElements = nil
+        self.composerView.accessibilityElements = nil
     }
 
     private func setupKeyboardObservers() {
