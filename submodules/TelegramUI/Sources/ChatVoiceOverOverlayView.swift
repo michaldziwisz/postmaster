@@ -1148,6 +1148,18 @@ public final class ChatVoiceOverOverlayView: UIView {
         return self.inputTextNode.textView
     }
 
+    var nativeMessageListAccessibilityContainer: UIView {
+        return self.tableView
+    }
+
+    var nativeSupplementaryAccessibilityContainers: [UIView] {
+        var result: [UIView] = []
+        if !self.voicePlayerView.isHidden && !self.voicePlayerView.accessibilityElementsHidden {
+            result.append(self.voicePlayerView)
+        }
+        return result
+    }
+
     public override var accessibilityElements: [Any]? {
         get {
             guard UIAccessibility.isVoiceOverRunning else {

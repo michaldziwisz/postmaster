@@ -24,10 +24,10 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate 
     private let composerSeparatorView = UIView()
     private let attachButton = UIButton(type: .system)
     private let inputTextView = VoiceOverNativeChatTextView()
-    private let sendButton = UIButton(type: .system)
-    private let recordButton = UIButton(type: .system)
+    private let primaryActionButton = UIButton(type: .system)
     private var accessibilityObservers: [NSObjectProtocol] = []
     private var keyboardDismissVoiceOverContainmentDeadline: CFTimeInterval = 0.0
+    private var primaryActionKind: PrimaryActionKind = .record
     private var nativeComposerState = ChatVoiceOverOverlayView.NativeComposerState(
         isEnabled: true,
         isRecording: false,
@@ -38,6 +38,11 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate 
         recordHint: nil,
         inputLabel: "Message"
     )
+
+    private enum PrimaryActionKind {
+        case send
+        case record
+    }
 
     init(overlayView: ChatVoiceOverOverlayView) {
         self.overlayView = overlayView
@@ -117,17 +122,13 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate 
         self.attachButton.contentEdgeInsets = UIEdgeInsets(top: 8.0, left: 10.0, bottom: 8.0, right: 10.0)
         self.composerView.addSubview(self.attachButton)
 
-        self.sendButton.translatesAutoresizingMaskIntoConstraints = false
-        self.sendButton.titleLabel?.font = UIFont.preferredFont(forTextStyle: .body)
-        self.sendButton.titleLabel?.adjustsFontForContentSizeCategory = true
-        self.sendButton.contentEdgeInsets = UIEdgeInsets(top: 8.0, left: 10.0, bottom: 8.0, right: 10.0)
-        self.composerView.addSubview(self.sendButton)
-
-        self.recordButton.translatesAutoresizingMaskIntoConstraints = false
-        self.recordButton.titleLabel?.font = UIFont.preferredFont(forTextStyle: .body)
-        self.recordButton.titleLabel?.adjustsFontForContentSizeCategory = true
-        self.recordButton.contentEdgeInsets = UIEdgeInsets(top: 8.0, left: 10.0, bottom: 8.0, right: 10.0)
-        self.composerView.addSubview(self.recordButton)
+        self.primaryActionButton.translatesAutoresizingMaskIntoConstraints = false
+        self.primaryActionButton.titleLabel?.font = UIFont.preferredFont(forTextStyle: .body)
+        self.primaryActionButton.titleLabel?.adjustsFontForContentSizeCategory = true
+        self.primaryActionButton.contentEdgeInsets = UIEdgeInsets(top: 8.0, left: 12.0, bottom: 8.0, right: 12.0)
+        self.primaryActionButton.setContentHuggingPriority(.required, for: .horizontal)
+        self.primaryActionButton.setContentCompressionResistancePriority(.required, for: .horizontal)
+        self.composerView.addSubview(self.primaryActionButton)
 
         self.inputTextView.translatesAutoresizingMaskIntoConstraints = false
         self.inputTextView.font = UIFont.preferredFont(forTextStyle: .body)
@@ -193,18 +194,13 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate 
             self.attachButton.widthAnchor.constraint(greaterThanOrEqualToConstant: 44.0),
             self.attachButton.heightAnchor.constraint(equalToConstant: 44.0),
 
-            self.sendButton.trailingAnchor.constraint(equalTo: self.composerView.trailingAnchor, constant: -12.0),
-            self.sendButton.bottomAnchor.constraint(equalTo: self.composerView.bottomAnchor, constant: -10.0),
-            self.sendButton.widthAnchor.constraint(greaterThanOrEqualToConstant: 44.0),
-            self.sendButton.heightAnchor.constraint(equalToConstant: 44.0),
-
-            self.recordButton.trailingAnchor.constraint(equalTo: self.composerView.trailingAnchor, constant: -12.0),
-            self.recordButton.bottomAnchor.constraint(equalTo: self.composerView.bottomAnchor, constant: -10.0),
-            self.recordButton.widthAnchor.constraint(greaterThanOrEqualToConstant: 44.0),
-            self.recordButton.heightAnchor.constraint(equalToConstant: 44.0),
+            self.primaryActionButton.trailingAnchor.constraint(equalTo: self.composerView.trailingAnchor, constant: -12.0),
+            self.primaryActionButton.bottomAnchor.constraint(equalTo: self.composerView.bottomAnchor, constant: -10.0),
+            self.primaryActionButton.widthAnchor.constraint(greaterThanOrEqualToConstant: 56.0),
+            self.primaryActionButton.heightAnchor.constraint(equalToConstant: 44.0),
 
             self.inputTextView.leadingAnchor.constraint(equalTo: self.attachButton.trailingAnchor, constant: 8.0),
-            self.inputTextView.trailingAnchor.constraint(equalTo: self.sendButton.leadingAnchor, constant: -8.0),
+            self.inputTextView.trailingAnchor.constraint(equalTo: self.primaryActionButton.leadingAnchor, constant: -8.0),
             self.inputTextView.topAnchor.constraint(equalTo: self.composerView.topAnchor, constant: 10.0),
             self.inputTextView.bottomAnchor.constraint(equalTo: self.composerView.bottomAnchor, constant: -10.0),
             self.inputTextView.heightAnchor.constraint(greaterThanOrEqualToConstant: 44.0),
@@ -223,8 +219,7 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate 
         self.titleButton.addTarget(self, action: #selector(self.infoPressed), for: .touchUpInside)
         self.infoButton.addTarget(self, action: #selector(self.infoPressed), for: .touchUpInside)
         self.attachButton.addTarget(self, action: #selector(self.attachPressed), for: .touchUpInside)
-        self.sendButton.addTarget(self, action: #selector(self.sendPressed), for: .touchUpInside)
-        self.recordButton.addTarget(self, action: #selector(self.recordPressed), for: .touchUpInside)
+        self.primaryActionButton.addTarget(self, action: #selector(self.primaryActionPressed), for: .touchUpInside)
         self.inputTextView.onAccessibilityEscape = { [weak self] in
             return self?.handleVoiceOverKeyboardEscape() ?? false
         }
@@ -258,6 +253,7 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate 
             self?.handleVoiceOverElementFocused(notification)
         }
         self.accessibilityObservers.append(focusToken)
+        self.refreshAccessibilityContainers()
     }
 
     deinit {
@@ -284,7 +280,7 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate 
             self.titleButton,
             self.infoButton
         ]
-        self.view.accessibilityElements = nil
+        self.refreshAccessibilityContainers()
     }
 
     private func applyComposerState(_ state: ChatVoiceOverOverlayView.NativeComposerState) {
@@ -296,19 +292,25 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate 
         self.attachButton.accessibilityTraits = [.button]
         self.attachButton.isEnabled = state.isEnabled
 
-        self.sendButton.setTitle("Send", for: .normal)
-        self.sendButton.accessibilityLabel = state.sendLabel
-        self.sendButton.accessibilityTraits = [.button]
-        self.sendButton.isHidden = !state.isEnabled || self.inputTextView.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || state.isRecording
-        self.sendButton.isAccessibilityElement = !self.sendButton.isHidden
-
-        self.recordButton.setTitle(state.isRecording ? "■" : "●", for: .normal)
-        self.recordButton.accessibilityLabel = state.recordLabel
-        self.recordButton.accessibilityHint = state.recordHint
-        self.recordButton.accessibilityTraits = state.canRecord ? [.button] : [.button, .notEnabled]
-        self.recordButton.isEnabled = state.canRecord
-        self.recordButton.isHidden = !self.sendButton.isHidden
-        self.recordButton.isAccessibilityElement = !self.recordButton.isHidden
+        let shouldShowSend = state.isEnabled && !self.inputTextView.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !state.isRecording
+        if shouldShowSend {
+            self.primaryActionKind = .send
+            self.primaryActionButton.setTitle("➤", for: .normal)
+            self.primaryActionButton.accessibilityLabel = state.sendLabel
+            self.primaryActionButton.accessibilityHint = nil
+            self.primaryActionButton.accessibilityTraits = [.button]
+            self.primaryActionButton.isEnabled = true
+        } else {
+            self.primaryActionKind = .record
+            self.primaryActionButton.setTitle(state.isRecording ? "■" : "●", for: .normal)
+            self.primaryActionButton.accessibilityLabel = state.recordLabel
+            self.primaryActionButton.accessibilityHint = state.recordHint
+            self.primaryActionButton.accessibilityTraits = state.canRecord ? [.button] : [.button, .notEnabled]
+            self.primaryActionButton.isEnabled = state.canRecord
+        }
+        self.primaryActionButton.isAccessibilityElement = true
+        self.primaryActionButton.accessibilityElementsHidden = false
+        self.composerView.bringSubviewToFront(self.primaryActionButton)
 
         self.inputTextView.isEditable = state.isEnabled
         self.inputTextView.isSelectable = state.isEnabled
@@ -319,8 +321,9 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate 
         self.composerView.accessibilityElements = [
             self.attachButton,
             self.inputTextView,
-            self.sendButton.isHidden ? self.recordButton as Any : self.sendButton as Any
+            self.primaryActionButton
         ]
+        self.refreshAccessibilityContainers()
     }
 
     @objc private func backPressed() {
@@ -333,6 +336,15 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate 
 
     @objc private func attachPressed() {
         self.overlayView.actions.openAttachments?()
+    }
+
+    @objc private func primaryActionPressed() {
+        switch self.primaryActionKind {
+        case .send:
+            self.sendPressed()
+        case .record:
+            self.recordPressed()
+        }
     }
 
     @objc private func sendPressed() {
@@ -356,6 +368,7 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate 
     func setAccessibilityModalState(_ isModal: Bool) {
         self.view.accessibilityViewIsModal = isModal
         self.view.accessibilityElementsHidden = !isModal
+        self.refreshAccessibilityContainers()
     }
 
     override func accessibilityPerformEscape() -> Bool {
@@ -424,12 +437,7 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate 
     private func reinforceNativeChatAccessibilityContainment() {
         self.view.accessibilityViewIsModal = true
         self.view.accessibilityElementsHidden = false
-        self.view.accessibilityElements = [
-            self.backButton,
-            self.titleButton,
-            self.infoButton,
-            self.overlayView as Any
-        ]
+        self.refreshAccessibilityContainers()
         self.parent?.viewIfLoaded?.accessibilityViewIsModal = true
         self.navigationController?.viewIfLoaded?.accessibilityViewIsModal = true
     }
@@ -495,5 +503,16 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate 
     func textViewDidBeginEditing(_ textView: UITextView) {
         self.keyboardDismissVoiceOverContainmentDeadline = 0.0
         UIAccessibility.post(notification: .layoutChanged, argument: self.inputTextView)
+    }
+
+    private func refreshAccessibilityContainers() {
+        var contentElements: [Any] = [self.overlayView.nativeMessageListAccessibilityContainer]
+        contentElements.append(contentsOf: self.overlayView.nativeSupplementaryAccessibilityContainers)
+        self.contentView.accessibilityElements = contentElements
+        self.view.accessibilityElements = [
+            self.headerView,
+            self.contentView,
+            self.composerView
+        ]
     }
 }
