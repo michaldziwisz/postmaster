@@ -480,7 +480,11 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
         }
         
         if wasHidden, resolvedIsChatOnTop {
-            overlay.voiceOverDidReturnToChat()
+            if let overlayController = self.voiceOverOverlayController {
+                overlayController.voiceOverDidReturnToChat()
+            } else {
+                overlay.voiceOverDidReturnToChat()
+            }
         }
     }
 
@@ -505,7 +509,9 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
         overlay.accessibilityViewIsModal = overlay.usesNativeVoiceOverAccessibility ? false : true
         self.voiceOverOverlayController?.setAccessibilityModalState(true)
         self.setVoiceOverModalStateOnControllerHierarchy(true)
-        if focusProfileButton {
+        if let overlayController = self.voiceOverOverlayController {
+            overlayController.voiceOverDidReturnToChat(focusInfoButton: focusProfileButton)
+        } else if focusProfileButton {
             overlay.voiceOverFocusProfileButton()
         } else {
             overlay.voiceOverDidReturnToChat()
@@ -1717,6 +1723,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                         
                         self.voiceOverOverlayVoicePlaybackState = resolvedState
                         self.voiceOverOverlayView?.updateVoicePlaybackState(resolvedState)
+                        self.voiceOverOverlayController?.updateVoicePlaybackState(resolvedState)
                     })
                 }
                 
@@ -1726,21 +1733,26 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                             return
                         }
                         overlay.updateEntries(entries)
+                        self.voiceOverOverlayController?.updateEntries(entries)
                         
                         let originalView = self.historyNode.originalHistoryView
                         let canLoadEarlier = (originalView?.earlierId != nil) || (originalView?.holeEarlier == true)
                         let isLoadingEarlier = originalView?.isLoadingEarlier ?? false
                         overlay.updateLoadEarlierState(canLoadEarlier: canLoadEarlier, isLoadingEarlier: isLoadingEarlier)
+                        self.voiceOverOverlayController?.updateLoadEarlierState(canLoadEarlier: canLoadEarlier, isLoadingEarlier: isLoadingEarlier)
                     }
                 }
             }
             
             overlay.updateInterfaceState(self.chatPresentationInterfaceState)
+            self.voiceOverOverlayController?.updateInterfaceState(self.chatPresentationInterfaceState)
             overlay.updateEntries(self.historyNode.voiceOverHistoryEntries)
+            self.voiceOverOverlayController?.updateEntries(self.historyNode.voiceOverHistoryEntries)
             let originalView = self.historyNode.originalHistoryView
             let canLoadEarlier = (originalView?.earlierId != nil) || (originalView?.holeEarlier == true)
             let isLoadingEarlier = originalView?.isLoadingEarlier ?? false
             overlay.updateLoadEarlierState(canLoadEarlier: canLoadEarlier, isLoadingEarlier: isLoadingEarlier)
+            self.voiceOverOverlayController?.updateLoadEarlierState(canLoadEarlier: canLoadEarlier, isLoadingEarlier: isLoadingEarlier)
             
             if let overlayController = self.voiceOverOverlayController {
                 self.view.bringSubviewToFront(overlayController.view)
@@ -4322,6 +4334,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
             self.chatPresentationInterfaceState = chatPresentationInterfaceState
             
             self.voiceOverOverlayView?.updateInterfaceState(chatPresentationInterfaceState)
+            self.voiceOverOverlayController?.updateInterfaceState(chatPresentationInterfaceState)
             
             self.navigateButtons.update(strings: chatPresentationInterfaceState.strings, theme: chatPresentationInterfaceState.theme, preferClearGlass: chatPresentationInterfaceState.preferredGlassType == .clear, dateTimeFormat: chatPresentationInterfaceState.dateTimeFormat, backgroundNode: self.backgroundNode)
             

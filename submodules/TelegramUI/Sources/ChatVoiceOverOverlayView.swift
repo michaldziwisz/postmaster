@@ -895,6 +895,40 @@ public final class ChatVoiceOverOverlayView: UIView {
         }
     }
 
+    public struct NativeMessageListRowPresentation {
+        public let title: String
+        public let subtitle: String?
+        public let accessibilityLabel: String
+        public let accessibilityHint: String?
+        public let accessibilityTraits: UIAccessibilityTraits
+        public let accessibilityCustomActions: [UIAccessibilityCustomAction]?
+        public let usesProminentStyle: Bool
+        public let usesAccentColor: Bool
+        public let selectionStyle: UITableViewCell.SelectionStyle
+
+        public init(
+            title: String,
+            subtitle: String?,
+            accessibilityLabel: String,
+            accessibilityHint: String?,
+            accessibilityTraits: UIAccessibilityTraits,
+            accessibilityCustomActions: [UIAccessibilityCustomAction]?,
+            usesProminentStyle: Bool,
+            usesAccentColor: Bool,
+            selectionStyle: UITableViewCell.SelectionStyle
+        ) {
+            self.title = title
+            self.subtitle = subtitle
+            self.accessibilityLabel = accessibilityLabel
+            self.accessibilityHint = accessibilityHint
+            self.accessibilityTraits = accessibilityTraits
+            self.accessibilityCustomActions = accessibilityCustomActions
+            self.usesProminentStyle = usesProminentStyle
+            self.usesAccentColor = usesAccentColor
+            self.selectionStyle = selectionStyle
+        }
+    }
+
     public struct MessageTextActionItem: Equatable {
         public let action: TelegramTextAttributesVoiceOver.Action
         public let title: String
@@ -1743,6 +1777,131 @@ public final class ChatVoiceOverOverlayView: UIView {
             recordHint: isRecording ? nil : strings.VoiceOver_Chat_RecordModeVoiceMessageInfo,
             inputLabel: strings.Conversation_InputTextPlaceholder
         )
+    }
+
+    func nativeMessageListRowCount() -> Int {
+        return self.rows.count + self.loadEarlierRowOffset
+    }
+
+    func nativeMessageListEstimatedHeight(at indexPath: IndexPath) -> CGFloat {
+        if self.shouldShowLoadEarlierRow, indexPath.row == 0 {
+            return 96.0
+        }
+
+        let rowIndex = indexPath.row - self.loadEarlierRowOffset
+        guard rowIndex >= 0, rowIndex < self.rows.count else {
+            return self.tableView.estimatedRowHeight
+        }
+
+        let row = self.rows[rowIndex]
+        switch row.kind {
+        case let .info(text):
+            let lines = max(1, min(6, (text.count / 44) + 1))
+            return max(72.0, CGFloat(24 * lines + 28))
+        case .unreadMarker:
+            return 44.0
+        case let .message(message):
+            if !message.text.isEmpty {
+                let lines = max(1, min(8, (message.text.count / 36) + 1))
+                return max(72.0, CGFloat(26 + (lines * 22)))
+            } else {
+                return 88.0
+            }
+        }
+    }
+
+    func nativeMessageListPresentation(at indexPath: IndexPath, menuRectProvider: @escaping () -> CGRect?) -> NativeMessageListRowPresentation? {
+        if self.shouldShowLoadEarlierRow, indexPath.row == 0 {
+            let bundle = Bundle(for: ChatVoiceOverOverlayView.self)
+            let title: String
+            let traits: UIAccessibilityTraits
+            let selectionStyle: UITableViewCell.SelectionStyle
+
+            if self.isLoadEarlierInProgress {
+                title = self.interfaceState?.strings.Channel_NotificationLoading ?? bundle.localizedString(forKey: "Channel.NotificationLoading", value: "Loading", table: nil)
+                traits = [.updatesFrequently]
+                selectionStyle = .none
+            } else if self.canLoadEarlierHistory {
+                title = bundle.localizedString(forKey: "VoiceOver.Chat.LoadEarlier", value: "Load older messages", table: nil)
+                traits = [.button]
+                selectionStyle = .default
+            } else {
+                title = bundle.localizedString(forKey: "VoiceOver.Chat.LoadEarlier.None", value: "No older messages", table: nil)
+                traits = [.staticText]
+                selectionStyle = .none
+            }
+
+            return NativeMessageListRowPresentation(
+                title: title,
+                subtitle: nil,
+                accessibilityLabel: title,
+                accessibilityHint: nil,
+                accessibilityTraits: traits,
+                accessibilityCustomActions: nil,
+                usesProminentStyle: true,
+                usesAccentColor: traits.contains(.button),
+                selectionStyle: selectionStyle
+            )
+        }
+
+        let rowIndex = indexPath.row - self.loadEarlierRowOffset
+        guard rowIndex >= 0, rowIndex < self.rows.count, let state = self.interfaceState else {
+            return nil
+        }
+
+        let row = self.rows[rowIndex]
+        let resolved = self.resolveRow(row, state: state)
+        let customActions: [UIAccessibilityCustomAction]?
+        let selectionStyle: UITableViewCell.SelectionStyle
+
+        switch row.kind {
+        case let .message(message):
+            customActions = self.makeMessageAccessibilityCustomActions(message: message, state: state, menuRectProvider: menuRectProvider)
+            selectionStyle = self.isMessageActivatable(message) ? .default : .none
+        case .unreadMarker, .info:
+            customActions = nil
+            selectionStyle = .none
+        }
+
+        return NativeMessageListRowPresentation(
+            title: resolved.title,
+            subtitle: resolved.subtitle,
+            accessibilityLabel: resolved.accessibilityLabel,
+            accessibilityHint: resolved.hint,
+            accessibilityTraits: resolved.traits,
+            accessibilityCustomActions: customActions,
+            usesProminentStyle: false,
+            usesAccentColor: false,
+            selectionStyle: selectionStyle
+        )
+    }
+
+    @discardableResult
+    func activateNativeMessageListRow(at indexPath: IndexPath) -> Bool {
+        if self.shouldShowLoadEarlierRow, indexPath.row == 0 {
+            guard self.canLoadEarlierHistory, !self.isLoadEarlierInProgress else {
+                return false
+            }
+            self.loadEarlierInitiationFocus = .loadEarlierRow
+            self.triggerLoadEarlierRequest()
+            return true
+        }
+
+        let rowIndex = indexPath.row - self.loadEarlierRowOffset
+        guard rowIndex >= 0, rowIndex < self.rows.count else {
+            return false
+        }
+        guard case let .message(message) = self.rows[rowIndex].kind else {
+            return false
+        }
+        return self.activateMessageRow(message)
+    }
+
+    func nativeMessageListDidScroll(visibleIndexPaths: [IndexPath]) {
+        guard !visibleIndexPaths.isEmpty else {
+            return
+        }
+        self.requestVisibleTranslationsForNativeVisibleIndexPaths(visibleIndexPaths)
     }
     private func makeRows(from entries: [ChatHistoryEntry]) -> [Row] {
         var result: [Row] = []
@@ -5218,6 +5377,38 @@ public final class ChatVoiceOverOverlayView: UIView {
             return
         }
         guard let visibleIndexPaths = self.tableView.indexPathsForVisibleRows, !visibleIndexPaths.isEmpty else {
+            return
+        }
+
+        let rowOffset = self.loadEarlierRowOffset
+        var messageIds: [MessageId] = []
+        messageIds.reserveCapacity(visibleIndexPaths.count)
+
+        for indexPath in visibleIndexPaths.sorted() {
+            guard indexPath.section == 0 else {
+                continue
+            }
+            let rowIndex = indexPath.row - rowOffset
+            guard rowIndex >= 0, rowIndex < self.rows.count else {
+                continue
+            }
+            guard case let .message(message) = self.rows[rowIndex].kind else {
+                continue
+            }
+            messageIds.append(message.id)
+        }
+
+        guard !messageIds.isEmpty else {
+            return
+        }
+        self.actions.requestVisibleTranslations?(messageIds)
+    }
+
+    private func requestVisibleTranslationsForNativeVisibleIndexPaths(_ visibleIndexPaths: [IndexPath]) {
+        guard UIAccessibility.isVoiceOverRunning else {
+            return
+        }
+        guard self.activeTranslationLanguage(for: self.interfaceState) != nil else {
             return
         }
 

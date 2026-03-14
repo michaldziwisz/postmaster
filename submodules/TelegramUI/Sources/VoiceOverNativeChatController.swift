@@ -1,4 +1,9 @@
 import UIKit
+import Postbox
+import TelegramCore
+import TelegramPresentationData
+import ChatPresentationInterfaceState
+import ChatHistoryEntry
 
 private final class VoiceOverNativeChatTextView: UITextView {
     var onAccessibilityEscape: (() -> Bool)?
@@ -11,7 +16,14 @@ private final class VoiceOverNativeChatTextView: UITextView {
     }
 }
 
-final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate {
+private final class VoiceOverNativeChatMessageCell: UITableViewCell {
+    override func prepareForReuse() {
+        super.prepareForReuse()
+        self.accessibilityCustomActions = nil
+    }
+}
+
+final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate, UITableViewDataSource, UITableViewDelegate {
     let overlayView: ChatVoiceOverOverlayView
 
     private let headerView = UIView()
@@ -20,6 +32,7 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate 
     private let infoButton = UIButton(type: .system)
     private let headerSeparatorView = UIView()
     private let contentView = UIView()
+    private let tableView = UITableView(frame: .zero, style: .plain)
     private let composerView = UIView()
     private let composerSeparatorView = UIView()
     private let attachButton = UIButton(type: .system)
@@ -31,6 +44,8 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate 
     private var primaryActionKind: PrimaryActionKind = .record
     private var composerBottomConstraint: NSLayoutConstraint?
     private var lastKnownKeyboardBottomInset: CGFloat = 0.0
+    private var interfaceState: ChatPresentationInterfaceState?
+    private var didInitialScrollToBottom = false
     private var nativeComposerState = ChatVoiceOverOverlayView.NativeComposerState(
         isEnabled: true,
         isRecording: false,
@@ -108,6 +123,21 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate 
         self.contentView.shouldGroupAccessibilityChildren = false
         view.addSubview(self.contentView)
 
+        self.tableView.translatesAutoresizingMaskIntoConstraints = false
+        self.tableView.dataSource = self
+        self.tableView.delegate = self
+        self.tableView.rowHeight = UITableView.automaticDimension
+        self.tableView.estimatedRowHeight = 88.0
+        self.tableView.separatorInset = .zero
+        self.tableView.allowsSelection = true
+        self.tableView.keyboardDismissMode = .interactive
+        self.tableView.alwaysBounceVertical = true
+        self.tableView.isAccessibilityElement = false
+        if #available(iOS 11.0, *) {
+            self.tableView.accessibilityContainerType = .list
+        }
+        self.contentView.addSubview(self.tableView)
+
         self.composerView.translatesAutoresizingMaskIntoConstraints = false
         self.composerView.backgroundColor = .systemBackground
         self.composerView.isAccessibilityElement = false
@@ -143,9 +173,6 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate 
         self.inputTextView.enablesReturnKeyAutomatically = false
         self.inputTextView.delegate = self
         self.composerView.addSubview(self.inputTextView)
-
-        self.overlayView.translatesAutoresizingMaskIntoConstraints = false
-        self.contentView.addSubview(self.overlayView)
 
         NSLayoutConstraint.activate([
             self.headerView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
@@ -183,6 +210,11 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate 
             self.contentView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             self.contentView.bottomAnchor.constraint(equalTo: self.composerView.topAnchor),
 
+            self.tableView.topAnchor.constraint(equalTo: self.contentView.topAnchor),
+            self.tableView.leadingAnchor.constraint(equalTo: self.contentView.leadingAnchor),
+            self.tableView.trailingAnchor.constraint(equalTo: self.contentView.trailingAnchor),
+            self.tableView.bottomAnchor.constraint(equalTo: self.contentView.bottomAnchor),
+
             self.composerSeparatorView.leadingAnchor.constraint(equalTo: self.composerView.leadingAnchor),
             self.composerSeparatorView.trailingAnchor.constraint(equalTo: self.composerView.trailingAnchor),
             self.composerSeparatorView.topAnchor.constraint(equalTo: self.composerView.topAnchor),
@@ -202,12 +234,7 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate 
             self.inputTextView.trailingAnchor.constraint(equalTo: self.primaryActionButton.leadingAnchor, constant: -8.0),
             self.inputTextView.topAnchor.constraint(equalTo: self.composerView.topAnchor, constant: 10.0),
             self.inputTextView.bottomAnchor.constraint(equalTo: self.composerView.bottomAnchor, constant: -10.0),
-            self.inputTextView.heightAnchor.constraint(greaterThanOrEqualToConstant: 44.0),
-
-            self.overlayView.topAnchor.constraint(equalTo: self.contentView.topAnchor),
-            self.overlayView.leadingAnchor.constraint(equalTo: self.contentView.leadingAnchor),
-            self.overlayView.trailingAnchor.constraint(equalTo: self.contentView.trailingAnchor),
-            self.overlayView.bottomAnchor.constraint(equalTo: self.contentView.bottomAnchor)
+            self.inputTextView.heightAnchor.constraint(greaterThanOrEqualToConstant: 44.0)
         ])
 
         let composerBottomConstraint = self.composerView.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor)
@@ -231,47 +258,20 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate 
             return self?.handleVoiceOverKeyboardEscape() ?? false
         }
 
-        self.applyNavigationState(ChatVoiceOverOverlayView.NativeNavigationState(
-            title: "",
-            backTitle: "Back",
-            infoLabel: "Chat info",
-            infoHint: nil
-        ))
-        self.applyComposerState(self.overlayView.currentNativeComposerState())
         self.overlayView.setNativeComposerHostedExternally(true)
         self.overlayView.accessibilityViewIsModal = false
-        self.overlayView.accessibilityElementsHidden = false
-
-        self.overlayView.onNativeNavigationStateUpdated = { [weak self] state in
-            self?.applyNavigationState(state)
-        }
-        self.overlayView.onNativeComposerStateUpdated = { [weak self] state in
-            self?.applyComposerState(state)
-        }
-        self.overlayView.onNativeMessageListAccessibilityUpdated = { [weak self] in
-            self?.refreshAccessibilityContainers()
-        }
-        self.overlayView.externalNavigationFocusTargetProvider = { [weak self] in
-            return self?.backButton
-        }
-        self.overlayView.externalProfileFocusTargetProvider = { [weak self] in
-            return self?.titleButton
-        }
-        self.overlayView.externalNativeKeyboardEscapeHandler = { [weak self] in
-            return self?.handleVoiceOverKeyboardEscape() ?? false
-        }
+        self.overlayView.accessibilityElementsHidden = true
+        self.overlayView.externalNavigationFocusTargetProvider = nil
+        self.overlayView.externalProfileFocusTargetProvider = nil
+        self.overlayView.externalNativeKeyboardEscapeHandler = nil
 
         let focusToken = NotificationCenter.default.addObserver(forName: UIAccessibility.elementFocusedNotification, object: nil, queue: .main) { [weak self] notification in
             self?.handleVoiceOverElementFocused(notification)
         }
         self.accessibilityObservers.append(focusToken)
         self.setupKeyboardObservers()
-        self.refreshAccessibilityContainers()
-    }
-
-    override func viewDidLayoutSubviews() {
-        super.viewDidLayoutSubviews()
-        self.refreshAccessibilityContainers()
+        self.headerView.accessibilityElements = [self.backButton, self.titleButton, self.infoButton]
+        self.composerView.accessibilityElements = [self.attachButton, self.inputTextView, self.primaryActionButton]
     }
 
     deinit {
@@ -294,8 +294,7 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate 
         self.infoButton.accessibilityLabel = state.infoLabel
         self.infoButton.accessibilityHint = state.infoHint
 
-        self.headerView.accessibilityElements = nil
-        self.refreshAccessibilityContainers()
+        self.headerView.accessibilityElements = [self.backButton, self.titleButton, self.infoButton]
     }
 
     private func applyComposerState(_ state: ChatVoiceOverOverlayView.NativeComposerState) {
@@ -333,8 +332,7 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate 
         self.inputTextView.accessibilityLabel = state.inputLabel
         self.inputTextView.accessibilityHint = nil
 
-        self.composerView.accessibilityElements = nil
-        self.refreshAccessibilityContainers()
+        self.composerView.accessibilityElements = [self.attachButton, self.inputTextView, self.primaryActionButton]
     }
 
     @objc private func backPressed() {
@@ -365,7 +363,7 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate 
         }
         self.overlayView.actions.sendText?(text)
         self.inputTextView.text = ""
-        self.applyComposerState(self.nativeComposerState)
+        self.applyComposerState(self.currentComposerState())
     }
 
     @objc private func recordPressed() {
@@ -379,14 +377,10 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate 
     func setAccessibilityModalState(_ isModal: Bool) {
         self.view.accessibilityViewIsModal = isModal
         self.view.accessibilityElementsHidden = !isModal
-        self.refreshAccessibilityContainers()
     }
 
     override func accessibilityPerformEscape() -> Bool {
         if self.handleVoiceOverKeyboardEscape() {
-            return true
-        }
-        if self.overlayView.accessibilityPerformEscape() {
             return true
         }
         self.backPressed()
@@ -402,15 +396,7 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate 
             self.scheduleKeyboardDismissFocusRestore(after: 0.05, remainingAttempts: 8)
             return true
         }
-        guard self.overlayView.shouldHandleVoiceOverKeyboardEscapeExternally() else {
-            return false
-        }
-        self.extendKeyboardDismissVoiceOverContainment(8.0)
-        _ = self.overlayView.dismissKeyboardForExternalVoiceOverEscape()
-        let immediateTarget = self.preferredKeyboardDismissFocusTarget()
-        UIAccessibility.post(notification: .layoutChanged, argument: immediateTarget)
-        self.scheduleKeyboardDismissFocusRestore(after: 0.05, remainingAttempts: 8)
-        return true
+        return false
     }
 
     private func scheduleKeyboardDismissFocusRestore(after delay: TimeInterval, remainingAttempts: Int) {
@@ -448,7 +434,6 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate 
     private func reinforceNativeChatAccessibilityContainment() {
         self.view.accessibilityViewIsModal = true
         self.view.accessibilityElementsHidden = false
-        self.refreshAccessibilityContainers()
         self.parent?.viewIfLoaded?.accessibilityViewIsModal = true
         self.navigationController?.viewIfLoaded?.accessibilityViewIsModal = true
     }
@@ -508,7 +493,7 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate 
     }
 
     func textViewDidChange(_ textView: UITextView) {
-        self.applyComposerState(self.nativeComposerState)
+        self.applyComposerState(self.currentComposerState())
     }
 
     func textViewDidBeginEditing(_ textView: UITextView) {
@@ -516,42 +501,108 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate 
         UIAccessibility.post(notification: .layoutChanged, argument: self.inputTextView)
     }
 
-    private func refreshAccessibilityContainers() {
-        let messageElements = self.nativeVisibleMessageAccessibilityElements()
-
-        self.headerView.accessibilityElements = [
-            self.backButton,
-            self.titleButton,
-            self.infoButton
-        ]
-        var contentElements = messageElements
-        contentElements.append(contentsOf: self.overlayView.nativeSupplementaryAccessibilityContainers)
-        if contentElements.isEmpty {
-            contentElements = [self.overlayView.nativeMessageListAccessibilityContainer]
-        }
-        self.contentView.accessibilityElements = contentElements
-        self.composerView.accessibilityElements = [
-            self.attachButton,
-            self.inputTextView,
-            self.primaryActionButton
-        ]
-        self.view.accessibilityElements = [
-            self.headerView,
-            self.contentView,
-            self.composerView
-        ]
+    private func currentComposerState() -> ChatVoiceOverOverlayView.NativeComposerState {
+        return self.overlayView.currentNativeComposerState()
     }
 
-    private func nativeVisibleMessageAccessibilityElements() -> [Any] {
-        guard let tableView = self.overlayView.nativeMessageListAccessibilityContainer as? UITableView else {
-            return []
+    func updateInterfaceState(_ state: ChatPresentationInterfaceState) {
+        self.interfaceState = state
+
+        self.view.backgroundColor = state.theme.list.plainBackgroundColor
+        self.contentView.backgroundColor = state.theme.list.plainBackgroundColor
+        self.tableView.backgroundColor = state.theme.list.plainBackgroundColor
+        self.headerView.backgroundColor = state.theme.rootController.navigationBar.backgroundColor
+        self.composerView.backgroundColor = state.theme.rootController.navigationBar.backgroundColor
+        self.headerSeparatorView.backgroundColor = UIColor.separator
+        self.composerSeparatorView.backgroundColor = UIColor.separator
+
+        self.backButton.tintColor = state.theme.rootController.navigationBar.accentTextColor
+        self.infoButton.tintColor = state.theme.rootController.navigationBar.accentTextColor
+        self.titleButton.setTitleColor(state.theme.rootController.navigationBar.primaryTextColor, for: .normal)
+        self.attachButton.tintColor = state.theme.rootController.navigationBar.accentTextColor
+        self.primaryActionButton.tintColor = state.theme.rootController.navigationBar.accentTextColor
+
+        self.inputTextView.backgroundColor = state.theme.list.itemBlocksBackgroundColor
+        self.inputTextView.textColor = state.theme.list.itemPrimaryTextColor
+        self.inputTextView.tintColor = state.theme.list.itemAccentColor
+
+        self.applyNavigationState(self.navigationState(for: state))
+        self.applyComposerState(self.currentComposerState())
+        self.tableView.reloadData()
+    }
+
+    func updateEntries(_ entries: [ChatHistoryEntry]) {
+        self.tableView.reloadData()
+
+        if !self.didInitialScrollToBottom, self.overlayView.nativeMessageListRowCount() > 0 {
+            self.didInitialScrollToBottom = true
+            let lastRow = max(0, self.overlayView.nativeMessageListRowCount() - 1)
+            let lastIndexPath = IndexPath(row: lastRow, section: 0)
+            DispatchQueue.main.async { [weak self] in
+                guard let self else {
+                    return
+                }
+                guard lastRow < self.tableView.numberOfRows(inSection: 0) else {
+                    return
+                }
+                UIView.performWithoutAnimation {
+                    self.tableView.scrollToRow(at: lastIndexPath, at: .bottom, animated: false)
+                    self.tableView.layoutIfNeeded()
+                }
+            }
         }
-        let visibleIndexPaths = (tableView.indexPathsForVisibleRows ?? []).sorted()
-        let visibleCells = visibleIndexPaths.compactMap { tableView.cellForRow(at: $0) }
-        if !visibleCells.isEmpty {
-            return visibleCells
+    }
+
+    func updateLoadEarlierState(canLoadEarlier: Bool, isLoadingEarlier: Bool) {
+        self.tableView.reloadData()
+    }
+
+    func updateVoicePlaybackState(_ state: ChatVoiceOverOverlayView.VoicePlaybackState?) {
+        if let visibleRows = self.tableView.indexPathsForVisibleRows, !visibleRows.isEmpty {
+            self.tableView.reloadRows(at: visibleRows, with: .none)
+        } else {
+            self.tableView.reloadData()
         }
-        return [tableView]
+    }
+
+    private func navigationState(for state: ChatPresentationInterfaceState) -> ChatVoiceOverOverlayView.NativeNavigationState {
+        let title: String
+        if let threadData = state.threadData {
+            title = threadData.title
+        } else if let forumTopicData = state.forumTopicData {
+            title = forumTopicData.title
+        } else if let peer = state.renderedPeer?.chatMainPeer {
+            if peer.id == state.accountPeerId {
+                title = state.strings.DialogList_SavedMessages
+            } else {
+                title = EnginePeer(peer).displayTitle(strings: state.strings, displayOrder: state.nameDisplayOrder)
+            }
+        } else {
+            title = ""
+        }
+
+        return ChatVoiceOverOverlayView.NativeNavigationState(
+            title: title,
+            backTitle: state.strings.Common_Back,
+            infoLabel: state.strings.KeyCommand_ChatInfo,
+            infoHint: state.strings.VoiceOver_Chat_OpenHint
+        )
+    }
+
+    func voiceOverDidReturnToChat(focusInfoButton: Bool = false) {
+        let target: Any
+        if focusInfoButton {
+            target = self.titleButton
+        } else if let firstVisible = self.tableView.indexPathsForVisibleRows?.sorted().first,
+                  let cell = self.tableView.cellForRow(at: firstVisible) {
+            target = cell
+        } else {
+            target = self.backButton
+        }
+        UIAccessibility.post(notification: .screenChanged, argument: target)
+        DispatchQueue.main.async {
+            UIAccessibility.post(notification: .layoutChanged, argument: target)
+        }
     }
 
     private func setupKeyboardObservers() {
@@ -601,17 +652,97 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate 
             view.layoutIfNeeded()
         }
 
-        self.refreshAccessibilityContainers()
-
         if previousBottomInset > 0.0 && bottomInset == 0.0 {
             self.extendKeyboardDismissVoiceOverContainment(max(2.0, duration + 0.6))
             DispatchQueue.main.asyncAfter(deadline: .now() + max(0.08, duration + 0.02)) { [weak self] in
                 guard let self else {
                     return
                 }
-                self.refreshAccessibilityContainers()
                 self.restoreVoiceOverFocusAfterKeyboardDismissIfNeeded()
             }
         }
+    }
+
+    func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
+        return self.overlayView.nativeMessageListRowCount()
+    }
+
+    func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
+        let cell: VoiceOverNativeChatMessageCell
+        if let current = tableView.dequeueReusableCell(withIdentifier: "Message") as? VoiceOverNativeChatMessageCell {
+            cell = current
+        } else {
+            cell = VoiceOverNativeChatMessageCell(style: .subtitle, reuseIdentifier: "Message")
+        }
+        guard let presentation = self.overlayView.nativeMessageListPresentation(at: indexPath, menuRectProvider: { [weak self, weak cell] in
+            guard let self, let cell else {
+                return nil
+            }
+            return self.view.convert(cell.bounds, from: cell)
+        }) else {
+            return cell
+        }
+
+        cell.textLabel?.text = presentation.title
+        cell.textLabel?.numberOfLines = 0
+        cell.textLabel?.font = UIFont.preferredFont(forTextStyle: presentation.usesProminentStyle ? .headline : .body)
+        cell.textLabel?.adjustsFontForContentSizeCategory = true
+        cell.textLabel?.textAlignment = presentation.usesProminentStyle ? .center : .natural
+
+        cell.detailTextLabel?.text = presentation.subtitle
+        cell.detailTextLabel?.numberOfLines = 0
+        cell.detailTextLabel?.font = UIFont.preferredFont(forTextStyle: .caption1)
+        cell.detailTextLabel?.adjustsFontForContentSizeCategory = true
+        cell.detailTextLabel?.textAlignment = presentation.usesProminentStyle ? .center : .natural
+
+        if presentation.usesProminentStyle {
+            cell.contentView.directionalLayoutMargins = NSDirectionalEdgeInsets(top: 20.0, leading: 24.0, bottom: 20.0, trailing: 24.0)
+            cell.separatorInset = UIEdgeInsets(top: 0.0, left: 24.0, bottom: 0.0, right: 24.0)
+        } else {
+            cell.contentView.directionalLayoutMargins = NSDirectionalEdgeInsets(top: 12.0, leading: 16.0, bottom: 12.0, trailing: 16.0)
+            cell.separatorInset = .zero
+        }
+
+        if let state = self.interfaceState {
+            cell.backgroundColor = state.theme.list.plainBackgroundColor
+            let primaryColor = presentation.usesAccentColor ? state.theme.list.itemAccentColor : state.theme.list.itemPrimaryTextColor
+            cell.textLabel?.textColor = primaryColor
+            cell.detailTextLabel?.textColor = state.theme.list.itemSecondaryTextColor
+        }
+
+        cell.selectionStyle = presentation.selectionStyle
+        cell.isAccessibilityElement = true
+        cell.accessibilityLabel = presentation.accessibilityLabel
+        cell.accessibilityHint = presentation.accessibilityHint
+        cell.accessibilityTraits = presentation.accessibilityTraits
+        cell.accessibilityCustomActions = presentation.accessibilityCustomActions
+        return cell
+    }
+
+    func tableView(_ tableView: UITableView, estimatedHeightForRowAt indexPath: IndexPath) -> CGFloat {
+        return self.overlayView.nativeMessageListEstimatedHeight(at: indexPath)
+    }
+
+    func tableView(_ tableView: UITableView, heightForRowAt indexPath: IndexPath) -> CGFloat {
+        if self.overlayView.nativeMessageListEstimatedHeight(at: indexPath) == 96.0 && indexPath.row == 0 {
+            return 96.0
+        }
+        return UITableView.automaticDimension
+    }
+
+    func tableView(_ tableView: UITableView, willSelectRowAt indexPath: IndexPath) -> IndexPath? {
+        guard let presentation = self.overlayView.nativeMessageListPresentation(at: indexPath, menuRectProvider: { nil }) else {
+            return nil
+        }
+        return presentation.selectionStyle == .none ? nil : indexPath
+    }
+
+    func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+        tableView.deselectRow(at: indexPath, animated: true)
+        _ = self.overlayView.activateNativeMessageListRow(at: indexPath)
+    }
+
+    func scrollViewDidScroll(_ scrollView: UIScrollView) {
+        self.overlayView.nativeMessageListDidScroll(visibleIndexPaths: self.tableView.indexPathsForVisibleRows ?? [])
     }
 }
