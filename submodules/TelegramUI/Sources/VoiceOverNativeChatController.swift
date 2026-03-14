@@ -511,8 +511,8 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate,
         self.view.backgroundColor = state.theme.list.plainBackgroundColor
         self.contentView.backgroundColor = state.theme.list.plainBackgroundColor
         self.tableView.backgroundColor = state.theme.list.plainBackgroundColor
-        self.headerView.backgroundColor = state.theme.rootController.navigationBar.backgroundColor
-        self.composerView.backgroundColor = state.theme.rootController.navigationBar.backgroundColor
+        self.headerView.backgroundColor = state.theme.rootController.navigationBar.opaqueBackgroundColor
+        self.composerView.backgroundColor = state.theme.rootController.navigationBar.opaqueBackgroundColor
         self.headerSeparatorView.backgroundColor = UIColor.separator
         self.composerSeparatorView.backgroundColor = UIColor.separator
 
