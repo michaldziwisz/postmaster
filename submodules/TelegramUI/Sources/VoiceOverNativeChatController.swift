@@ -47,6 +47,7 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate,
     private var keyboardObservers: [NSObjectProtocol] = []
     private var composerBottomConstraint: NSLayoutConstraint?
     private var lastKnownKeyboardBottomInset: CGFloat = 0.0
+    private var observedVisibleKeyboard = false
     private var shouldRestoreFocusAfterKeyboardHide = false
     private var pendingKeyboardFocusRestoreWorkItems: [DispatchWorkItem] = []
     private var primaryActionKind: PrimaryActionKind = .record
@@ -579,6 +580,7 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate,
         let bottomInset = max(CGFloat(0.0), overlap - self.view.safeAreaInsets.bottom)
 
         if bottomInset > 0.0 {
+            self.observedVisibleKeyboard = true
             self.cancelPendingKeyboardFocusRestore()
             if self.inputTextView.isFirstResponder {
                 self.shouldRestoreFocusAfterKeyboardHide = false
@@ -596,10 +598,11 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate,
     }
 
     private func handleKeyboardDidHide() {
-        guard self.shouldRestoreFocusAfterKeyboardHide else {
+        guard self.shouldRestoreFocusAfterKeyboardHide || self.observedVisibleKeyboard else {
             return
         }
         self.shouldRestoreFocusAfterKeyboardHide = false
+        self.observedVisibleKeyboard = false
         self.scheduleKeyboardFocusRestore()
     }
 
