@@ -30,6 +30,7 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate 
     private var keyboardDismissVoiceOverContainmentDeadline: CFTimeInterval = 0.0
     private var primaryActionKind: PrimaryActionKind = .record
     private var composerBottomConstraint: NSLayoutConstraint?
+    private var lastKnownKeyboardBottomInset: CGFloat = 0.0
     private var nativeComposerState = ChatVoiceOverOverlayView.NativeComposerState(
         isEnabled: true,
         isRecording: false,
@@ -238,6 +239,8 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate 
         ))
         self.applyComposerState(self.overlayView.currentNativeComposerState())
         self.overlayView.setNativeComposerHostedExternally(true)
+        self.overlayView.accessibilityViewIsModal = false
+        self.overlayView.accessibilityElementsHidden = false
 
         self.overlayView.onNativeNavigationStateUpdated = { [weak self] state in
             self?.applyNavigationState(state)
@@ -263,6 +266,11 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate 
         }
         self.accessibilityObservers.append(focusToken)
         self.setupKeyboardObservers()
+        self.refreshAccessibilityContainers()
+    }
+
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
         self.refreshAccessibilityContainers()
     }
 
@@ -509,20 +517,29 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate 
     }
 
     private func refreshAccessibilityContainers() {
-        var rootElements: [Any] = [
+        let messageElements = self.nativeVisibleMessageAccessibilityElements()
+
+        self.headerView.accessibilityElements = [
             self.backButton,
             self.titleButton,
             self.infoButton
         ]
-        rootElements.append(contentsOf: self.nativeVisibleMessageAccessibilityElements())
-        rootElements.append(contentsOf: self.overlayView.nativeSupplementaryAccessibilityContainers)
-        rootElements.append(self.attachButton)
-        rootElements.append(self.inputTextView)
-        rootElements.append(self.primaryActionButton)
-        self.view.accessibilityElements = rootElements
-        self.headerView.accessibilityElements = nil
-        self.contentView.accessibilityElements = nil
-        self.composerView.accessibilityElements = nil
+        var contentElements = messageElements
+        contentElements.append(contentsOf: self.overlayView.nativeSupplementaryAccessibilityContainers)
+        if contentElements.isEmpty {
+            contentElements = [self.overlayView.nativeMessageListAccessibilityContainer]
+        }
+        self.contentView.accessibilityElements = contentElements
+        self.composerView.accessibilityElements = [
+            self.attachButton,
+            self.inputTextView,
+            self.primaryActionButton
+        ]
+        self.view.accessibilityElements = [
+            self.headerView,
+            self.contentView,
+            self.composerView
+        ]
     }
 
     private func nativeVisibleMessageAccessibilityElements() -> [Any] {
@@ -576,10 +593,25 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate 
         let endFrameInView = view.convert(endFrameScreen, from: nil)
         let overlap = max(CGFloat(0.0), view.bounds.maxY - endFrameInView.minY)
         let bottomInset = max(CGFloat(0.0), overlap - view.safeAreaInsets.bottom)
+        let previousBottomInset = self.lastKnownKeyboardBottomInset
+        self.lastKnownKeyboardBottomInset = bottomInset
 
         self.composerBottomConstraint?.constant = -bottomInset
         UIView.animate(withDuration: duration, delay: 0.0, options: [curve, .beginFromCurrentState, .allowUserInteraction]) {
             view.layoutIfNeeded()
+        }
+
+        self.refreshAccessibilityContainers()
+
+        if previousBottomInset > 0.0 && bottomInset == 0.0 {
+            self.extendKeyboardDismissVoiceOverContainment(max(2.0, duration + 0.6))
+            DispatchQueue.main.asyncAfter(deadline: .now() + max(0.08, duration + 0.02)) { [weak self] in
+                guard let self else {
+                    return
+                }
+                self.refreshAccessibilityContainers()
+                self.restoreVoiceOverFocusAfterKeyboardDismissIfNeeded()
+            }
         }
     }
 }

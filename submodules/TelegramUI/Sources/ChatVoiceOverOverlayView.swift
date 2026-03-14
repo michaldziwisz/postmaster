@@ -1553,7 +1553,6 @@ public final class ChatVoiceOverOverlayView: UIView {
     func updateEntries(_ entries: [ChatHistoryEntry]) {
         self.pendingEntries = entries
         self.schedulePendingEntriesApplyIfNeeded()
-        self.notifyNativeMessageListAccessibilityUpdated()
     }
 
     public func updateLoadEarlierState(canLoadEarlier: Bool, isLoadingEarlier: Bool) {
@@ -3201,6 +3200,7 @@ public final class ChatVoiceOverOverlayView: UIView {
             if self.refreshControl.isRefreshing, !previousWasWaitingForLoadEarlier {
                 self.refreshControl.endRefreshing()
             }
+            self.notifyNativeMessageListAccessibilityUpdated()
             self.scheduleVoiceOverFocusRecoveryIfNeeded()
             return
         }
@@ -3503,6 +3503,7 @@ public final class ChatVoiceOverOverlayView: UIView {
         }
 
         self.requestVisibleTranslationsIfNeeded()
+        self.notifyNativeMessageListAccessibilityUpdated()
     }
 
     private func captureLastUserScrollAnchor() {
