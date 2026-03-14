@@ -26,8 +26,10 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate 
     private let inputTextView = VoiceOverNativeChatTextView()
     private let primaryActionButton = UIButton(type: .system)
     private var accessibilityObservers: [NSObjectProtocol] = []
+    private var keyboardObservers: [NSObjectProtocol] = []
     private var keyboardDismissVoiceOverContainmentDeadline: CFTimeInterval = 0.0
     private var primaryActionKind: PrimaryActionKind = .record
+    private var composerBottomConstraint: NSLayoutConstraint?
     private var nativeComposerState = ChatVoiceOverOverlayView.NativeComposerState(
         isEnabled: true,
         isRecording: false,
@@ -180,10 +182,6 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate 
             self.contentView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             self.contentView.bottomAnchor.constraint(equalTo: self.composerView.topAnchor),
 
-            self.composerView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            self.composerView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            self.composerView.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor),
-
             self.composerSeparatorView.leadingAnchor.constraint(equalTo: self.composerView.leadingAnchor),
             self.composerSeparatorView.trailingAnchor.constraint(equalTo: self.composerView.trailingAnchor),
             self.composerSeparatorView.topAnchor.constraint(equalTo: self.composerView.topAnchor),
@@ -209,6 +207,14 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate 
             self.overlayView.leadingAnchor.constraint(equalTo: self.contentView.leadingAnchor),
             self.overlayView.trailingAnchor.constraint(equalTo: self.contentView.trailingAnchor),
             self.overlayView.bottomAnchor.constraint(equalTo: self.contentView.bottomAnchor)
+        ])
+
+        let composerBottomConstraint = self.composerView.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor)
+        self.composerBottomConstraint = composerBottomConstraint
+        NSLayoutConstraint.activate([
+            self.composerView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            self.composerView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            composerBottomConstraint
         ])
     }
 
@@ -253,6 +259,7 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate 
             self?.handleVoiceOverElementFocused(notification)
         }
         self.accessibilityObservers.append(focusToken)
+        self.setupKeyboardObservers()
         self.refreshAccessibilityContainers()
     }
 
@@ -260,6 +267,7 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate 
         self.overlayView.setNativeComposerHostedExternally(false)
         let notificationCenter = NotificationCenter.default
         self.accessibilityObservers.forEach { notificationCenter.removeObserver($0) }
+        self.keyboardObservers.forEach { notificationCenter.removeObserver($0) }
     }
 
     private func applyNavigationState(_ state: ChatVoiceOverOverlayView.NativeNavigationState) {
@@ -295,7 +303,7 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate 
         let shouldShowSend = state.isEnabled && !self.inputTextView.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !state.isRecording
         if shouldShowSend {
             self.primaryActionKind = .send
-            self.primaryActionButton.setTitle("➤", for: .normal)
+            self.primaryActionButton.setTitle(state.sendLabel, for: .normal)
             self.primaryActionButton.accessibilityLabel = state.sendLabel
             self.primaryActionButton.accessibilityHint = nil
             self.primaryActionButton.accessibilityTraits = [.button]
@@ -506,13 +514,62 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate 
     }
 
     private func refreshAccessibilityContainers() {
-        var contentElements: [Any] = [self.overlayView.nativeMessageListAccessibilityContainer]
-        contentElements.append(contentsOf: self.overlayView.nativeSupplementaryAccessibilityContainers)
-        self.contentView.accessibilityElements = contentElements
-        self.view.accessibilityElements = [
-            self.headerView,
-            self.contentView,
-            self.composerView
+        var rootElements: [Any] = [
+            self.backButton,
+            self.titleButton,
+            self.infoButton,
+            self.overlayView.nativeMessageListAccessibilityContainer
         ]
+        rootElements.append(contentsOf: self.overlayView.nativeSupplementaryAccessibilityContainers)
+        rootElements.append(self.attachButton)
+        rootElements.append(self.inputTextView)
+        rootElements.append(self.primaryActionButton)
+        self.view.accessibilityElements = rootElements
+    }
+
+    private func setupKeyboardObservers() {
+        let notificationCenter = NotificationCenter.default
+
+        let willChange = notificationCenter.addObserver(
+            forName: UIResponder.keyboardWillChangeFrameNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            self?.handleKeyboardFrameNotification(notification)
+        }
+        self.keyboardObservers.append(willChange)
+
+        let willHide = notificationCenter.addObserver(
+            forName: UIResponder.keyboardWillHideNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            self?.handleKeyboardFrameNotification(notification)
+        }
+        self.keyboardObservers.append(willHide)
+    }
+
+    private func handleKeyboardFrameNotification(_ notification: Notification) {
+        let view = self.view
+        guard view.window != nil else {
+            return
+        }
+        guard let userInfo = notification.userInfo else {
+            return
+        }
+
+        let duration = (userInfo[UIResponder.keyboardAnimationDurationUserInfoKey] as? NSNumber)?.doubleValue ?? 0.25
+        let curveRaw = (userInfo[UIResponder.keyboardAnimationCurveUserInfoKey] as? NSNumber)?.uintValue ?? UIView.AnimationCurve.easeInOut.rawValue
+        let curve = UIView.AnimationOptions(rawValue: curveRaw << 16)
+
+        let endFrameScreen = (userInfo[UIResponder.keyboardFrameEndUserInfoKey] as? NSValue)?.cgRectValue ?? .zero
+        let endFrameInView = view.convert(endFrameScreen, from: nil)
+        let overlap = max(0.0, view.bounds.maxY - endFrameInView.minY)
+        let bottomInset = max(0.0, overlap - view.safeAreaInsets.bottom)
+
+        self.composerBottomConstraint?.constant = -bottomInset
+        UIView.animate(withDuration: duration, delay: 0.0, options: [curve, .beginFromCurrentState, .allowUserInteraction]) {
+            view.layoutIfNeeded()
+        }
     }
 }
