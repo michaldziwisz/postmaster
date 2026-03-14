@@ -47,6 +47,7 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate,
     private var keyboardObservers: [NSObjectProtocol] = []
     private var composerBottomConstraint: NSLayoutConstraint?
     private var lastKnownKeyboardBottomInset: CGFloat = 0.0
+    private var shouldRestoreFocusAfterKeyboardHide = false
     private var primaryActionKind: PrimaryActionKind = .record
     private var interfaceState: ChatPresentationInterfaceState?
     private var didInitialScrollToBottom = false
@@ -403,9 +404,8 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate,
 
     private func handleVoiceOverKeyboardEscape() -> Bool {
         if self.inputTextView.isFirstResponder {
+            self.shouldRestoreFocusAfterKeyboardHide = true
             _ = self.inputTextView.resignFirstResponder()
-            let target: Any = self.primaryActionButton.window != nil ? self.primaryActionButton : self.backButton
-            UIAccessibility.post(notification: .layoutChanged, argument: target)
             return true
         }
         return false
@@ -552,6 +552,15 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate,
             self?.handleKeyboardFrameNotification(notification)
         }
         self.keyboardObservers.append(willHide)
+
+        let didHide = notificationCenter.addObserver(
+            forName: UIResponder.keyboardDidHideNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.handleKeyboardDidHide()
+        }
+        self.keyboardObservers.append(didHide)
     }
 
     private func handleKeyboardFrameNotification(_ notification: Notification) {
@@ -573,6 +582,36 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate,
         self.composerBottomConstraint?.constant = -bottomInset
         UIView.animate(withDuration: duration, delay: 0.0, options: [curve, .beginFromCurrentState, .allowUserInteraction]) {
             self.view.layoutIfNeeded()
+        }
+    }
+
+    private func handleKeyboardDidHide() {
+        guard self.shouldRestoreFocusAfterKeyboardHide else {
+            return
+        }
+        self.shouldRestoreFocusAfterKeyboardHide = false
+        guard UIAccessibility.isVoiceOverRunning else {
+            return
+        }
+        guard self.view.window != nil, !self.view.accessibilityElementsHidden else {
+            return
+        }
+
+        self.view.accessibilityViewIsModal = true
+        let target: Any
+        if self.primaryActionButton.window != nil, !self.primaryActionButton.isHidden, self.primaryActionButton.alpha > 0.01 {
+            target = self.primaryActionButton
+        } else if self.attachButton.window != nil, !self.attachButton.isHidden, self.attachButton.alpha > 0.01 {
+            target = self.attachButton
+        } else {
+            target = self.backButton
+        }
+
+        DispatchQueue.main.async {
+            UIAccessibility.post(notification: .screenChanged, argument: target)
+            DispatchQueue.main.async {
+                UIAccessibility.post(notification: .layoutChanged, argument: target)
+            }
         }
     }
 
