@@ -16,6 +16,12 @@ private final class VoiceOverNativeChatTextView: UITextView {
     }
 }
 
+private final class VoiceOverNativeChatComposerView: UIView {
+    override var intrinsicContentSize: CGSize {
+        CGSize(width: UIView.noIntrinsicMetric, height: 65.0)
+    }
+}
+
 private final class VoiceOverNativeChatMessageCell: UITableViewCell {
     override func prepareForReuse() {
         super.prepareForReuse()
@@ -33,17 +39,12 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate,
     private let headerSeparatorView = UIView()
     private let contentView = UIView()
     private let tableView = UITableView(frame: .zero, style: .plain)
-    private let composerView = UIView()
+    private let composerView = VoiceOverNativeChatComposerView()
     private let composerSeparatorView = UIView()
     private let attachButton = UIButton(type: .system)
     private let inputTextView = VoiceOverNativeChatTextView()
     private let primaryActionButton = UIButton(type: .system)
-    private var accessibilityObservers: [NSObjectProtocol] = []
-    private var keyboardObservers: [NSObjectProtocol] = []
-    private var keyboardDismissVoiceOverContainmentDeadline: CFTimeInterval = 0.0
     private var primaryActionKind: PrimaryActionKind = .record
-    private var composerBottomConstraint: NSLayoutConstraint?
-    private var lastKnownKeyboardBottomInset: CGFloat = 0.0
     private var interfaceState: ChatPresentationInterfaceState?
     private var didInitialScrollToBottom = false
     private var nativeComposerState = ChatVoiceOverOverlayView.NativeComposerState(
@@ -71,6 +72,14 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate,
 
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
+    }
+
+    override var canBecomeFirstResponder: Bool {
+        true
+    }
+
+    override var inputAccessoryView: UIView? {
+        self.composerView
     }
 
     override func loadView() {
@@ -142,7 +151,6 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate,
         self.composerView.backgroundColor = .systemBackground
         self.composerView.isAccessibilityElement = false
         self.composerView.shouldGroupAccessibilityChildren = false
-        view.addSubview(self.composerView)
 
         self.composerSeparatorView.translatesAutoresizingMaskIntoConstraints = false
         self.composerSeparatorView.backgroundColor = UIColor.separator
@@ -208,7 +216,7 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate,
             self.contentView.topAnchor.constraint(equalTo: self.headerView.bottomAnchor),
             self.contentView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             self.contentView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            self.contentView.bottomAnchor.constraint(equalTo: self.composerView.topAnchor),
+            self.contentView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
 
             self.tableView.topAnchor.constraint(equalTo: self.contentView.topAnchor),
             self.tableView.leadingAnchor.constraint(equalTo: self.contentView.leadingAnchor),
@@ -236,14 +244,6 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate,
             self.inputTextView.bottomAnchor.constraint(equalTo: self.composerView.bottomAnchor, constant: -10.0),
             self.inputTextView.heightAnchor.constraint(greaterThanOrEqualToConstant: 44.0)
         ])
-
-        let composerBottomConstraint = self.composerView.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor)
-        self.composerBottomConstraint = composerBottomConstraint
-        NSLayoutConstraint.activate([
-            self.composerView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            self.composerView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            composerBottomConstraint
-        ])
     }
 
     override func viewDidLoad() {
@@ -264,21 +264,29 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate,
         self.overlayView.externalNavigationFocusTargetProvider = nil
         self.overlayView.externalProfileFocusTargetProvider = nil
         self.overlayView.externalNativeKeyboardEscapeHandler = nil
-
-        let focusToken = NotificationCenter.default.addObserver(forName: UIAccessibility.elementFocusedNotification, object: nil, queue: .main) { [weak self] notification in
-            self?.handleVoiceOverElementFocused(notification)
-        }
-        self.accessibilityObservers.append(focusToken)
-        self.setupKeyboardObservers()
         self.headerView.accessibilityElements = [self.backButton, self.titleButton, self.infoButton]
         self.composerView.accessibilityElements = [self.attachButton, self.inputTextView, self.primaryActionButton]
+        self.view.accessibilityElements = [self.headerView, self.tableView]
     }
 
     deinit {
         self.overlayView.setNativeComposerHostedExternally(false)
-        let notificationCenter = NotificationCenter.default
-        self.accessibilityObservers.forEach { notificationCenter.removeObserver($0) }
-        self.keyboardObservers.forEach { notificationCenter.removeObserver($0) }
+    }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        _ = self.becomeFirstResponder()
+        self.updateTableInsetsForComposer()
+    }
+
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        _ = self.resignFirstResponder()
+    }
+
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        self.updateTableInsetsForComposer()
     }
 
     private func applyNavigationState(_ state: ChatVoiceOverOverlayView.NativeNavigationState) {
@@ -389,105 +397,10 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate,
 
     private func handleVoiceOverKeyboardEscape() -> Bool {
         if self.inputTextView.isFirstResponder {
-            self.extendKeyboardDismissVoiceOverContainment(8.0)
             _ = self.inputTextView.resignFirstResponder()
-            let immediateTarget = self.preferredKeyboardDismissFocusTarget()
-            UIAccessibility.post(notification: .layoutChanged, argument: immediateTarget)
-            self.scheduleKeyboardDismissFocusRestore(after: 0.05, remainingAttempts: 8)
-            return true
-        }
-        return false
-    }
-
-    private func scheduleKeyboardDismissFocusRestore(after delay: TimeInterval, remainingAttempts: Int) {
-        guard UIAccessibility.isVoiceOverRunning, remainingAttempts > 0 else {
-            return
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
-            guard let self else {
-                return
-            }
-            guard self.shouldContainVoiceOverFocusAfterKeyboardDismiss else {
-                return
-            }
-            self.restoreVoiceOverFocusAfterKeyboardDismissIfNeeded()
-            self.scheduleKeyboardDismissFocusRestore(after: 0.35, remainingAttempts: remainingAttempts - 1)
-        }
-    }
-
-    private func restoreVoiceOverFocusAfterKeyboardDismissIfNeeded() {
-        self.reinforceNativeChatAccessibilityContainment()
-        let target = self.preferredKeyboardDismissFocusTarget()
-        guard self.shouldRestoreVoiceOverFocus(to: target) else {
-            return
-        }
-        UIAccessibility.post(notification: .screenChanged, argument: target)
-        DispatchQueue.main.async {
+            let target: Any = self.primaryActionButton.window != nil ? self.primaryActionButton : self.backButton
             UIAccessibility.post(notification: .layoutChanged, argument: target)
-        }
-    }
-
-    private func preferredKeyboardDismissFocusTarget() -> Any {
-        return self.backButton
-    }
-
-    private func reinforceNativeChatAccessibilityContainment() {
-        self.view.accessibilityViewIsModal = true
-        self.view.accessibilityElementsHidden = false
-        self.parent?.viewIfLoaded?.accessibilityViewIsModal = true
-        self.navigationController?.viewIfLoaded?.accessibilityViewIsModal = true
-    }
-
-    private var shouldContainVoiceOverFocusAfterKeyboardDismiss: Bool {
-        guard UIAccessibility.isVoiceOverRunning else {
-            return false
-        }
-        return CACurrentMediaTime() < self.keyboardDismissVoiceOverContainmentDeadline
-    }
-
-    private func extendKeyboardDismissVoiceOverContainment(_ duration: TimeInterval) {
-        let deadline = CACurrentMediaTime() + max(0.0, duration)
-        if deadline > self.keyboardDismissVoiceOverContainmentDeadline {
-            self.keyboardDismissVoiceOverContainmentDeadline = deadline
-        }
-    }
-
-    private func handleVoiceOverElementFocused(_ notification: Notification) {
-        guard self.shouldContainVoiceOverFocusAfterKeyboardDismiss else {
-            return
-        }
-        let focusedElement = notification.userInfo?[UIAccessibility.focusedElementUserInfoKey]
-        if self.isVoiceOverElementWithinNativeChat(focusedElement) {
-            return
-        }
-        self.restoreVoiceOverFocusAfterKeyboardDismissIfNeeded()
-    }
-
-    private func shouldRestoreVoiceOverFocus(to target: Any) -> Bool {
-        let focusedElement = UIAccessibility.focusedElement(using: .notificationVoiceOver)
-        guard let focusedElement else {
             return true
-        }
-        if self.isSameVoiceOverElement(focusedElement, target) {
-            return false
-        }
-        return !self.isVoiceOverElementWithinNativeChat(focusedElement)
-    }
-
-    private func isSameVoiceOverElement(_ lhs: Any, _ rhs: Any) -> Bool {
-        return (lhs as AnyObject) === (rhs as AnyObject)
-    }
-
-    private func isVoiceOverElementWithinNativeChat(_ element: Any?) -> Bool {
-        guard let element else {
-            return false
-        }
-        if let view = element as? UIView {
-            return view.isDescendant(of: self.view)
-        }
-        if let accessibilityElement = element as? UIAccessibilityElement,
-           let containerView = accessibilityElement.accessibilityContainer as? UIView {
-            return containerView.isDescendant(of: self.view)
         }
         return false
     }
@@ -497,7 +410,6 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate,
     }
 
     func textViewDidBeginEditing(_ textView: UITextView) {
-        self.keyboardDismissVoiceOverContainmentDeadline = 0.0
         UIAccessibility.post(notification: .layoutChanged, argument: self.inputTextView)
     }
 
@@ -529,6 +441,7 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate,
         self.applyNavigationState(self.navigationState(for: state))
         self.applyComposerState(self.currentComposerState())
         self.tableView.reloadData()
+        self.view.accessibilityElements = [self.headerView, self.tableView]
     }
 
     func updateEntries(_ entries: [ChatHistoryEntry]) {
@@ -605,61 +518,12 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate,
         }
     }
 
-    private func setupKeyboardObservers() {
-        let notificationCenter = NotificationCenter.default
-
-        let willChange = notificationCenter.addObserver(
-            forName: UIResponder.keyboardWillChangeFrameNotification,
-            object: nil,
-            queue: .main
-        ) { [weak self] notification in
-            self?.handleKeyboardFrameNotification(notification)
-        }
-        self.keyboardObservers.append(willChange)
-
-        let willHide = notificationCenter.addObserver(
-            forName: UIResponder.keyboardWillHideNotification,
-            object: nil,
-            queue: .main
-        ) { [weak self] notification in
-            self?.handleKeyboardFrameNotification(notification)
-        }
-        self.keyboardObservers.append(willHide)
-    }
-
-    private func handleKeyboardFrameNotification(_ notification: Notification) {
-        let view = self.view!
-        guard view.window != nil else {
-            return
-        }
-        guard let userInfo = notification.userInfo else {
-            return
-        }
-
-        let duration = (userInfo[UIResponder.keyboardAnimationDurationUserInfoKey] as? NSNumber)?.doubleValue ?? 0.25
-        let curveRaw = (userInfo[UIResponder.keyboardAnimationCurveUserInfoKey] as? NSNumber)?.uintValue ?? UInt(UIView.AnimationCurve.easeInOut.rawValue)
-        let curve = UIView.AnimationOptions(rawValue: curveRaw << 16)
-
-        let endFrameScreen = (userInfo[UIResponder.keyboardFrameEndUserInfoKey] as? NSValue)?.cgRectValue ?? .zero
-        let endFrameInView = view.convert(endFrameScreen, from: nil)
-        let overlap = max(CGFloat(0.0), view.bounds.maxY - endFrameInView.minY)
-        let bottomInset = max(CGFloat(0.0), overlap - view.safeAreaInsets.bottom)
-        let previousBottomInset = self.lastKnownKeyboardBottomInset
-        self.lastKnownKeyboardBottomInset = bottomInset
-
-        self.composerBottomConstraint?.constant = -bottomInset
-        UIView.animate(withDuration: duration, delay: 0.0, options: [curve, .beginFromCurrentState, .allowUserInteraction]) {
-            view.layoutIfNeeded()
-        }
-
-        if previousBottomInset > 0.0 && bottomInset == 0.0 {
-            self.extendKeyboardDismissVoiceOverContainment(max(2.0, duration + 0.6))
-            DispatchQueue.main.asyncAfter(deadline: .now() + max(0.08, duration + 0.02)) { [weak self] in
-                guard let self else {
-                    return
-                }
-                self.restoreVoiceOverFocusAfterKeyboardDismissIfNeeded()
-            }
+    private func updateTableInsetsForComposer() {
+        let composerHeight = self.composerView.bounds.height > 0.0 ? self.composerView.bounds.height : self.composerView.intrinsicContentSize.height
+        let bottomInset = max(0.0, composerHeight)
+        if self.tableView.contentInset.bottom != bottomInset {
+            self.tableView.contentInset.bottom = bottomInset
+            self.tableView.scrollIndicatorInsets.bottom = bottomInset
         }
     }
 
