@@ -521,9 +521,9 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate,
     private func updateTableInsetsForComposer() {
         let composerHeight = self.composerView.bounds.height > 0.0 ? self.composerView.bounds.height : self.composerView.intrinsicContentSize.height
         let bottomInset = max(0.0, composerHeight)
-        if self.tableView.contentInset.bottom != bottomInset {
-            self.tableView.contentInset.bottom = bottomInset
-            self.tableView.scrollIndicatorInsets.bottom = bottomInset
+        self.tableView.contentInset.bottom = bottomInset
+        if #available(iOS 13.0, *) {
+            self.tableView.verticalScrollIndicatorInsets.bottom = bottomInset
         }
     }
 
