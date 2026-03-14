@@ -263,6 +263,7 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate,
         }
 
         self.overlayView.setNativeComposerHostedExternally(true)
+        self.overlayView.setAccessibilityInteractionSuspended(true)
         self.overlayView.accessibilityViewIsModal = false
         self.overlayView.accessibilityElementsHidden = true
         self.overlayView.externalNavigationFocusTargetProvider = nil
@@ -270,12 +271,12 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate,
         self.overlayView.externalNativeKeyboardEscapeHandler = nil
         self.headerView.accessibilityElements = [self.backButton, self.titleButton, self.infoButton]
         self.composerView.accessibilityElements = [self.attachButton, self.inputTextView, self.primaryActionButton]
-        self.view.accessibilityElements = [self.headerView, self.tableView, self.composerView]
         self.setupKeyboardObservers()
     }
 
     deinit {
         self.overlayView.setNativeComposerHostedExternally(false)
+        self.overlayView.setAccessibilityInteractionSuspended(false)
         let notificationCenter = NotificationCenter.default
         self.keyboardObservers.forEach { notificationCenter.removeObserver($0) }
     }
@@ -446,7 +447,6 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate,
         self.applyNavigationState(self.navigationState(for: state))
         self.applyComposerState(self.currentComposerState())
         self.tableView.reloadData()
-        self.view.accessibilityElements = [self.headerView, self.tableView, self.composerView]
     }
 
     func updateEntries(_ entries: [ChatHistoryEntry]) {

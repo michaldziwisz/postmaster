@@ -1138,6 +1138,7 @@ public final class ChatVoiceOverOverlayView: UIView {
 
     private var isComposerEnabled: Bool = true
     private var isComposerHostedExternally: Bool = false
+    private var accessibilityInteractionSuspended: Bool = false
 
     private var lastEntriesApplyTimestamp: CFTimeInterval = 0.0
     private var lastApplyWasStableIdsOnly: Bool = false
@@ -1759,6 +1760,22 @@ public final class ChatVoiceOverOverlayView: UIView {
         }
     }
 
+    func setAccessibilityInteractionSuspended(_ suspended: Bool) {
+        guard self.accessibilityInteractionSuspended != suspended else {
+            return
+        }
+        self.accessibilityInteractionSuspended = suspended
+        if suspended {
+            self.keyboardDismissFocusRestoreWorkItem?.cancel()
+            self.keyboardDismissFocusRestoreWorkItem = nil
+            self.voiceOverFocusRecoveryWorkItem?.cancel()
+            self.voiceOverFocusRecoveryWorkItem = nil
+            self.voiceOverModalIsolationGraceDeadline = 0.0
+            self.nativeKeyboardDismissFocusContainmentDeadline = 0.0
+            self.suppressNextEditingEndedFocusRestore = false
+        }
+    }
+
     func currentNativeComposerState() -> NativeComposerState {
         return self.currentNativeComposerState(for: self.interfaceState)
     }
@@ -2252,6 +2269,9 @@ public final class ChatVoiceOverOverlayView: UIView {
     // MARK: - ChatInputTextNodeDelegate
 
     public func chatInputTextNodeDidBeginEditing() {
+        if self.accessibilityInteractionSuspended {
+            return
+        }
         self.keyboardDismissFocusRestoreWorkItem?.cancel()
         self.keyboardDismissFocusRestoreWorkItem = nil
         self.nativeKeyboardDismissFocusContainmentDeadline = 0.0
@@ -2261,6 +2281,9 @@ public final class ChatVoiceOverOverlayView: UIView {
     }
 
     public func chatInputTextNodeDidFinishEditing() {
+        if self.accessibilityInteractionSuspended {
+            return
+        }
         if self.suppressNextEditingEndedFocusRestore {
             self.suppressNextEditingEndedFocusRestore = false
             return
@@ -2377,6 +2400,9 @@ public final class ChatVoiceOverOverlayView: UIView {
     }
 
     public override func accessibilityPerformEscape() -> Bool {
+        if self.accessibilityInteractionSuspended {
+            return false
+        }
         if self.usesNativeVoiceOverAccessibility, let externalHandler = self.externalNativeKeyboardEscapeHandler {
             return externalHandler()
         }
@@ -5262,6 +5288,9 @@ public final class ChatVoiceOverOverlayView: UIView {
     }
 
     private func handleAccessibilityElementFocused(notification: Notification) {
+        if self.accessibilityInteractionSuspended {
+            return
+        }
         guard UIAccessibility.isVoiceOverRunning, let userInfo = notification.userInfo else {
             return
         }
@@ -5437,6 +5466,9 @@ public final class ChatVoiceOverOverlayView: UIView {
     }
 
     private func handleKeyboard(notification: Notification) {
+        if self.accessibilityInteractionSuspended {
+            return
+        }
         guard let userInfo = notification.userInfo else {
             return
         }

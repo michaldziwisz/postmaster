@@ -1789,8 +1789,8 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                     self.updateVoiceOverOverlayAccessibilityIsolation(viewControllers: [])
                 }
             } else {
-                overlay.accessibilityElementsHidden = false
-                overlay.accessibilityViewIsModal = overlay.usesNativeVoiceOverAccessibility ? false : true
+                overlay.accessibilityElementsHidden = true
+                overlay.accessibilityViewIsModal = false
                 self.voiceOverOverlayController?.setAccessibilityModalState(true)
                 self.setVoiceOverModalStateOnControllerHierarchy(true)
             }
