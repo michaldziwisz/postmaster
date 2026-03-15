@@ -462,7 +462,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
         if usesNativeVoiceOverChat, self.voiceOverOverlayController != nil {
             self.setNativeVoiceOverChatRootAccessibility(resolvedIsChatOnTop)
             self.voiceOverOverlayController?.setAccessibilityModalState(resolvedIsChatOnTop)
-            self.setVoiceOverModalStateOnControllerHierarchy(false)
+            self.setVoiceOverModalStateOnControllerHierarchy(resolvedIsChatOnTop)
         } else {
             self.setVoiceOverModalStateOnControllerHierarchy(resolvedIsChatOnTop)
             self.voiceOverOverlayController?.setAccessibilityModalState(resolvedIsChatOnTop)
@@ -533,9 +533,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
         overlay.accessibilityViewIsModal = overlay.usesNativeVoiceOverAccessibility ? false : true
         self.voiceOverOverlayController?.setAccessibilityModalState(true)
         self.setNativeVoiceOverChatRootAccessibility(self.voiceOverOverlayController != nil && overlay.usesNativeVoiceOverAccessibility)
-        if !(self.voiceOverOverlayController != nil && overlay.usesNativeVoiceOverAccessibility) {
-            self.setVoiceOverModalStateOnControllerHierarchy(true)
-        }
+        self.setVoiceOverModalStateOnControllerHierarchy(true)
         if let overlayController = self.voiceOverOverlayController {
             overlayController.voiceOverDidReturnToChat(focusInfoButton: focusProfileButton)
         } else if focusProfileButton {
@@ -1821,7 +1819,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                 overlay.accessibilityViewIsModal = false
                 self.voiceOverOverlayController?.setAccessibilityModalState(true)
                 self.setNativeVoiceOverChatRootAccessibility(true)
-                self.setVoiceOverModalStateOnControllerHierarchy(false)
+                self.setVoiceOverModalStateOnControllerHierarchy(true)
             }
             
             if !self.didRequestVoiceOverScrollToEnd {
