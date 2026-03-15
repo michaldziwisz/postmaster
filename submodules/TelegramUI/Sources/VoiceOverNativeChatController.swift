@@ -276,6 +276,7 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate,
         self.overlayView.externalNativeKeyboardEscapeHandler = nil
         self.headerView.accessibilityElements = [self.backButton, self.titleButton, self.infoButton]
         self.composerView.accessibilityElements = [self.attachButton, self.inputTextView, self.primaryActionButton]
+        self.updateAccessibilityTraversalOrder()
         self.setupKeyboardObservers()
         self.setupAccessibilityObservers()
     }
@@ -355,6 +356,14 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate,
         self.inputTextView.accessibilityHint = nil
 
         self.composerView.accessibilityElements = [self.attachButton, self.inputTextView, self.primaryActionButton]
+    }
+
+    private func updateAccessibilityTraversalOrder() {
+        self.view.accessibilityElements = [
+            self.headerView as Any,
+            self.tableView as Any,
+            self.composerView as Any
+        ]
     }
 
     @objc private func backPressed() {
@@ -595,6 +604,7 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate,
         let endFrameInView = self.view.convert(endFrameScreen, from: nil)
         let overlap = max(CGFloat(0.0), self.view.bounds.maxY - endFrameInView.minY)
         let bottomInset = max(CGFloat(0.0), overlap - self.view.safeAreaInsets.bottom)
+        let previousBottomInset = self.lastKnownKeyboardBottomInset
 
         if bottomInset > 0.0 {
             self.observedVisibleKeyboard = true
@@ -613,16 +623,14 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate,
         UIView.animate(withDuration: duration, delay: 0.0, options: [curve, .beginFromCurrentState, .allowUserInteraction]) {
             self.view.layoutIfNeeded()
         }
+
+        if previousBottomInset > 0.0, bottomInset <= 0.0 {
+            self.handleKeyboardDismissedIfNeeded(initialDelay: max(0.05, duration + 0.05))
+        }
     }
 
     private func handleKeyboardDidHide() {
-        guard self.shouldRestoreFocusAfterKeyboardHide || self.observedVisibleKeyboard else {
-            return
-        }
-        self.shouldRestoreFocusAfterKeyboardHide = false
-        self.observedVisibleKeyboard = false
-        self.beginKeyboardDismissFocusContainment()
-        self.scheduleKeyboardFocusRestore()
+        self.handleKeyboardDismissedIfNeeded(initialDelay: 0.0)
     }
 
     private func handleAccessibilityElementFocused(_ notification: Notification) {
@@ -645,7 +653,17 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate,
         self.forceFocusBackIntoNativeChat()
     }
 
-    private func scheduleKeyboardFocusRestore() {
+    private func handleKeyboardDismissedIfNeeded(initialDelay: TimeInterval) {
+        guard self.shouldRestoreFocusAfterKeyboardHide || self.observedVisibleKeyboard else {
+            return
+        }
+        self.shouldRestoreFocusAfterKeyboardHide = false
+        self.observedVisibleKeyboard = false
+        self.beginKeyboardDismissFocusContainment(duration: max(1.5, initialDelay + 1.0))
+        self.scheduleKeyboardFocusRestore(initialDelay: initialDelay)
+    }
+
+    private func scheduleKeyboardFocusRestore(initialDelay: TimeInterval = 0.0) {
         self.cancelPendingKeyboardFocusRestore()
         guard UIAccessibility.isVoiceOverRunning else {
             return
@@ -653,7 +671,7 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate,
         guard self.view.window != nil, !self.view.accessibilityElementsHidden else {
             return
         }
-        for delay in [0.0, 0.25, 0.8] {
+        for delay in [initialDelay, initialDelay + 0.25, initialDelay + 0.8] {
             let workItem = DispatchWorkItem { [weak self] in
                 guard let self else {
                     return
@@ -701,7 +719,15 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate,
     }
 
     private func preferredPostKeyboardFocusTarget() -> Any {
-        if self.primaryActionButton.window != nil, !self.primaryActionButton.isHidden, self.primaryActionButton.alpha > 0.01 {
+        if let visibleIndexPath = self.tableView.indexPathsForVisibleRows?.sorted().last,
+           let cell = self.tableView.cellForRow(at: visibleIndexPath),
+           cell.window != nil,
+           !cell.accessibilityElementsHidden,
+           cell.alpha > 0.01 {
+            return cell
+        } else if self.inputTextView.window != nil, !self.inputTextView.isHidden, self.inputTextView.alpha > 0.01 {
+            return self.inputTextView
+        } else if self.primaryActionButton.window != nil, !self.primaryActionButton.isHidden, self.primaryActionButton.alpha > 0.01 {
             return self.primaryActionButton
         } else if self.attachButton.window != nil, !self.attachButton.isHidden, self.attachButton.alpha > 0.01 {
             return self.attachButton
