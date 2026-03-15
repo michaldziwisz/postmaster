@@ -399,6 +399,7 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate,
     func setAccessibilityModalState(_ isModal: Bool) {
         self.view.accessibilityViewIsModal = isModal
         self.view.accessibilityElementsHidden = !isModal
+        self.applyModalAccessibilityHierarchy(isModal: isModal)
     }
 
     override func accessibilityPerformEscape() -> Bool {
@@ -723,11 +724,40 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate,
         self.pendingKeyboardFocusRestoreWorkItems.removeAll()
     }
 
+    private func applyModalAccessibilityHierarchy(isModal: Bool) {
+        if let parentView = self.parent?.view {
+            parentView.isAccessibilityElement = false
+            parentView.accessibilityViewIsModal = isModal
+            if isModal, self.view.isDescendant(of: parentView) {
+                parentView.shouldGroupAccessibilityChildren = true
+                parentView.accessibilityElements = [self.view as Any]
+            } else {
+                parentView.shouldGroupAccessibilityChildren = false
+                parentView.accessibilityElements = nil
+            }
+        }
+
+        if let navigationView = self.navigationController?.view {
+            navigationView.isAccessibilityElement = false
+            navigationView.accessibilityViewIsModal = isModal
+            if isModal {
+                let hierarchyRoot: Any
+                if let parentView = self.parent?.view, parentView.isDescendant(of: navigationView) {
+                    hierarchyRoot = parentView as Any
+                } else {
+                    hierarchyRoot = self.view as Any
+                }
+                navigationView.shouldGroupAccessibilityChildren = true
+                navigationView.accessibilityElements = [hierarchyRoot]
+            } else {
+                navigationView.shouldGroupAccessibilityChildren = false
+                navigationView.accessibilityElements = nil
+            }
+        }
+    }
+
     private func enforceNativeChatModalIsolation() {
-        self.view.accessibilityViewIsModal = true
-        self.view.accessibilityElementsHidden = false
-        self.parent?.view.accessibilityViewIsModal = true
-        self.navigationController?.view.accessibilityViewIsModal = true
+        self.setAccessibilityModalState(true)
     }
 
     private func restoreVoiceOverFocusAfterKeyboardDismissIfNeeded() {
