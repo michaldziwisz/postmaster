@@ -387,6 +387,22 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                 controllerView.accessibilityElements = nil
             }
         }
+
+        if let navigationControllerView = self.controller?.effectiveNavigationController?.viewIfLoaded,
+           let controllerView = self.controller?.viewIfLoaded
+        {
+            navigationControllerView.isAccessibilityElement = false
+            if isActive,
+               controllerView.isDescendant(of: navigationControllerView),
+               controllerView.window != nil
+            {
+                navigationControllerView.shouldGroupAccessibilityChildren = true
+                navigationControllerView.accessibilityElements = [controllerView as Any]
+            } else {
+                navigationControllerView.shouldGroupAccessibilityChildren = false
+                navigationControllerView.accessibilityElements = nil
+            }
+        }
     }
 
     private func updateVoiceOverOverlayAccessibilityIsolation(viewControllers: [UIViewController]) {
