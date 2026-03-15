@@ -372,6 +372,25 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
         self.controller?.effectiveNavigationController?.viewIfLoaded?.accessibilityViewIsModal = isModal
     }
 
+    private func setNativeVoiceOverChatRootAccessibility(_ isActive: Bool) {
+        let rootElements: [Any]? = {
+            guard isActive, let overlayController = self.voiceOverOverlayController else {
+                return nil
+            }
+            return [overlayController.view as Any]
+        }()
+
+        self.view.isAccessibilityElement = false
+        self.view.shouldGroupAccessibilityChildren = isActive
+        self.view.accessibilityElements = rootElements
+
+        if let controllerView = self.controller?.viewIfLoaded {
+            controllerView.isAccessibilityElement = false
+            controllerView.shouldGroupAccessibilityChildren = isActive
+            controllerView.accessibilityElements = rootElements
+        }
+    }
+
     private func updateVoiceOverOverlayAccessibilityIsolation(viewControllers: [UIViewController]) {
         guard let overlay = self.voiceOverOverlayView else {
             return
@@ -442,8 +461,14 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
         
         overlay.accessibilityViewIsModal = usesNativeVoiceOverChat ? false : resolvedIsChatOnTop
         overlay.accessibilityElementsHidden = !resolvedIsChatOnTop
-        self.setVoiceOverModalStateOnControllerHierarchy(resolvedIsChatOnTop)
-        self.voiceOverOverlayController?.setAccessibilityModalState(resolvedIsChatOnTop)
+        if usesNativeVoiceOverChat, self.voiceOverOverlayController != nil {
+            self.setNativeVoiceOverChatRootAccessibility(resolvedIsChatOnTop)
+            self.voiceOverOverlayController?.setAccessibilityModalState(resolvedIsChatOnTop)
+            self.setVoiceOverModalStateOnControllerHierarchy(false)
+        } else {
+            self.setVoiceOverModalStateOnControllerHierarchy(resolvedIsChatOnTop)
+            self.voiceOverOverlayController?.setAccessibilityModalState(resolvedIsChatOnTop)
+        }
         
         // When the chat is not the top-most controller, we must restore the navigation bar so pushed
         // controllers (e.g. poll results) have a visible Back/Close button.
@@ -495,6 +520,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
         overlay.accessibilityViewIsModal = false
         overlay.accessibilityElementsHidden = true
         self.voiceOverOverlayController?.setAccessibilityModalState(false)
+        self.setNativeVoiceOverChatRootAccessibility(false)
         self.setVoiceOverModalStateOnControllerHierarchy(false)
     }
 
@@ -508,7 +534,10 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
         overlay.accessibilityElementsHidden = false
         overlay.accessibilityViewIsModal = overlay.usesNativeVoiceOverAccessibility ? false : true
         self.voiceOverOverlayController?.setAccessibilityModalState(true)
-        self.setVoiceOverModalStateOnControllerHierarchy(true)
+        self.setNativeVoiceOverChatRootAccessibility(self.voiceOverOverlayController != nil && overlay.usesNativeVoiceOverAccessibility)
+        if !(self.voiceOverOverlayController != nil && overlay.usesNativeVoiceOverAccessibility) {
+            self.setVoiceOverModalStateOnControllerHierarchy(true)
+        }
         if let overlayController = self.voiceOverOverlayController {
             overlayController.voiceOverDidReturnToChat(focusInfoButton: focusProfileButton)
         } else if focusProfileButton {
@@ -1792,7 +1821,8 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                 overlay.accessibilityElementsHidden = true
                 overlay.accessibilityViewIsModal = false
                 self.voiceOverOverlayController?.setAccessibilityModalState(true)
-                self.setVoiceOverModalStateOnControllerHierarchy(true)
+                self.setNativeVoiceOverChatRootAccessibility(true)
+                self.setVoiceOverModalStateOnControllerHierarchy(false)
             }
             
             if !self.didRequestVoiceOverScrollToEnd {
@@ -1841,6 +1871,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
             self.wrappingNode.view.accessibilityElementsHidden = false
             self.wrappingNode.view.isUserInteractionEnabled = true
             self.panRecognizer?.isEnabled = true
+            self.setNativeVoiceOverChatRootAccessibility(false)
             self.setVoiceOverModalStateOnControllerHierarchy(false)
             self.navigationBar?.view.accessibilityElementsHidden = false
             if let savedState = self.voiceOverOverlaySavedState {
