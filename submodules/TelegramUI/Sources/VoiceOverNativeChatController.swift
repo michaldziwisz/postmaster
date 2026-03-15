@@ -428,6 +428,33 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate,
         UIAccessibility.post(notification: .layoutChanged, argument: self.inputTextView)
     }
 
+    func textViewDidEndEditing(_ textView: UITextView) {
+        guard UIAccessibility.isVoiceOverRunning else {
+            return
+        }
+        guard self.lastKnownKeyboardBottomInset > 0.0 || self.observedVisibleKeyboard || self.shouldRestoreFocusAfterKeyboardHide else {
+            return
+        }
+
+        self.shouldRestoreFocusAfterKeyboardHide = true
+        self.beginKeyboardDismissFocusContainment(duration: 2.0)
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
+            guard let self else {
+                return
+            }
+            guard UIAccessibility.isVoiceOverRunning else {
+                return
+            }
+            guard self.view.window != nil, !self.view.accessibilityElementsHidden else {
+                return
+            }
+            if self.lastKnownKeyboardBottomInset <= 0.0 {
+                self.handleKeyboardDismissedIfNeeded(initialDelay: 0.0)
+            }
+        }
+    }
+
     private func currentComposerState() -> ChatVoiceOverOverlayView.NativeComposerState {
         return self.overlayView.currentNativeComposerState()
     }
@@ -595,6 +622,7 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate,
         let endFrameInView = self.view.convert(endFrameScreen, from: nil)
         let overlap = max(CGFloat(0.0), self.view.bounds.maxY - endFrameInView.minY)
         let bottomInset = max(CGFloat(0.0), overlap - self.view.safeAreaInsets.bottom)
+        let previousBottomInset = self.lastKnownKeyboardBottomInset
 
         if bottomInset > 0.0 {
             self.observedVisibleKeyboard = true
@@ -613,16 +641,14 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate,
         UIView.animate(withDuration: duration, delay: 0.0, options: [curve, .beginFromCurrentState, .allowUserInteraction]) {
             self.view.layoutIfNeeded()
         }
+
+        if previousBottomInset > 0.0, bottomInset <= 0.0 {
+            self.handleKeyboardDismissedIfNeeded(initialDelay: max(0.05, duration + 0.05))
+        }
     }
 
     private func handleKeyboardDidHide() {
-        guard self.shouldRestoreFocusAfterKeyboardHide || self.observedVisibleKeyboard else {
-            return
-        }
-        self.shouldRestoreFocusAfterKeyboardHide = false
-        self.observedVisibleKeyboard = false
-        self.beginKeyboardDismissFocusContainment()
-        self.scheduleKeyboardFocusRestore()
+        self.handleKeyboardDismissedIfNeeded(initialDelay: 0.0)
     }
 
     private func handleAccessibilityElementFocused(_ notification: Notification) {
@@ -645,7 +671,17 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate,
         self.forceFocusBackIntoNativeChat()
     }
 
-    private func scheduleKeyboardFocusRestore() {
+    private func handleKeyboardDismissedIfNeeded(initialDelay: TimeInterval) {
+        guard self.shouldRestoreFocusAfterKeyboardHide || self.observedVisibleKeyboard else {
+            return
+        }
+        self.shouldRestoreFocusAfterKeyboardHide = false
+        self.observedVisibleKeyboard = false
+        self.beginKeyboardDismissFocusContainment(duration: max(1.5, initialDelay + 1.0))
+        self.scheduleKeyboardFocusRestore(initialDelay: initialDelay)
+    }
+
+    private func scheduleKeyboardFocusRestore(initialDelay: TimeInterval = 0.0) {
         self.cancelPendingKeyboardFocusRestore()
         guard UIAccessibility.isVoiceOverRunning else {
             return
@@ -653,7 +689,7 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate,
         guard self.view.window != nil, !self.view.accessibilityElementsHidden else {
             return
         }
-        for delay in [0.0, 0.25, 0.8] {
+        for delay in [initialDelay, initialDelay + 0.25, initialDelay + 0.8] {
             let workItem = DispatchWorkItem { [weak self] in
                 guard let self else {
                     return
@@ -664,15 +700,7 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate,
                 guard self.view.window != nil, !self.view.accessibilityElementsHidden else {
                     return
                 }
-                guard !self.isVoiceOverFocusWithinNativeChat() else {
-                    return
-                }
-                self.enforceNativeChatModalIsolation()
-                let target = self.preferredPostKeyboardFocusTarget()
-                UIAccessibility.post(notification: .screenChanged, argument: target)
-                DispatchQueue.main.async {
-                    UIAccessibility.post(notification: .layoutChanged, argument: target)
-                }
+                self.restoreVoiceOverFocusAfterKeyboardDismissIfNeeded()
             }
             self.pendingKeyboardFocusRestoreWorkItems.append(workItem)
             DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: workItem)
@@ -686,6 +714,7 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate,
     private func forceFocusBackIntoNativeChat() {
         self.cancelPendingKeyboardFocusRestore()
         self.beginKeyboardDismissFocusContainment()
+        self.restoreVoiceOverFocusAfterKeyboardDismissIfNeeded()
         self.scheduleKeyboardFocusRestore()
     }
 
@@ -696,22 +725,132 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate,
 
     private func enforceNativeChatModalIsolation() {
         self.view.accessibilityViewIsModal = true
+        self.view.accessibilityElementsHidden = false
         self.parent?.view.accessibilityViewIsModal = true
         self.navigationController?.view.accessibilityViewIsModal = true
     }
 
-    private func preferredPostKeyboardFocusTarget() -> Any {
-        if self.primaryActionButton.window != nil, !self.primaryActionButton.isHidden, self.primaryActionButton.alpha > 0.01 {
-            return self.primaryActionButton
-        } else if self.attachButton.window != nil, !self.attachButton.isHidden, self.attachButton.alpha > 0.01 {
-            return self.attachButton
-        } else {
-            return self.backButton
+    private func restoreVoiceOverFocusAfterKeyboardDismissIfNeeded() {
+        self.enforceNativeChatModalIsolation()
+        let target = self.preferredPostKeyboardFocusTarget()
+        guard self.shouldRestoreVoiceOverFocus(to: target) else {
+            return
+        }
+        UIAccessibility.post(notification: .screenChanged, argument: target)
+        DispatchQueue.main.async {
+            UIAccessibility.post(notification: .layoutChanged, argument: target)
         }
     }
 
-    private func isVoiceOverFocusWithinNativeChat() -> Bool {
-        return self.isVoiceOverElementWithinNativeChat(UIAccessibility.focusedElement(using: .notificationVoiceOver))
+    private func preferredPostKeyboardFocusTarget() -> Any {
+        if let composerTarget = self.preferredComposerFocusTarget() {
+            return composerTarget
+        } else if let messageTarget = self.preferredVisibleMessageFocusTarget() {
+            return messageTarget
+        } else if self.tableView.window != nil, !self.tableView.isHidden, self.tableView.alpha > 0.01 {
+            return self.tableView
+        } else if self.backButton.window != nil, !self.backButton.isHidden, self.backButton.alpha > 0.01 {
+            return self.backButton
+        } else if self.titleButton.window != nil, !self.titleButton.isHidden, self.titleButton.alpha > 0.01 {
+            return self.titleButton
+        } else if self.infoButton.window != nil, !self.infoButton.isHidden, self.infoButton.alpha > 0.01 {
+            return self.infoButton
+        } else {
+            return self.view
+        }
+    }
+
+    private func shouldRestoreVoiceOverFocus(to target: Any) -> Bool {
+        let focusedElement = UIAccessibility.focusedElement(using: .notificationVoiceOver)
+        guard let focusedElement else {
+            return true
+        }
+        if self.isSameVoiceOverElement(focusedElement, target) {
+            return false
+        }
+        if let focusedView = focusedElement as? UIView {
+            if focusedView === self.inputTextView || focusedView.isDescendant(of: self.inputTextView) {
+                return true
+            }
+            return focusedView === self.view || !focusedView.isDescendant(of: self.view)
+        }
+        if let accessibilityElement = focusedElement as? UIAccessibilityElement,
+           let containerView = accessibilityElement.accessibilityContainer as? UIView {
+            if containerView === self.inputTextView || containerView.isDescendant(of: self.inputTextView) {
+                return true
+            }
+            return containerView === self.view || !containerView.isDescendant(of: self.view)
+        }
+        return true
+    }
+
+    private func isSameVoiceOverElement(_ lhs: Any, _ rhs: Any) -> Bool {
+        return (lhs as AnyObject) === (rhs as AnyObject)
+    }
+
+    private func preferredComposerFocusTarget() -> Any? {
+        guard self.composerView.window != nil, !self.composerView.isHidden, self.composerView.alpha > 0.01 else {
+            return nil
+        }
+        if self.primaryActionButton.isAccessibilityElement, !self.primaryActionButton.isHidden, self.primaryActionButton.alpha > 0.01, self.primaryActionButton.isEnabled {
+            return self.primaryActionButton
+        }
+        if self.attachButton.isAccessibilityElement, !self.attachButton.isHidden, self.attachButton.alpha > 0.01, self.attachButton.isEnabled {
+            return self.attachButton
+        }
+        if !self.inputTextView.isHidden, self.inputTextView.alpha > 0.01, self.inputTextView.isUserInteractionEnabled {
+            return self.inputTextView
+        }
+        return nil
+    }
+
+    private func preferredVisibleMessageFocusTarget() -> Any? {
+        let rowCount = max(0, self.tableView.numberOfRows(inSection: 0))
+        guard rowCount > 0 else {
+            return nil
+        }
+
+        guard let visibleIndexPaths = self.tableView.indexPathsForVisibleRows?.sorted(), !visibleIndexPaths.isEmpty else {
+            return self.tableView
+        }
+
+        let targetIndexPath: IndexPath
+        if self.isNearBottom() {
+            targetIndexPath = visibleIndexPaths.last ?? IndexPath(row: max(0, rowCount - 1), section: 0)
+        } else if self.isNearTop() {
+            targetIndexPath = visibleIndexPaths.first ?? IndexPath(row: 0, section: 0)
+        } else {
+            let visibleMidY = self.tableView.contentOffset.y + self.tableView.bounds.height * 0.5
+            var bestIndexPath = visibleIndexPaths[0]
+            var bestDistance = abs(self.tableView.rectForRow(at: bestIndexPath).midY - visibleMidY)
+            for indexPath in visibleIndexPaths.dropFirst() {
+                let distance = abs(self.tableView.rectForRow(at: indexPath).midY - visibleMidY)
+                if distance < bestDistance {
+                    bestDistance = distance
+                    bestIndexPath = indexPath
+                }
+            }
+            targetIndexPath = bestIndexPath
+        }
+
+        return self.tableView.cellForRow(at: targetIndexPath) ?? self.tableView
+    }
+
+    private func isNearBottom() -> Bool {
+        let visibleHeight = self.tableView.bounds.height
+        if visibleHeight <= 0.0 {
+            return true
+        }
+        let contentHeight = self.tableView.contentSize.height
+        let y = self.tableView.contentOffset.y
+        let threshold: CGFloat = 180.0
+        return y + visibleHeight + threshold >= contentHeight
+    }
+
+    private func isNearTop() -> Bool {
+        let minOffset = -self.tableView.adjustedContentInset.top
+        let threshold: CGFloat = 120.0
+        return self.tableView.contentOffset.y - minOffset <= threshold
     }
 
     private func isVoiceOverElementWithinNativeChat(_ focusedElement: Any?) -> Bool {

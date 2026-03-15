@@ -185,10 +185,10 @@ jobs:
             echo "No IPA files found (checked bazel-bin and bazel-out)."
             exit 1
           fi
-          cp "${IPA_CANDIDATES[0]}" "$OUTPUT_PATH/Postmaster.ipa"
+          cp "${IPA_CANDIDATES[0]}" "$OUTPUT_PATH/postmaster.ipa"
           python3 scripts/prepare_sideload_ipa.py \
-            --input "$OUTPUT_PATH/Postmaster.ipa" \
-            --output "$OUTPUT_PATH/Postmaster.ipa"
+            --input "$OUTPUT_PATH/postmaster.ipa" \
+            --output "$OUTPUT_PATH/postmaster.ipa"
 
           # collect dsym
           mkdir -p build/DSYMs
@@ -198,15 +198,21 @@ jobs:
           for f in "${DSYM_FILES[@]}"; do
             cp -R "$f" build/DSYMs/
           done
-          zip -r "./$OUTPUT_PATH/Telegram.DSYMs.zip" build/DSYMs 1>/dev/null
+          zip -r "./$OUTPUT_PATH/postmaster-dsyms.zip" build/DSYMs 1>/dev/null
 
-      - name: Upload workflow artifacts
+      - name: Upload IPA artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Postmaster-${{ env.APP_VERSION }}-${{ env.BUILD_NUMBER }}-${{ env.BUILD_CONFIGURATION }}
-          path: |
-            /Users/Shared/telegram-ios/build/artifacts/Postmaster.ipa
-            /Users/Shared/telegram-ios/build/artifacts/Telegram.DSYMs.zip
+          name: postmaster
+          overwrite: true
+          path: /Users/Shared/telegram-ios/build/artifacts/postmaster.ipa
+
+      - name: Upload dSYM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: postmaster-dsyms
+          overwrite: true
+          path: /Users/Shared/telegram-ios/build/artifacts/postmaster-dsyms.zip
 
       - name: Create or update GitHub Release
         if: github.ref == 'refs/heads/master'
@@ -247,8 +253,8 @@ jobs:
 
           # Release uploads are best-effort. The workflow artifacts already contain the IPA/DSYMs,
           # so don't fail the entire build if GitHub Release asset upload is flaky.
-          upload_with_retry "$TAG" "build/artifacts/Postmaster.ipa#Postmaster.ipa" || echo "Failed to upload Postmaster.ipa to the GitHub Release."
-          upload_with_retry "$TAG" "build/artifacts/Telegram.DSYMs.zip#Telegram.DSYMs.zip" || echo "Failed to upload Telegram.DSYMs.zip to the GitHub Release."
+          upload_with_retry "$TAG" "build/artifacts/postmaster.ipa#postmaster.ipa" || echo "Failed to upload postmaster.ipa to the GitHub Release."
+          upload_with_retry "$TAG" "build/artifacts/postmaster-dsyms.zip#postmaster-dsyms.zip" || echo "Failed to upload postmaster-dsyms.zip to the GitHub Release."
 
       - name: Fail if tests failed
         if: ${{ env.RUN_TESTS == 'true' && env.TESTS_EXIT_CODE != '0' }}
