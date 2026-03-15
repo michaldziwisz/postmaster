@@ -45,11 +45,13 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate,
     private let inputTextView = VoiceOverNativeChatTextView()
     private let primaryActionButton = UIButton(type: .system)
     private var keyboardObservers: [NSObjectProtocol] = []
+    private var accessibilityObservers: [NSObjectProtocol] = []
     private var composerBottomConstraint: NSLayoutConstraint?
     private var lastKnownKeyboardBottomInset: CGFloat = 0.0
     private var observedVisibleKeyboard = false
     private var shouldRestoreFocusAfterKeyboardHide = false
     private var pendingKeyboardFocusRestoreWorkItems: [DispatchWorkItem] = []
+    private var keyboardDismissFocusContainmentDeadline: Double = 0.0
     private var primaryActionKind: PrimaryActionKind = .record
     private var interfaceState: ChatPresentationInterfaceState?
     private var didInitialScrollToBottom = false
@@ -275,6 +277,7 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate,
         self.headerView.accessibilityElements = [self.backButton, self.titleButton, self.infoButton]
         self.composerView.accessibilityElements = [self.attachButton, self.inputTextView, self.primaryActionButton]
         self.setupKeyboardObservers()
+        self.setupAccessibilityObservers()
     }
 
     deinit {
@@ -283,6 +286,7 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate,
         self.cancelPendingKeyboardFocusRestore()
         let notificationCenter = NotificationCenter.default
         self.keyboardObservers.forEach { notificationCenter.removeObserver($0) }
+        self.accessibilityObservers.forEach { notificationCenter.removeObserver($0) }
     }
 
     override func viewDidAppear(_ animated: Bool) {
@@ -409,6 +413,7 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate,
         if self.inputTextView.isFirstResponder {
             self.cancelPendingKeyboardFocusRestore()
             self.shouldRestoreFocusAfterKeyboardHide = true
+            self.beginKeyboardDismissFocusContainment()
             _ = self.inputTextView.resignFirstResponder()
             return true
         }
@@ -567,6 +572,18 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate,
         self.keyboardObservers.append(didHide)
     }
 
+    private func setupAccessibilityObservers() {
+        let notificationCenter = NotificationCenter.default
+        let focusToken = notificationCenter.addObserver(
+            forName: UIAccessibility.elementFocusedNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            self?.handleAccessibilityElementFocused(notification)
+        }
+        self.accessibilityObservers.append(focusToken)
+    }
+
     private func handleKeyboardFrameNotification(_ notification: Notification) {
         guard let userInfo = notification.userInfo else {
             return
@@ -581,6 +598,7 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate,
 
         if bottomInset > 0.0 {
             self.observedVisibleKeyboard = true
+            self.beginKeyboardDismissFocusContainment()
             self.cancelPendingKeyboardFocusRestore()
             if self.inputTextView.isFirstResponder {
                 self.shouldRestoreFocusAfterKeyboardHide = false
@@ -603,7 +621,28 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate,
         }
         self.shouldRestoreFocusAfterKeyboardHide = false
         self.observedVisibleKeyboard = false
+        self.beginKeyboardDismissFocusContainment()
         self.scheduleKeyboardFocusRestore()
+    }
+
+    private func handleAccessibilityElementFocused(_ notification: Notification) {
+        guard UIAccessibility.isVoiceOverRunning else {
+            return
+        }
+        guard self.lastKnownKeyboardBottomInset <= 0.0 else {
+            return
+        }
+        guard CACurrentMediaTime() < self.keyboardDismissFocusContainmentDeadline else {
+            return
+        }
+        guard let userInfo = notification.userInfo else {
+            return
+        }
+        let focusedElement = userInfo[UIAccessibility.focusedElementUserInfoKey]
+        if self.isVoiceOverElementWithinNativeChat(focusedElement) {
+            return
+        }
+        self.forceFocusBackIntoNativeChat()
     }
 
     private func scheduleKeyboardFocusRestore() {
@@ -640,6 +679,16 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate,
         }
     }
 
+    private func beginKeyboardDismissFocusContainment(duration: Double = 1.5) {
+        self.keyboardDismissFocusContainmentDeadline = max(self.keyboardDismissFocusContainmentDeadline, CACurrentMediaTime() + duration)
+    }
+
+    private func forceFocusBackIntoNativeChat() {
+        self.cancelPendingKeyboardFocusRestore()
+        self.beginKeyboardDismissFocusContainment()
+        self.scheduleKeyboardFocusRestore()
+    }
+
     private func cancelPendingKeyboardFocusRestore() {
         self.pendingKeyboardFocusRestoreWorkItems.forEach { $0.cancel() }
         self.pendingKeyboardFocusRestoreWorkItems.removeAll()
@@ -662,9 +711,10 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate,
     }
 
     private func isVoiceOverFocusWithinNativeChat() -> Bool {
-        guard let focusedElement = UIAccessibility.focusedElement(using: .notificationVoiceOver) else {
-            return false
-        }
+        return self.isVoiceOverElementWithinNativeChat(UIAccessibility.focusedElement(using: .notificationVoiceOver))
+    }
+
+    private func isVoiceOverElementWithinNativeChat(_ focusedElement: Any?) -> Bool {
         if let focusedView = focusedElement as? UIView {
             return focusedView === self.view || focusedView.isDescendant(of: self.view)
         }
