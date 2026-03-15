@@ -756,7 +756,7 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate,
         } else if self.infoButton.window != nil, !self.infoButton.isHidden, self.infoButton.alpha > 0.01 {
             return self.infoButton
         } else {
-            return self.view
+            return self.view as Any
         }
     }
 
