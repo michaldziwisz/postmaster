@@ -399,7 +399,9 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate,
     func setAccessibilityModalState(_ isModal: Bool) {
         self.view.accessibilityViewIsModal = isModal
         self.view.accessibilityElementsHidden = !isModal
-        self.applyModalAccessibilityHierarchy(isModal: isModal)
+        if !isModal || self.view.window != nil {
+            self.applyModalAccessibilityHierarchy(isModal: isModal)
+        }
     }
 
     override func accessibilityPerformEscape() -> Bool {
@@ -740,15 +742,26 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate,
         if let navigationView = self.navigationController?.view {
             navigationView.isAccessibilityElement = false
             navigationView.accessibilityViewIsModal = isModal
-            if isModal {
-                let hierarchyRoot: Any
-                if let parentView = self.parent?.view, parentView.isDescendant(of: navigationView) {
+            if isModal, navigationView.window != nil {
+                let hierarchyRoot: Any?
+                if let parentView = self.parent?.view,
+                   parentView.isDescendant(of: navigationView),
+                   parentView.window != nil
+                {
                     hierarchyRoot = parentView as Any
-                } else {
+                } else if self.view.isDescendant(of: navigationView), self.view.window != nil {
                     hierarchyRoot = self.view as Any
+                } else {
+                    hierarchyRoot = nil
                 }
-                navigationView.shouldGroupAccessibilityChildren = true
-                navigationView.accessibilityElements = [hierarchyRoot]
+
+                if let hierarchyRoot {
+                    navigationView.shouldGroupAccessibilityChildren = true
+                    navigationView.accessibilityElements = [hierarchyRoot]
+                } else {
+                    navigationView.shouldGroupAccessibilityChildren = false
+                    navigationView.accessibilityElements = nil
+                }
             } else {
                 navigationView.shouldGroupAccessibilityChildren = false
                 navigationView.accessibilityElements = nil
