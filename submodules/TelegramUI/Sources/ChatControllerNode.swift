@@ -373,21 +373,19 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
     }
 
     private func setNativeVoiceOverChatRootAccessibility(_ isActive: Bool) {
-        let rootElements: [Any]? = {
-            guard isActive, let overlayController = self.voiceOverOverlayController else {
-                return nil
-            }
-            return [overlayController.view as Any]
-        }()
-
         self.view.isAccessibilityElement = false
-        self.view.shouldGroupAccessibilityChildren = isActive
-        self.view.accessibilityElements = rootElements
+        self.view.shouldGroupAccessibilityChildren = false
+        self.view.accessibilityElements = nil
 
         if let controllerView = self.controller?.viewIfLoaded {
             controllerView.isAccessibilityElement = false
-            controllerView.shouldGroupAccessibilityChildren = isActive
-            controllerView.accessibilityElements = rootElements
+            if isActive, let overlayController = self.voiceOverOverlayController, overlayController.view.isDescendant(of: controllerView) {
+                controllerView.shouldGroupAccessibilityChildren = true
+                controllerView.accessibilityElements = [overlayController.view as Any]
+            } else {
+                controllerView.shouldGroupAccessibilityChildren = false
+                controllerView.accessibilityElements = nil
+            }
         }
     }
 
@@ -1683,14 +1681,15 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                 if let controller = self.controller {
                     let overlayController = VoiceOverNativeChatController(overlayView: overlay)
                     controller.addChild(overlayController)
-                    self.view.addSubview(overlayController.view)
+                    let hostView = controller.viewIfLoaded ?? self.view
+                    hostView.addSubview(overlayController.view)
                     overlayController.view.translatesAutoresizingMaskIntoConstraints = false
                     self.voiceOverOverlayController = overlayController
                     self.voiceOverOverlayConstraints = [
-                        overlayController.view.topAnchor.constraint(equalTo: self.view.topAnchor),
-                        overlayController.view.leadingAnchor.constraint(equalTo: self.view.leadingAnchor),
-                        overlayController.view.trailingAnchor.constraint(equalTo: self.view.trailingAnchor),
-                        overlayController.view.bottomAnchor.constraint(equalTo: self.view.bottomAnchor)
+                        overlayController.view.topAnchor.constraint(equalTo: hostView.topAnchor),
+                        overlayController.view.leadingAnchor.constraint(equalTo: hostView.leadingAnchor),
+                        overlayController.view.trailingAnchor.constraint(equalTo: hostView.trailingAnchor),
+                        overlayController.view.bottomAnchor.constraint(equalTo: hostView.bottomAnchor)
                     ]
                     NSLayoutConstraint.activate(self.voiceOverOverlayConstraints)
                     overlayController.didMove(toParent: controller)
@@ -1782,9 +1781,9 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
             let isLoadingEarlier = originalView?.isLoadingEarlier ?? false
             overlay.updateLoadEarlierState(canLoadEarlier: canLoadEarlier, isLoadingEarlier: isLoadingEarlier)
             self.voiceOverOverlayController?.updateLoadEarlierState(canLoadEarlier: canLoadEarlier, isLoadingEarlier: isLoadingEarlier)
-            
+
             if let overlayController = self.voiceOverOverlayController {
-                self.view.bringSubviewToFront(overlayController.view)
+                overlayController.view.superview?.bringSubviewToFront(overlayController.view)
             } else {
                 self.view.bringSubviewToFront(overlay)
             }
