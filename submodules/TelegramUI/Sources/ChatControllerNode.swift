@@ -342,10 +342,11 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
     private var panRecognizer: WindowPanRecognizer?
     
     private var voiceOverOverlayController: VoiceOverNativeChatController?
+    private var voiceOverNativeChatModel: VoiceOverNativeChatModel?
     private var voiceOverOverlayView: ChatVoiceOverOverlayView?
     private var voiceOverOverlayConstraints: [NSLayoutConstraint] = []
     private var voiceOverOverlayVoicePlaybackDisposable: Disposable?
-    private var voiceOverOverlayVoicePlaybackState: ChatVoiceOverOverlayView.VoicePlaybackState?
+    private var voiceOverOverlayVoicePlaybackState: VoiceOverNativeChatModel.VoicePlaybackState?
     private var voiceOverOverlayTopControllerDisposable: Disposable?
     private var voiceOverOverlayModalIsolationTimer: SwiftSignalKit.Timer?
     private struct VoiceOverOverlaySavedState {
@@ -361,10 +362,10 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
     private var keyboardGestureBeginLocation: CGPoint?
     private var keyboardGestureAccessoryHeight: CGFloat?
 
-    internal static func resolveVoiceOverOverlayWindow(controller: UIViewController, overlay: UIView) -> UIWindow? {
+    internal static func resolveVoiceOverOverlayWindow(controller: UIViewController, fallbackView: UIView?) -> UIWindow? {
         // Do not access `controller.view` here: it may trigger `loadView()` and cause re-entrant
         // initialization while VoiceOver overlay is being set up.
-        return controller.viewIfLoaded?.window ?? overlay.window
+        return controller.viewIfLoaded?.window ?? fallbackView?.window
     }
 
     private func setVoiceOverModalStateOnControllerHierarchy(_ isModal: Bool) {
@@ -405,24 +406,49 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
         }
     }
 
+    private var usesNativeVoiceOverChat: Bool {
+        self.voiceOverNativeChatModel != nil && self.voiceOverOverlayController != nil
+    }
+
+    private var voiceOverAccessibilityFallbackView: UIView? {
+        if let overlayController = self.voiceOverOverlayController {
+            return overlayController.view
+        } else {
+            return self.voiceOverOverlayView
+        }
+    }
+
+    private func releaseVoiceOverOverlayModalTrapForPresentation() {
+        if self.usesNativeVoiceOverChat {
+            self.voiceOverOverlayController?.setAccessibilityModalState(false)
+            self.setNativeVoiceOverChatRootAccessibility(false)
+            self.setVoiceOverModalStateOnControllerHierarchy(false)
+        } else if let overlay = self.voiceOverOverlayView {
+            overlay.accessibilityViewIsModal = false
+        }
+    }
+
     private func updateVoiceOverOverlayAccessibilityIsolation(viewControllers: [UIViewController]) {
-        guard let overlay = self.voiceOverOverlayView else {
+        let overlay = self.voiceOverOverlayView
+        let usesNativeVoiceOverChat = self.usesNativeVoiceOverChat
+        guard overlay != nil || usesNativeVoiceOverChat else {
             return
         }
-        let usesNativeVoiceOverChat = overlay.usesNativeVoiceOverAccessibility
         let shouldPreserveModalIsolationDuringFocusRecovery: Bool = {
             if usesNativeVoiceOverChat, let overlayController = self.voiceOverOverlayController {
                 return overlayController.shouldPreserveModalIsolationDuringFocusRecovery
-            } else {
+            } else if let overlay {
                 return overlay.shouldPreserveModalIsolationDuringFocusRecovery
+            } else {
+                return false
             }
         }()
         guard let controller = self.controller else {
-            overlay.accessibilityViewIsModal = !usesNativeVoiceOverChat
-            overlay.accessibilityElementsHidden = false
+            overlay?.accessibilityViewIsModal = !usesNativeVoiceOverChat
+            overlay?.accessibilityElementsHidden = false
             return
         }
-        let wasHidden = overlay.accessibilityElementsHidden
+        let wasHidden = self.voiceOverOverlayController?.view.accessibilityElementsHidden ?? overlay?.accessibilityElementsHidden ?? false
         let isChatOnTop: Bool
         if viewControllers.isEmpty {
             isChatOnTop = true
@@ -457,7 +483,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
         // Some controllers (e.g. media gallery presented in the root window) are not reflected in
         // `viewControllers` or `galleryPresentationContext`. Use the active window host's view
         // controller enumeration to determine if the chat is truly the top-most controller.
-        if resolvedIsChatOnTop, !shouldPreserveModalIsolationDuringFocusRecovery, let window = ChatControllerNode.resolveVoiceOverOverlayWindow(controller: controller, overlay: overlay), let windowHost = window as? WindowHost {
+        if resolvedIsChatOnTop, !shouldPreserveModalIsolationDuringFocusRecovery, let window = ChatControllerNode.resolveVoiceOverOverlayWindow(controller: controller, fallbackView: self.voiceOverAccessibilityFallbackView), let windowHost = window as? WindowHost {
             var didEncounterChatController = false
             var hasVisibleControllerAboveChat = false
             windowHost.forEachController { candidate in
@@ -480,8 +506,8 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
             }
         }
         
-        overlay.accessibilityViewIsModal = usesNativeVoiceOverChat ? false : resolvedIsChatOnTop
-        overlay.accessibilityElementsHidden = !resolvedIsChatOnTop
+        overlay?.accessibilityViewIsModal = usesNativeVoiceOverChat ? false : resolvedIsChatOnTop
+        overlay?.accessibilityElementsHidden = !resolvedIsChatOnTop
         if usesNativeVoiceOverChat, self.voiceOverOverlayController != nil {
             self.setNativeVoiceOverChatRootAccessibility(resolvedIsChatOnTop)
             self.voiceOverOverlayController?.setAccessibilityModalState(resolvedIsChatOnTop)
@@ -528,40 +554,40 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
         if wasHidden, resolvedIsChatOnTop {
             if let overlayController = self.voiceOverOverlayController {
                 overlayController.voiceOverDidReturnToChat()
-            } else {
+            } else if let overlay {
                 overlay.voiceOverDidReturnToChat()
             }
         }
     }
 
     func prepareForVoiceOverExternalPresentation() {
-        guard let overlay = self.voiceOverOverlayView else {
+        guard self.voiceOverOverlayView != nil || self.usesNativeVoiceOverChat else {
             return
         }
-        overlay.accessibilityViewIsModal = false
-        overlay.accessibilityElementsHidden = true
+        self.voiceOverOverlayView?.accessibilityViewIsModal = false
+        self.voiceOverOverlayView?.accessibilityElementsHidden = true
         self.voiceOverOverlayController?.setAccessibilityModalState(false)
         self.setNativeVoiceOverChatRootAccessibility(false)
         self.setVoiceOverModalStateOnControllerHierarchy(false)
     }
 
     func restoreVoiceOverOverlayAfterExternalPresentation(focusProfileButton: Bool) {
-        guard let overlay = self.voiceOverOverlayView else {
+        guard self.voiceOverOverlayView != nil || self.usesNativeVoiceOverChat else {
             if let controllerView = self.controller?.viewIfLoaded {
                 UIAccessibility.post(notification: .screenChanged, argument: controllerView)
             }
             return
         }
-        overlay.accessibilityElementsHidden = false
-        overlay.accessibilityViewIsModal = overlay.usesNativeVoiceOverAccessibility ? false : true
+        self.voiceOverOverlayView?.accessibilityElementsHidden = false
+        self.voiceOverOverlayView?.accessibilityViewIsModal = self.usesNativeVoiceOverChat ? false : true
         self.voiceOverOverlayController?.setAccessibilityModalState(true)
-        self.setNativeVoiceOverChatRootAccessibility(self.voiceOverOverlayController != nil && overlay.usesNativeVoiceOverAccessibility)
+        self.setNativeVoiceOverChatRootAccessibility(self.usesNativeVoiceOverChat)
         self.setVoiceOverModalStateOnControllerHierarchy(true)
         if let overlayController = self.voiceOverOverlayController {
             overlayController.voiceOverDidReturnToChat(focusInfoButton: focusProfileButton)
-        } else if focusProfileButton {
+        } else if let overlay = self.voiceOverOverlayView, focusProfileButton {
             overlay.voiceOverFocusProfileButton()
-        } else {
+        } else if let overlay = self.voiceOverOverlayView {
             overlay.voiceOverDidReturnToChat()
         }
     }
@@ -1294,38 +1320,49 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
 
     private func updateVoiceOverOverlay(isEnabled: Bool) {
         if isEnabled {
-            let overlay: ChatVoiceOverOverlayView
-            if let current = self.voiceOverOverlayView {
-                overlay = current
+            guard let controller = self.controller else {
+                return
+            }
+
+            let hostView = controller.viewIfLoaded ?? self.view
+            let model: VoiceOverNativeChatModel
+            if let current = self.voiceOverNativeChatModel {
+                model = current
             } else {
-                overlay = ChatVoiceOverOverlayView(frame: .zero)
-                overlay.translatesAutoresizingMaskIntoConstraints = false
-                
-                let contextMenuAnchorNode = ASDisplayNode()
-                contextMenuAnchorNode.isUserInteractionEnabled = false
-                contextMenuAnchorNode.view.isUserInteractionEnabled = false
-                contextMenuAnchorNode.view.isAccessibilityElement = false
-                contextMenuAnchorNode.view.accessibilityElementsHidden = true
-                contextMenuAnchorNode.view.backgroundColor = .clear
-                contextMenuAnchorNode.view.alpha = 0.01
-                contextMenuAnchorNode.frame = .zero
-                overlay.addSubview(contextMenuAnchorNode.view)
-                self.voiceOverContextMenuAnchorNode = contextMenuAnchorNode
-                
-                overlay.actions.back = { [weak self] in
-                    self?.controller?.navigationButtonAction(.dismiss)
+                model = VoiceOverNativeChatModel()
+                self.voiceOverNativeChatModel = model
+
+                if self.voiceOverContextMenuAnchorNode == nil {
+                    let contextMenuAnchorNode = ASDisplayNode()
+                    contextMenuAnchorNode.isUserInteractionEnabled = false
+                    contextMenuAnchorNode.view.isUserInteractionEnabled = false
+                    contextMenuAnchorNode.view.isAccessibilityElement = false
+                    contextMenuAnchorNode.view.accessibilityElementsHidden = true
+                    contextMenuAnchorNode.view.backgroundColor = .clear
+                    contextMenuAnchorNode.view.alpha = 0.01
+                    contextMenuAnchorNode.frame = .zero
+                    hostView.addSubview(contextMenuAnchorNode.view)
+                    self.voiceOverContextMenuAnchorNode = contextMenuAnchorNode
+                } else if let anchorView = self.voiceOverContextMenuAnchorNode?.view, anchorView.superview !== hostView {
+                    hostView.addSubview(anchorView)
                 }
-                overlay.actions.openProfile = { [weak self] in
-                    self?.prepareForVoiceOverExternalPresentation()
-                    self?.interfaceInteraction?.openPeerInfo()
+
+                let updateIsolation: () -> Void = { [weak self] in
+                    guard let self else {
+                        return
+                    }
+                    if let navigationController = self.controller?.effectiveNavigationController {
+                        self.updateVoiceOverOverlayAccessibilityIsolation(viewControllers: navigationController.viewControllers)
+                    } else {
+                        self.updateVoiceOverOverlayAccessibilityIsolation(viewControllers: [])
+                    }
                 }
+
                 let performVoiceOverTextAction: (Message, TelegramTextAttributesVoiceOver.Action) -> Void = { [weak self] message, action in
                     guard let self else {
                         return
                     }
-                    if let overlay = self.voiceOverOverlayView {
-                        overlay.accessibilityViewIsModal = false
-                    }
+                    self.releaseVoiceOverOverlayModalTrapForPresentation()
                     switch action {
                     case let .url(url, concealed):
                         self.controller?.openUrl(url, concealed: concealed, message: message)
@@ -1347,84 +1384,70 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                         self.controllerInteraction.seekToTimecode(message, timecode, true)
                     }
                 }
-                overlay.actions.openAttachments = { [weak self] in
+
+                model.actions.back = { [weak self] in
+                    self?.controller?.navigationButtonAction(.dismiss)
+                }
+                model.actions.openProfile = { [weak self] in
+                    self?.prepareForVoiceOverExternalPresentation()
+                    self?.interfaceInteraction?.openPeerInfo()
+                }
+                model.actions.openAttachments = { [weak self] in
                     self?.controller?.presentAttachmentMenu(subject: .default)
                 }
-                overlay.actions.sendText = { [weak self] text in
+                model.actions.sendText = { [weak self] text in
                     self?.controllerInteraction.sendMessage(text)
                 }
-                overlay.actions.beginVoiceRecording = { [weak self] in
+                model.actions.beginVoiceRecording = { [weak self] in
                     self?.interfaceInteraction?.beginMediaRecording(false)
                 }
-                overlay.actions.finishVoiceRecordingAndSend = { [weak self] in
+                model.actions.finishVoiceRecordingAndSend = { [weak self] in
                     self?.interfaceInteraction?.finishMediaRecording(.send(viewOnce: false))
                 }
-                overlay.actions.requestLoadEarlier = { [weak self] in
+                model.actions.requestLoadEarlier = { [weak self] in
                     self?.historyNode.voiceOverRequestLoadEarlier()
                 }
-                overlay.actions.didEndLoadEarlier = { [weak self] in
+                model.actions.didEndLoadEarlier = { [weak self] in
                     self?.historyNode.voiceOverDidFinishLoadEarlier()
                 }
-                overlay.actions.scrollToLatest = { [weak self] in
+                model.actions.scrollToLatest = { [weak self] in
                     self?.historyNode.scrollToEndOfHistory()
                 }
-                overlay.actions.requestVisibleTranslations = { [weak self] messageIds in
+                model.actions.requestVisibleTranslations = { [weak self] messageIds in
                     guard let self else {
                         return
                     }
                     let ids = messageIds.map { MessageAndThreadId(messageId: $0, threadId: nil) }
                     self.voiceOverVisibleTranslationManager.add(ids)
                 }
-                overlay.actions.activateMessage = { [weak self] message in
+                model.actions.activateMessage = { [weak self] message in
                     guard let self else {
                         return
                     }
-                    
-                    // `openMessage` can present controllers modally (e.g. gallery/map/contact preview).
-                    // When the overlay remains `accessibilityViewIsModal`, VoiceOver can appear to hang
-                    // because it is still trapped inside the overlay even though a new screen is visible.
-                    // Proactively release the modal trap before opening.
-                    if self.historyNode.messageInCurrentHistoryView(message.id) != nil, let overlay = self.voiceOverOverlayView {
-                        overlay.accessibilityViewIsModal = false
+
+                    if self.historyNode.messageInCurrentHistoryView(message.id) != nil {
+                        self.releaseVoiceOverOverlayModalTrapForPresentation()
                     }
-                    
+
                     let didOpen = self.controllerInteraction.openMessage(message, OpenMessageParams(mode: .default))
 
-                    let updateIsolation: () -> Void = { [weak self] in
-                        guard let self else {
-                            return
-                        }
-                        if let navigationController = self.controller?.effectiveNavigationController {
-                            self.updateVoiceOverOverlayAccessibilityIsolation(viewControllers: navigationController.viewControllers)
-                        } else {
-                            self.updateVoiceOverOverlayAccessibilityIsolation(viewControllers: [])
-                        }
-                    }
-
                     if didOpen {
-                        // Delay the first isolation update slightly so that window-level presentations
-                        // (e.g. gallery in `.window(.root)`) have time to register, preventing the overlay
-                        // from re-enabling itself too early.
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                            updateIsolation()
-                        }
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                            updateIsolation()
-                        }
-                        
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15, execute: updateIsolation)
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35, execute: updateIsolation)
+
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
                             guard let self, UIAccessibility.isVoiceOverRunning else {
                                 return
                             }
-                            guard let controller = self.controller, let overlay = self.voiceOverOverlayView else {
+                            guard let controller = self.controller else {
                                 UIAccessibility.post(notification: .screenChanged, argument: nil)
                                 return
                             }
-                            guard let window = ChatControllerNode.resolveVoiceOverOverlayWindow(controller: controller, overlay: overlay), let windowHost = window as? WindowHost else {
+                            guard let window = ChatControllerNode.resolveVoiceOverOverlayWindow(controller: controller, fallbackView: self.voiceOverAccessibilityFallbackView), let windowHost = window as? WindowHost else {
                                 UIAccessibility.post(notification: .screenChanged, argument: nil)
                                 return
                             }
-                            
+
                             var didEncounterChatController = false
                             var topMostVisibleAboveChat: ContainableController?
                             windowHost.forEachController { candidate in
@@ -1435,7 +1458,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                                     topMostVisibleAboveChat = candidate
                                 }
                             }
-                            
+
                             if let topMostVisibleAboveChat {
                                 UIAccessibility.post(notification: .screenChanged, argument: topMostVisibleAboveChat.view)
                             } else {
@@ -1443,19 +1466,17 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                             }
                         }
                     } else {
-                        DispatchQueue.main.async {
-                            updateIsolation()
-                        }
+                        DispatchQueue.main.async(execute: updateIsolation)
                     }
                 }
-                overlay.actions.openPollMessage = { [weak self] message in
+                model.actions.openPollMessage = { [weak self] message in
                     guard let self else {
                         return
                     }
                     guard let poll = message.media.first(where: { $0 is TelegramMediaPoll }) as? TelegramMediaPoll else {
                         return
                     }
-                    
+
                     let controller = VoiceOverPollVoteController(
                         context: self.context,
                         messageId: message.id,
@@ -1479,7 +1500,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                                 } else {
                                     resolvedPoll = fallbackPoll
                                 }
-                                
+
                                 let controller = VoiceOverPollResultsController(context: self.context, messageId: messageId, poll: resolvedPoll)
                                 self.controller?.push(controller)
                             })
@@ -1487,14 +1508,14 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                     )
                     self.controller?.push(controller)
                 }
-                overlay.actions.openTodoMessage = { [weak self] message in
+                model.actions.openTodoMessage = { [weak self] message in
                     guard let self else {
                         return
                     }
                     guard let todo = message.media.first(where: { $0 is TelegramMediaTodo }) as? TelegramMediaTodo else {
                         return
                     }
-                    
+
                     let controller = VoiceOverTodoMessageController(
                         context: self.context,
                         message: message,
@@ -1508,16 +1529,16 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                     )
                     self.controller?.push(controller)
                 }
-                overlay.actions.toggleVoiceMessagePlayback = { [weak self] message in
+                model.actions.toggleVoiceMessagePlayback = { [weak self] message in
                     guard let self else {
                         return
                     }
 
-                    let isVoiceMessage: Bool = message.media.contains(where: { media in
-                        if let file = media as? TelegramMediaFile {
-                            return file.isVoice
+                    let isVoiceMessage = message.media.contains(where: { media in
+                        guard let file = media as? TelegramMediaFile else {
+                            return false
                         }
-                        return false
+                        return file.isVoice
                     })
 
                     if isVoiceMessage, let playbackState = self.voiceOverOverlayVoicePlaybackState, playbackState.messageId == message.id {
@@ -1527,13 +1548,13 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                         let _ = self.controllerInteraction.openMessage(message, OpenMessageParams(mode: .default))
                     }
                 }
-                overlay.actions.toggleCurrentVoicePlayback = { [weak self] in
+                model.actions.toggleCurrentVoicePlayback = { [weak self] in
                     self?.context.sharedContext.mediaManager.playlistControl(.playback(.togglePlayPause), type: .voice)
                 }
-                overlay.actions.seekCurrentVoicePlayback = { [weak self] position in
+                model.actions.seekCurrentVoicePlayback = { [weak self] position in
                     self?.context.sharedContext.mediaManager.playlistControl(.seek(position), type: .voice)
                 }
-                overlay.actions.setCurrentVoicePlaybackRate = { [weak self] rateValue in
+                model.actions.setCurrentVoicePlaybackRate = { [weak self] rateValue in
                     guard let self else {
                         return
                     }
@@ -1541,7 +1562,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                     let _ = (self.context.sharedContext.accountManager.transaction { transaction -> AudioPlaybackRate in
                         let settings = transaction.getSharedData(ApplicationSpecificSharedDataKeys.musicPlaybackSettings)?.get(MusicPlaybackSettings.self) ?? MusicPlaybackSettings.defaultSettings
                         transaction.updateSharedData(ApplicationSpecificSharedDataKeys.musicPlaybackSettings, { _ in
-                            return PreferencesEntry(settings.withUpdatedVoicePlaybackRate(rate))
+                            PreferencesEntry(settings.withUpdatedVoicePlaybackRate(rate))
                         })
                         return rate
                     }
@@ -1552,23 +1573,21 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                         self.context.sharedContext.mediaManager.playlistControl(.setBaseRate(baseRate), type: .voice)
                     })
                 }
-                overlay.actions.openMessageContextMenu = { [weak self] message, sourceRect in
+                model.actions.openMessageContextMenu = { [weak self] message, sourceRect in
                     guard let self, let anchorNode = self.voiceOverContextMenuAnchorNode else {
                         return
                     }
                     anchorNode.view.frame = sourceRect
                     self.controllerInteraction.openMessageContextMenu(message, false, anchorNode, anchorNode.bounds, nil, nil)
                 }
-                overlay.actions.activateMessageTextAction = { message, action in
+                model.actions.activateMessageTextAction = { message, action in
                     performVoiceOverTextAction(message, action)
                 }
-                overlay.actions.presentMessageTextActions = { [weak self] message, items in
+                model.actions.presentMessageTextActions = { [weak self] message, items in
                     guard let self, let controller = self.controller else {
                         return
                     }
-                    if let overlay = self.voiceOverOverlayView {
-                        overlay.accessibilityViewIsModal = false
-                    }
+                    self.releaseVoiceOverOverlayModalTrapForPresentation()
                     let alertController = UIAlertController(title: nil, message: nil, preferredStyle: .actionSheet)
                     for item in items {
                         alertController.addAction(UIAlertAction(title: item.title, style: .default, handler: { _ in
@@ -1581,20 +1600,16 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                         popover.sourceRect = CGRect(x: controller.view.bounds.midX, y: controller.view.bounds.maxY - 1.0, width: 1.0, height: 1.0)
                     }
                     controller.present(alertController, animated: true)
-                    if let navigationController = self.controller?.effectiveNavigationController {
-                        self.updateVoiceOverOverlayAccessibilityIsolation(viewControllers: navigationController.viewControllers)
-                    } else {
-                        self.updateVoiceOverOverlayAccessibilityIsolation(viewControllers: [])
-                    }
+                    updateIsolation()
                 }
-                overlay.actions.performTextSelectionAction = { [weak self] message, text, action in
+                model.actions.performTextSelectionAction = { [weak self] message, text, action in
                     guard let self else {
                         return
                     }
                     let canCopy = !(self.chatPresentationInterfaceState.copyProtectionEnabled || message.isCopyProtected())
                     self.controllerInteraction.performTextSelectionAction(message, canCopy, text, action)
                 }
-                overlay.actions.requestAudioTranscription = { [weak self] message in
+                model.actions.requestAudioTranscription = { [weak self] message in
                     guard let self else {
                         return
                     }
@@ -1612,7 +1627,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                         }
                     })
                 }
-                overlay.actions.viewAudioTranscript = { [weak self] message in
+                model.actions.viewAudioTranscript = { [weak self] message in
                     guard let self, let controller = self.controller else {
                         return
                     }
@@ -1649,8 +1664,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                             }
                             switch transcription {
                             case let .success(text, _):
-                                let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
-                                guard !trimmedText.isEmpty else {
+                                guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
                                     return
                                 }
                                 transcriptText = text
@@ -1664,8 +1678,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                         }
                         switch transcription {
                         case let .success(text, _):
-                            let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
-                            guard !trimmedText.isEmpty else {
+                            guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
                                 return
                             }
                             transcriptText = text
@@ -1678,54 +1691,29 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                     let transcriptController = VoiceOverTranscriptController(
                         presentationData: presentationData,
                         transcriptText: transcriptText,
-                        onDismiss: { [weak self] in
-                            guard let self else {
-                                return
-                            }
-                            if let navigationController = self.controller?.effectiveNavigationController {
-                                self.updateVoiceOverOverlayAccessibilityIsolation(viewControllers: navigationController.viewControllers)
-                            } else {
-                                self.updateVoiceOverOverlayAccessibilityIsolation(viewControllers: [])
-                            }
+                        onDismiss: {
+                            updateIsolation()
                         }
                     )
                     let navigationController = UINavigationController(rootViewController: transcriptController)
                     navigationController.modalPresentationStyle = .pageSheet
                     controller.present(navigationController, animated: true)
-                    if let navigationController = self.controller?.effectiveNavigationController {
-                        self.updateVoiceOverOverlayAccessibilityIsolation(viewControllers: navigationController.viewControllers)
-                    } else {
-                        self.updateVoiceOverOverlayAccessibilityIsolation(viewControllers: [])
-                    }
+                    updateIsolation()
                 }
-                
-                if let controller = self.controller {
-                    let overlayController = VoiceOverNativeChatController(overlayView: overlay)
-                    controller.addChild(overlayController)
-                    let hostView = controller.viewIfLoaded ?? self.view
-                    hostView.addSubview(overlayController.view)
-                    overlayController.view.translatesAutoresizingMaskIntoConstraints = false
-                    self.voiceOverOverlayController = overlayController
-                    self.voiceOverOverlayConstraints = [
-                        overlayController.view.topAnchor.constraint(equalTo: hostView.topAnchor),
-                        overlayController.view.leadingAnchor.constraint(equalTo: hostView.leadingAnchor),
-                        overlayController.view.trailingAnchor.constraint(equalTo: hostView.trailingAnchor),
-                        overlayController.view.bottomAnchor.constraint(equalTo: hostView.bottomAnchor)
-                    ]
-                    NSLayoutConstraint.activate(self.voiceOverOverlayConstraints)
-                    overlayController.didMove(toParent: controller)
-                } else {
-                    self.view.addSubview(overlay)
-                    self.voiceOverOverlayConstraints = [
-                        overlay.topAnchor.constraint(equalTo: self.view.topAnchor),
-                        overlay.leadingAnchor.constraint(equalTo: self.view.leadingAnchor),
-                        overlay.trailingAnchor.constraint(equalTo: self.view.trailingAnchor),
-                        overlay.bottomAnchor.constraint(equalTo: self.view.bottomAnchor)
-                    ]
-                    NSLayoutConstraint.activate(self.voiceOverOverlayConstraints)
-                }
-                
-                self.voiceOverOverlayView = overlay
+
+                let overlayController = VoiceOverNativeChatController(model: model)
+                controller.addChild(overlayController)
+                hostView.addSubview(overlayController.view)
+                overlayController.view.translatesAutoresizingMaskIntoConstraints = false
+                self.voiceOverOverlayController = overlayController
+                self.voiceOverOverlayConstraints = [
+                    overlayController.view.topAnchor.constraint(equalTo: hostView.topAnchor),
+                    overlayController.view.leadingAnchor.constraint(equalTo: hostView.leadingAnchor),
+                    overlayController.view.trailingAnchor.constraint(equalTo: hostView.trailingAnchor),
+                    overlayController.view.bottomAnchor.constraint(equalTo: hostView.bottomAnchor)
+                ]
+                NSLayoutConstraint.activate(self.voiceOverOverlayConstraints)
+                overlayController.didMove(toParent: controller)
 
                 if self.voiceOverOverlayVoicePlaybackDisposable == nil {
                     self.voiceOverOverlayVoicePlaybackDisposable = (self.context.sharedContext.mediaManager.globalMediaPlayerState
@@ -1733,8 +1721,8 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                         guard let self else {
                             return
                         }
-                        
-                        let resolvedState: ChatVoiceOverOverlayView.VoicePlaybackState? = {
+
+                        let resolvedState: VoiceOverNativeChatModel.VoicePlaybackState? = {
                             guard let (account, stateOrLoading, playerType) = value, account.id == self.context.account.id else {
                                 return nil
                             }
@@ -1747,12 +1735,12 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                             guard let itemId = state.item.id as? PeerMessagesMediaPlaylistItemId else {
                                 return nil
                             }
-                            
-                            let messageId: MessageId = itemId.messageId
+
+                            let messageId = itemId.messageId
                             if let chatPeerId = self.chatLocation.peerId, messageId.peerId != chatPeerId {
                                 return nil
                             }
-                            
+
                             let status = state.status
                             let position: Double
                             if status.generationTimestamp > 0.0, case .playing = status.status {
@@ -1760,8 +1748,8 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                             } else {
                                 position = status.timestamp
                             }
-                            
-                            return ChatVoiceOverOverlayView.VoicePlaybackState(
+
+                            return VoiceOverNativeChatModel.VoicePlaybackState(
                                 messageId: messageId,
                                 isPlaying: status.status == .playing,
                                 position: position,
@@ -1769,81 +1757,52 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                                 baseRate: status.baseRate
                             )
                         }()
-                        
+
                         self.voiceOverOverlayVoicePlaybackState = resolvedState
-                        self.voiceOverOverlayView?.updateVoicePlaybackState(resolvedState)
+                        self.voiceOverNativeChatModel?.updateVoicePlaybackState(resolvedState)
                         self.voiceOverOverlayController?.updateVoicePlaybackState(resolvedState)
                     })
                 }
-                
+
                 self.historyNode.voiceOverHistoryEntriesUpdated = { [weak self] entries in
                     DispatchQueue.main.async {
-                        guard let self, let overlay = self.voiceOverOverlayView else {
+                        guard let self, let model = self.voiceOverNativeChatModel else {
                             return
                         }
-                        overlay.updateEntries(entries)
+                        model.updateEntries(entries)
                         self.voiceOverOverlayController?.updateEntries(entries)
-                        
+
                         let originalView = self.historyNode.originalHistoryView
                         let canLoadEarlier = (originalView?.earlierId != nil) || (originalView?.holeEarlier == true)
                         let isLoadingEarlier = originalView?.isLoadingEarlier ?? false
-                        overlay.updateLoadEarlierState(canLoadEarlier: canLoadEarlier, isLoadingEarlier: isLoadingEarlier)
+                        model.updateLoadEarlierState(canLoadEarlier: canLoadEarlier, isLoadingEarlier: isLoadingEarlier)
                         self.voiceOverOverlayController?.updateLoadEarlierState(canLoadEarlier: canLoadEarlier, isLoadingEarlier: isLoadingEarlier)
                     }
                 }
             }
-            
-            overlay.updateInterfaceState(self.chatPresentationInterfaceState)
+
+            model.updateInterfaceState(self.chatPresentationInterfaceState)
             self.voiceOverOverlayController?.updateInterfaceState(self.chatPresentationInterfaceState)
-            overlay.updateEntries(self.historyNode.voiceOverHistoryEntries)
+            model.updateEntries(self.historyNode.voiceOverHistoryEntries)
             self.voiceOverOverlayController?.updateEntries(self.historyNode.voiceOverHistoryEntries)
             let originalView = self.historyNode.originalHistoryView
             let canLoadEarlier = (originalView?.earlierId != nil) || (originalView?.holeEarlier == true)
             let isLoadingEarlier = originalView?.isLoadingEarlier ?? false
-            overlay.updateLoadEarlierState(canLoadEarlier: canLoadEarlier, isLoadingEarlier: isLoadingEarlier)
+            model.updateLoadEarlierState(canLoadEarlier: canLoadEarlier, isLoadingEarlier: isLoadingEarlier)
             self.voiceOverOverlayController?.updateLoadEarlierState(canLoadEarlier: canLoadEarlier, isLoadingEarlier: isLoadingEarlier)
 
             if let overlayController = self.voiceOverOverlayController {
                 overlayController.view.superview?.bringSubviewToFront(overlayController.view)
-            } else {
-                self.view.bringSubviewToFront(overlay)
             }
-
-            if self.voiceOverOverlayController == nil {
-                if self.voiceOverOverlayTopControllerDisposable == nil, let navigationController = self.controller?.effectiveNavigationController {
-                    self.voiceOverOverlayTopControllerDisposable = (navigationController.viewControllersSignal
-                    |> deliverOnMainQueue).startStrict(next: { [weak self] viewControllers in
-                        self?.updateVoiceOverOverlayAccessibilityIsolation(viewControllers: viewControllers)
-                    })
-                }
-                if self.voiceOverOverlayModalIsolationTimer == nil {
-                    self.voiceOverOverlayModalIsolationTimer = SwiftSignalKit.Timer(timeout: 0.25, repeat: true, completion: { [weak self] in
-                        guard let self else {
-                            return
-                        }
-                        guard UIAccessibility.isVoiceOverRunning, self.voiceOverOverlayView != nil else {
-                            return
-                        }
-                        if let navigationController = self.controller?.effectiveNavigationController {
-                            self.updateVoiceOverOverlayAccessibilityIsolation(viewControllers: navigationController.viewControllers)
-                        } else {
-                            self.updateVoiceOverOverlayAccessibilityIsolation(viewControllers: [])
-                        }
-                    }, queue: .mainQueue())
-                    self.voiceOverOverlayModalIsolationTimer?.start()
-                }
-                if let navigationController = self.controller?.effectiveNavigationController {
-                    self.updateVoiceOverOverlayAccessibilityIsolation(viewControllers: navigationController.viewControllers)
-                } else {
-                    self.updateVoiceOverOverlayAccessibilityIsolation(viewControllers: [])
-                }
-            } else {
-                overlay.accessibilityElementsHidden = true
-                overlay.accessibilityViewIsModal = false
-                self.voiceOverOverlayController?.setAccessibilityModalState(true)
-                self.setNativeVoiceOverChatRootAccessibility(true)
-                self.setVoiceOverModalStateOnControllerHierarchy(true)
-            }
+            self.voiceOverOverlayView?.accessibilityElementsHidden = true
+            self.voiceOverOverlayView?.accessibilityViewIsModal = false
+            self.voiceOverOverlayController?.setAccessibilityModalState(true)
+            self.setNativeVoiceOverChatRootAccessibility(true)
+            self.setVoiceOverModalStateOnControllerHierarchy(true)
+            self.voiceOverOverlayTopControllerDisposable?.dispose()
+            self.voiceOverOverlayTopControllerDisposable = nil
+            self.voiceOverOverlayModalIsolationTimer?.invalidate()
+            self.voiceOverOverlayModalIsolationTimer = nil
             
             if !self.didRequestVoiceOverScrollToEnd {
                 self.didRequestVoiceOverScrollToEnd = true
@@ -1866,26 +1825,9 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
             self.wrappingNode.view.accessibilityElementsHidden = true
             self.wrappingNode.view.isUserInteractionEnabled = false
             self.panRecognizer?.isEnabled = false
-            if overlay.usesNativeVoiceOverAccessibility {
-                if self.voiceOverOverlayController != nil {
-                    self.navigationBar?.view.accessibilityElementsHidden = true
-                    self.navigationBar?.view.isHidden = true
-                    self.navigationBar?.view.isUserInteractionEnabled = false
-                } else {
-                    self.navigationBar?.view.accessibilityElementsHidden = false
-                    if let savedState = self.voiceOverOverlaySavedState {
-                        self.navigationBar?.view.isHidden = savedState.navigationBarIsHidden
-                        self.navigationBar?.view.isUserInteractionEnabled = savedState.navigationBarIsUserInteractionEnabled
-                    } else {
-                        self.navigationBar?.view.isHidden = false
-                        self.navigationBar?.view.isUserInteractionEnabled = true
-                    }
-                }
-            } else {
-                self.navigationBar?.view.accessibilityElementsHidden = true
-                self.navigationBar?.view.isHidden = true
-                self.navigationBar?.view.isUserInteractionEnabled = false
-            }
+            self.navigationBar?.view.accessibilityElementsHidden = true
+            self.navigationBar?.view.isHidden = true
+            self.navigationBar?.view.isUserInteractionEnabled = false
         } else {
             self.historyNode.view.accessibilityElementsHidden = false
             self.wrappingNode.view.accessibilityElementsHidden = false
@@ -1914,6 +1856,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                 overlay.removeFromSuperview()
             }
             self.voiceOverOverlayController = nil
+            self.voiceOverNativeChatModel = nil
             self.voiceOverOverlayView = nil
             self.voiceOverOverlayVoicePlaybackState = nil
             self.voiceOverOverlayVoicePlaybackDisposable?.dispose()
@@ -4384,6 +4327,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
             let updateInputTextState = self.chatPresentationInterfaceState.interfaceState.effectiveInputState != chatPresentationInterfaceState.interfaceState.effectiveInputState
             self.chatPresentationInterfaceState = chatPresentationInterfaceState
             
+            self.voiceOverNativeChatModel?.updateInterfaceState(chatPresentationInterfaceState)
             self.voiceOverOverlayView?.updateInterfaceState(chatPresentationInterfaceState)
             self.voiceOverOverlayController?.updateInterfaceState(chatPresentationInterfaceState)
             

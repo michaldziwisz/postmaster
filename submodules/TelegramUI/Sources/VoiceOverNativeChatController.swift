@@ -3,7 +3,12 @@ import Postbox
 import TelegramCore
 import TelegramPresentationData
 import ChatPresentationInterfaceState
+import TelegramStringFormatting
 import ChatHistoryEntry
+import TelegramUIPreferences
+import ChatMessageItemCommon
+import TextFormat
+import TextSelectionNode
 
 private final class VoiceOverNativeChatTextView: UITextView {
     var onAccessibilityEscape: (() -> Bool)?
@@ -29,8 +34,1119 @@ private final class VoiceOverNativeChatMessageCell: UITableViewCell {
     }
 }
 
+final class VoiceOverNativeChatModel {
+    struct NativeComposerState {
+        let isEnabled: Bool
+        let isRecording: Bool
+        let canRecord: Bool
+        let attachLabel: String
+        let sendLabel: String
+        let recordLabel: String
+        let recordHint: String?
+        let inputLabel: String
+    }
+
+    struct NativeNavigationState {
+        let title: String
+        let backTitle: String
+        let infoLabel: String
+        let infoHint: String?
+    }
+
+    struct NativeMessageListRowPresentation {
+        let title: String
+        let subtitle: String?
+        let accessibilityLabel: String
+        let accessibilityHint: String?
+        let accessibilityTraits: UIAccessibilityTraits
+        let accessibilityCustomActions: [UIAccessibilityCustomAction]?
+        let usesProminentStyle: Bool
+        let usesAccentColor: Bool
+        let selectionStyle: UITableViewCell.SelectionStyle
+    }
+
+    struct MessageTextActionItem: Equatable {
+        let action: TelegramTextAttributesVoiceOver.Action
+        let title: String
+    }
+
+    struct VoicePlaybackState: Equatable {
+        var messageId: MessageId
+        var isPlaying: Bool
+        var position: Double
+        var duration: Double
+        var baseRate: Double
+    }
+
+    struct Actions {
+        var back: (() -> Void)?
+        var openProfile: (() -> Void)?
+        var openAttachments: (() -> Void)?
+        var sendText: ((String) -> Void)?
+        var beginVoiceRecording: (() -> Void)?
+        var finishVoiceRecordingAndSend: (() -> Void)?
+        var requestLoadEarlier: (() -> Void)?
+        var didEndLoadEarlier: (() -> Void)?
+        var scrollToLatest: (() -> Void)?
+        var activateMessage: ((Message) -> Void)?
+        var openPollMessage: ((Message) -> Void)?
+        var openTodoMessage: ((Message) -> Void)?
+        var toggleVoiceMessagePlayback: ((Message) -> Void)?
+        var toggleCurrentVoicePlayback: (() -> Void)?
+        var seekCurrentVoicePlayback: ((Double) -> Void)?
+        var setCurrentVoicePlaybackRate: ((Double) -> Void)?
+        var openMessageContextMenu: ((Message, CGRect) -> Void)?
+        var activateMessageTextAction: ((Message, TelegramTextAttributesVoiceOver.Action) -> Void)?
+        var presentMessageTextActions: ((Message, [MessageTextActionItem]) -> Void)?
+        var performTextSelectionAction: ((Message, NSAttributedString, TextSelectionAction) -> Void)?
+        var requestAudioTranscription: ((Message) -> Void)?
+        var viewAudioTranscript: ((Message) -> Void)?
+        var requestVisibleTranslations: (([MessageId]) -> Void)?
+    }
+
+    private enum MessageActivation {
+        case none
+        case openPoll
+        case openTodo
+        case toggleVoicePlayback
+        case openDefault
+        case openTextAction(TelegramTextAttributesVoiceOver.Action)
+        case presentTextActions([MessageTextActionItem])
+    }
+
+    private struct Row {
+        enum Kind {
+            case message(Message)
+            case unreadMarker
+            case info(String)
+        }
+
+        var stableId: UInt64
+        var index: MessageIndex
+        var kind: Kind
+    }
+
+    private static let loadEarlierTimeout: TimeInterval = 12.0
+    private static let voiceMessageDurationFormatter: DateComponentsFormatter = {
+        let formatter = DateComponentsFormatter()
+        formatter.unitsStyle = .spellOut
+        formatter.allowedUnits = [.minute, .second]
+        return formatter
+    }()
+    private static let fileSizeFormatter: ByteCountFormatter = {
+        let formatter = ByteCountFormatter()
+        formatter.allowsNonnumericFormatting = true
+        return formatter
+    }()
+
+    var actions = Actions()
+
+    private var interfaceState: ChatPresentationInterfaceState?
+    private var entries: [ChatHistoryEntry] = []
+    private var rows: [Row] = []
+    private var isComposerEnabled = true
+    private var messageTextActionItemsCache: [MessageId: [MessageTextActionItem]] = [:]
+
+    private var canLoadEarlierHistory = false
+    private var isLoadingEarlierHistory = false
+    private var didReceiveLoadEarlierState = false
+    private var isWaitingForLoadEarlier = false
+    private var loadEarlierRequestId = 0
+    private var loadEarlierTimeoutWorkItem: DispatchWorkItem?
+    private var voicePlaybackState: VoicePlaybackState?
+
+    deinit {
+        self.loadEarlierTimeoutWorkItem?.cancel()
+    }
+
+    var usesNativeVoiceOverAccessibility: Bool {
+        true
+    }
+
+    var shouldPreserveModalIsolationDuringFocusRecovery: Bool {
+        false
+    }
+
+    private var shouldShowLoadEarlierRow: Bool {
+        self.didReceiveLoadEarlierState || self.canLoadEarlierHistory || self.isLoadEarlierInProgress
+    }
+
+    private var isLoadEarlierInProgress: Bool {
+        self.isWaitingForLoadEarlier || self.isLoadingEarlierHistory
+    }
+
+    private var loadEarlierRowOffset: Int {
+        self.shouldShowLoadEarlierRow ? 1 : 0
+    }
+
+    func updateInterfaceState(_ state: ChatPresentationInterfaceState) {
+        let previousActiveTranslationLanguage = self.activeTranslationLanguage(for: self.interfaceState)
+        self.interfaceState = state
+        if state.renderedPeer?.peer != nil {
+            self.isComposerEnabled = canSendMessagesToChat(state)
+        } else {
+            self.isComposerEnabled = true
+        }
+        self.rows = self.makeRows(from: self.entries)
+        if previousActiveTranslationLanguage != self.activeTranslationLanguage(for: state) {
+            self.messageTextActionItemsCache.removeAll(keepingCapacity: true)
+        }
+    }
+
+    func updateVoicePlaybackState(_ state: VoicePlaybackState?) {
+        self.voicePlaybackState = state
+    }
+
+    func updateEntries(_ entries: [ChatHistoryEntry]) {
+        self.entries = entries
+        self.rows = self.makeRows(from: entries)
+        self.messageTextActionItemsCache.removeAll(keepingCapacity: true)
+    }
+
+    func updateLoadEarlierState(canLoadEarlier: Bool, isLoadingEarlier: Bool) {
+        let wasInProgress = self.isLoadEarlierInProgress
+        self.didReceiveLoadEarlierState = true
+        self.canLoadEarlierHistory = canLoadEarlier
+        self.isLoadingEarlierHistory = isLoadingEarlier
+        if wasInProgress && !self.isLoadEarlierInProgress {
+            self.endWaitingForLoadEarlierIfNeeded()
+        }
+    }
+
+    func currentNativeNavigationState() -> NativeNavigationState {
+        let strings = self.interfaceState?.strings ?? defaultPresentationStrings
+        let title: String
+        if let threadData = self.interfaceState?.threadData {
+            title = threadData.title
+        } else if let forumTopicData = self.interfaceState?.forumTopicData {
+            title = forumTopicData.title
+        } else if let peer = self.interfaceState?.renderedPeer?.chatMainPeer {
+            if let accountPeerId = self.interfaceState?.accountPeerId, peer.id == accountPeerId {
+                title = strings.DialogList_SavedMessages
+            } else {
+                title = EnginePeer(peer).displayTitle(strings: strings, displayOrder: self.interfaceState?.nameDisplayOrder ?? PresentationPersonNameOrder.firstLast)
+            }
+        } else {
+            title = ""
+        }
+
+        return NativeNavigationState(
+            title: title,
+            backTitle: strings.Common_Back,
+            infoLabel: strings.KeyCommand_ChatInfo,
+            infoHint: strings.VoiceOver_Chat_OpenHint
+        )
+    }
+
+    func currentNativeComposerState() -> NativeComposerState {
+        let strings = self.interfaceState?.strings ?? defaultPresentationStrings
+        let isRecording = self.interfaceState?.inputTextPanelState.mediaRecordingState != nil
+        let canRecord = (self.interfaceState?.voiceMessagesAvailable ?? true) && self.isComposerEnabled
+        return NativeComposerState(
+            isEnabled: self.isComposerEnabled,
+            isRecording: isRecording,
+            canRecord: canRecord,
+            attachLabel: strings.VoiceOver_AttachMedia,
+            sendLabel: strings.MediaPicker_Send,
+            recordLabel: isRecording ? strings.VoiceOver_Camera_StopVideoRecording : strings.VoiceOver_Chat_RecordModeVoiceMessage,
+            recordHint: isRecording ? nil : strings.VoiceOver_Chat_RecordModeVoiceMessageInfo,
+            inputLabel: strings.Conversation_InputTextPlaceholder
+        )
+    }
+
+    func nativeMessageListRowCount() -> Int {
+        self.rows.count + self.loadEarlierRowOffset
+    }
+
+    func nativeMessageListEstimatedHeight(at indexPath: IndexPath) -> CGFloat {
+        if self.shouldShowLoadEarlierRow, indexPath.row == 0 {
+            return 96.0
+        }
+
+        let rowIndex = indexPath.row - self.loadEarlierRowOffset
+        guard rowIndex >= 0, rowIndex < self.rows.count else {
+            return 88.0
+        }
+
+        let row = self.rows[rowIndex]
+        switch row.kind {
+        case let .info(text):
+            let lines = max(1, min(6, (text.count / 44) + 1))
+            return max(72.0, CGFloat(24 * lines + 28))
+        case .unreadMarker:
+            return 44.0
+        case let .message(message):
+            if !message.text.isEmpty {
+                let lines = max(1, min(8, (message.text.count / 36) + 1))
+                return max(72.0, CGFloat(26 + (lines * 22)))
+            } else {
+                return 88.0
+            }
+        }
+    }
+
+    func nativeMessageListPresentation(at indexPath: IndexPath, menuRectProvider: @escaping () -> CGRect?) -> NativeMessageListRowPresentation? {
+        if self.shouldShowLoadEarlierRow, indexPath.row == 0 {
+            let bundle = Bundle(for: VoiceOverNativeChatModel.self)
+            let title: String
+            let traits: UIAccessibilityTraits
+            let selectionStyle: UITableViewCell.SelectionStyle
+
+            if self.isLoadEarlierInProgress {
+                title = self.interfaceState?.strings.Channel_NotificationLoading ?? bundle.localizedString(forKey: "Channel.NotificationLoading", value: "Loading", table: nil)
+                traits = [.updatesFrequently]
+                selectionStyle = .none
+            } else if self.canLoadEarlierHistory {
+                title = bundle.localizedString(forKey: "VoiceOver.Chat.LoadEarlier", value: "Load older messages", table: nil)
+                traits = [.button]
+                selectionStyle = .default
+            } else {
+                title = bundle.localizedString(forKey: "VoiceOver.Chat.LoadEarlier.None", value: "No older messages", table: nil)
+                traits = [.staticText]
+                selectionStyle = .none
+            }
+
+            return NativeMessageListRowPresentation(
+                title: title,
+                subtitle: nil,
+                accessibilityLabel: title,
+                accessibilityHint: nil,
+                accessibilityTraits: traits,
+                accessibilityCustomActions: nil,
+                usesProminentStyle: true,
+                usesAccentColor: traits.contains(.button),
+                selectionStyle: selectionStyle
+            )
+        }
+
+        let rowIndex = indexPath.row - self.loadEarlierRowOffset
+        guard rowIndex >= 0, rowIndex < self.rows.count, let state = self.interfaceState else {
+            return nil
+        }
+
+        let row = self.rows[rowIndex]
+        let resolved = self.resolveRow(row, state: state)
+        let customActions: [UIAccessibilityCustomAction]?
+        let selectionStyle: UITableViewCell.SelectionStyle
+
+        switch row.kind {
+        case let .message(message):
+            customActions = self.makeMessageAccessibilityCustomActions(message: message, state: state, menuRectProvider: menuRectProvider)
+            selectionStyle = self.isMessageActivatable(message) ? .default : .none
+        case .unreadMarker, .info:
+            customActions = nil
+            selectionStyle = .none
+        }
+
+        return NativeMessageListRowPresentation(
+            title: resolved.title,
+            subtitle: resolved.subtitle,
+            accessibilityLabel: resolved.accessibilityLabel,
+            accessibilityHint: resolved.hint,
+            accessibilityTraits: resolved.traits,
+            accessibilityCustomActions: customActions,
+            usesProminentStyle: false,
+            usesAccentColor: false,
+            selectionStyle: selectionStyle
+        )
+    }
+
+    @discardableResult
+    func activateNativeMessageListRow(at indexPath: IndexPath) -> Bool {
+        if self.shouldShowLoadEarlierRow, indexPath.row == 0 {
+            guard self.canLoadEarlierHistory, !self.isLoadEarlierInProgress else {
+                return false
+            }
+            self.triggerLoadEarlierRequest()
+            return true
+        }
+
+        let rowIndex = indexPath.row - self.loadEarlierRowOffset
+        guard rowIndex >= 0, rowIndex < self.rows.count else {
+            return false
+        }
+        guard case let .message(message) = self.rows[rowIndex].kind else {
+            return false
+        }
+        return self.activateMessageRow(message)
+    }
+
+    func nativeMessageListDidScroll(visibleIndexPaths: [IndexPath]) {
+        self.requestVisibleTranslationsForNativeVisibleIndexPaths(visibleIndexPaths)
+    }
+
+    private func makeRows(from entries: [ChatHistoryEntry]) -> [Row] {
+        var result: [Row] = []
+        let sortedEntries = entries.sorted()
+        for entry in sortedEntries {
+            switch entry {
+            case let .MessageEntry(message, _, _, _, _, _):
+                result.append(Row(stableId: entry.stableId, index: message.index, kind: .message(message)))
+            case let .MessageGroupEntry(_, messages, _):
+                if let message = messages.last?.0 {
+                    result.append(Row(stableId: entry.stableId, index: message.index, kind: .message(message)))
+                }
+            case .UnreadEntry:
+                result.append(Row(stableId: entry.stableId, index: entry.index, kind: .unreadMarker))
+            case let .ChatInfoEntry(info, _):
+                switch info {
+                case let .botInfo(title, text, _, _):
+                    result.append(Row(stableId: entry.stableId, index: entry.index, kind: .info("\(title)\n\(text)")))
+                case let .userInfo(peer, _, _, _, _):
+                    let strings = self.interfaceState?.strings ?? defaultPresentationStrings
+                    result.append(Row(stableId: entry.stableId, index: entry.index, kind: .info(peer.displayTitle(strings: strings, displayOrder: PresentationPersonNameOrder.firstLast))))
+                case .newThreadInfo:
+                    break
+                }
+            case .ReplyCountEntry:
+                break
+            }
+        }
+        return result
+    }
+
+    private func resolveRow(_ row: Row, state: ChatPresentationInterfaceState) -> (title: String, subtitle: String?, accessibilityLabel: String, hint: String?, traits: UIAccessibilityTraits) {
+        switch row.kind {
+        case let .message(message):
+            return self.resolveMessageRow(message: message, state: state)
+        case .unreadMarker:
+            let title = state.strings.Conversation_UnreadMessages
+            return (title, nil, title, nil, [.staticText, .header])
+        case let .info(text):
+            return (text, nil, text, nil, [.staticText])
+        }
+    }
+
+    private func resolveMessageRow(message: Message, state: ChatPresentationInterfaceState) -> (title: String, subtitle: String?, accessibilityLabel: String, hint: String?, traits: UIAccessibilityTraits) {
+        let isIncoming = message.effectivelyIncoming(state.accountPeerId)
+        let textActionItems = self.messageTextActionItems(for: message)
+        let translatedText = self.translatedMessageText(for: message, state: state)
+
+        var announceIncomingAuthors = false
+        if let chatPeer = message.peers[message.id.peerId] {
+            if chatPeer is TelegramGroup {
+                announceIncomingAuthors = true
+            } else if let channel = chatPeer as? TelegramChannel, case .group = channel.info {
+                announceIncomingAuthors = true
+            }
+        }
+
+        let authorName = message.author.flatMap(EnginePeer.init)?.displayTitle(strings: state.strings, displayOrder: state.nameDisplayOrder)
+        let subtitle: String?
+        if isIncoming {
+            subtitle = announceIncomingAuthors ? authorName : nil
+        } else {
+            subtitle = state.strings.DialogList_You
+        }
+
+        var title = descriptionStringForMessage(
+            contentSettings: ContentSettings.default,
+            message: EngineMessage(message),
+            strings: state.strings,
+            nameDisplayOrder: state.nameDisplayOrder,
+            dateTimeFormat: state.dateTimeFormat,
+            accountPeerId: state.accountPeerId
+        ).0.string.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let translatedText, !translatedText.isEmpty {
+            title = translatedText
+        }
+
+        var accessibilityLabel = ""
+        var hint: String?
+        var traits: UIAccessibilityTraits = [.staticText]
+
+        if title.isEmpty {
+            if let service = plainServiceMessageString(strings: state.strings, nameDisplayOrder: state.nameDisplayOrder, dateTimeFormat: state.dateTimeFormat, message: EngineMessage(message), accountPeerId: state.accountPeerId, forChatList: false, forForumOverview: false)?.text {
+                let trimmed = service.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !trimmed.isEmpty {
+                    title = trimmed
+                }
+            }
+            for media in message.media {
+                if let action = media as? TelegramMediaAction, case let .customText(text, _, _) = action.action {
+                    let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !trimmed.isEmpty {
+                        title = trimmed
+                        break
+                    }
+                }
+            }
+            if title.isEmpty {
+                title = state.strings.VoiceOver_Chat_Message
+            }
+        }
+
+        for media in message.media {
+            if let poll = media as? TelegramMediaPoll {
+                traits.insert(.button)
+
+                let typeText: String = {
+                    if poll.isClosed {
+                        return state.strings.MessagePoll_LabelClosed
+                    }
+                    switch poll.kind {
+                    case .quiz:
+                        if case .anonymous = poll.publicity {
+                            return state.strings.MessagePoll_LabelAnonymousQuiz
+                        } else {
+                            return state.strings.MessagePoll_LabelQuiz
+                        }
+                    case .poll:
+                        if case .anonymous = poll.publicity {
+                            return state.strings.MessagePoll_LabelAnonymous
+                        } else {
+                            return state.strings.MessagePoll_LabelPoll
+                        }
+                    }
+                }()
+
+                let totalVoters = poll.results.totalVoters ?? 0
+                let votesText = totalVoters > 0 ? state.strings.VoiceOver_Chat_PollVotes(Int32(totalVoters)) : state.strings.VoiceOver_Chat_PollNoVotes
+                let question = (translatedText ?? poll.text).trimmingCharacters(in: .whitespacesAndNewlines)
+                let optionCountText = state.strings.VoiceOver_Chat_PollOptionCount(Int32(poll.options.count))
+
+                var baseLabel = typeText
+                if !question.isEmpty {
+                    baseLabel.append(". ")
+                    baseLabel.append(question)
+                }
+                baseLabel.append(". ")
+                baseLabel.append(optionCountText)
+                baseLabel.append(". ")
+                baseLabel.append(votesText)
+                if poll.isClosed {
+                    baseLabel.append(". ")
+                    baseLabel.append(state.strings.VoiceOver_Chat_PollFinalResults)
+                }
+
+                if isIncoming, announceIncomingAuthors, let authorName {
+                    accessibilityLabel = "\(authorName). \(baseLabel)"
+                } else if !isIncoming {
+                    accessibilityLabel = "\(state.strings.DialogList_You). \(baseLabel)"
+                } else {
+                    accessibilityLabel = baseLabel
+                }
+
+                hint = state.strings.VoiceOver_Chat_OpenHint
+                return (question.isEmpty ? typeText : question, subtitle, accessibilityLabel, hint, traits)
+            } else if let todo = media as? TelegramMediaTodo {
+                traits.insert(.button)
+
+                let typeText: String = {
+                    if todo.flags.contains(.othersCanComplete) {
+                        return state.strings.Chat_Todo_Message_TitleGroup
+                    } else if let author = message.author, author.id != state.accountPeerId {
+                        return state.strings.Chat_Todo_Message_TitlePersonal(EnginePeer(author).compactDisplayTitle).string
+                    } else {
+                        return state.strings.Chat_Todo_Message_Title
+                    }
+                }()
+
+                let completionSummary: String = {
+                    let completionsCount = Int32(todo.completions.count)
+                    let format: String
+                    if let author = message.author, author.id != state.accountPeerId, !todo.flags.contains(.othersCanComplete) {
+                        format = state.strings.Chat_Todo_Message_CompletedBy(completionsCount).replacingOccurrences(of: "{name}", with: EnginePeer(author).compactDisplayTitle)
+                    } else {
+                        format = state.strings.Chat_Todo_Message_Completed(completionsCount)
+                    }
+                    return format.replacingOccurrences(of: "{count}", with: "\(todo.items.count)")
+                }()
+
+                let todoTitle = (translatedText ?? todo.text).trimmingCharacters(in: .whitespacesAndNewlines)
+                var baseLabel = typeText
+                if !todoTitle.isEmpty {
+                    baseLabel.append(". ")
+                    baseLabel.append(todoTitle)
+                }
+                if !completionSummary.isEmpty {
+                    baseLabel.append(". ")
+                    baseLabel.append(completionSummary)
+                }
+
+                if isIncoming, announceIncomingAuthors, let authorName {
+                    accessibilityLabel = "\(authorName). \(baseLabel)"
+                } else if !isIncoming {
+                    accessibilityLabel = "\(state.strings.DialogList_You). \(baseLabel)"
+                } else {
+                    accessibilityLabel = baseLabel
+                }
+
+                hint = state.strings.VoiceOver_Chat_OpenHint
+                return (todoTitle.isEmpty ? typeText : todoTitle, subtitle, accessibilityLabel, hint, traits)
+            } else if let contact = media as? TelegramMediaContact {
+                traits.insert(.button)
+
+                let typeText: String
+                if isIncoming {
+                    if announceIncomingAuthors, let authorName {
+                        typeText = state.strings.VoiceOver_Chat_ContactFrom(authorName).string
+                    } else {
+                        typeText = state.strings.VoiceOver_Chat_Contact
+                    }
+                } else {
+                    typeText = state.strings.VoiceOver_Chat_YourContact
+                }
+
+                var displayName = ""
+                if !contact.firstName.isEmpty {
+                    displayName.append(contact.firstName)
+                }
+                if !contact.lastName.isEmpty {
+                    if !displayName.isEmpty {
+                        displayName.append(" ")
+                    }
+                    displayName.append(contact.lastName)
+                }
+                if displayName.isEmpty {
+                    displayName = state.strings.VoiceOver_Chat_Contact
+                }
+
+                var baseLabel = typeText
+                baseLabel.append(". ")
+                baseLabel.append(displayName)
+                if !contact.phoneNumber.isEmpty {
+                    baseLabel.append(". ")
+                    baseLabel.append(state.strings.VoiceOver_Chat_ContactPhoneNumber)
+                    baseLabel.append(": ")
+                    baseLabel.append(contact.phoneNumber)
+                }
+
+                accessibilityLabel = baseLabel
+                hint = state.strings.VoiceOver_Chat_OpenHint
+                return (displayName, subtitle, accessibilityLabel, hint, traits)
+            } else if let map = media as? TelegramMediaMap {
+                traits.insert(.button)
+
+                let typeText = state.strings.Attachment_Location
+                var baseLabel = typeText
+                if let venue = map.venue {
+                    if !venue.title.isEmpty {
+                        baseLabel.append(". ")
+                        baseLabel.append(venue.title)
+                    }
+                    if let venueAddress = venue.address, !venueAddress.isEmpty {
+                        baseLabel.append(". ")
+                        baseLabel.append(venueAddress)
+                    }
+                } else if let address = map.address {
+                    var parts: [String] = []
+                    if let street = address.street, !street.isEmpty { parts.append(street) }
+                    if let city = address.city, !city.isEmpty { parts.append(city) }
+                    if let stateText = address.state, !stateText.isEmpty { parts.append(stateText) }
+                    if !address.country.isEmpty { parts.append(address.country) }
+                    if !parts.isEmpty {
+                        baseLabel.append(". ")
+                        baseLabel.append(parts.joined(separator: ", "))
+                    }
+                }
+
+                if let captionText = translatedText ?? self.nonEmptyMessageText(for: message) {
+                    baseLabel.append(". ")
+                    baseLabel.append(state.strings.VoiceOver_Chat_Caption(captionText).string)
+                }
+
+                if isIncoming, announceIncomingAuthors, let authorName {
+                    accessibilityLabel = "\(authorName). \(baseLabel)"
+                } else if !isIncoming {
+                    accessibilityLabel = "\(state.strings.DialogList_You). \(baseLabel)"
+                } else {
+                    accessibilityLabel = baseLabel
+                }
+
+                hint = state.strings.VoiceOver_Chat_OpenHint
+                return (typeText, subtitle, accessibilityLabel, hint, traits)
+            } else if media is TelegramMediaImage {
+                traits.insert(.image)
+                if isIncoming {
+                    if announceIncomingAuthors, let authorName {
+                        accessibilityLabel = state.strings.VoiceOver_Chat_PhotoFrom(authorName).string
+                    } else {
+                        accessibilityLabel = state.strings.VoiceOver_Chat_Photo
+                    }
+                } else {
+                    accessibilityLabel = state.strings.VoiceOver_Chat_YourPhoto
+                }
+                if let captionText = translatedText ?? self.nonEmptyMessageText(for: message) {
+                    accessibilityLabel.append(". ")
+                    accessibilityLabel.append(state.strings.VoiceOver_Chat_Caption(captionText).string)
+                }
+                hint = state.strings.VoiceOver_Chat_OpenHint
+                return (state.strings.VoiceOver_Chat_Photo, subtitle, accessibilityLabel, hint, traits)
+            } else if let file = media as? TelegramMediaFile {
+                if file.isVoice {
+                    traits.insert(.startsMediaSession)
+                    if isIncoming {
+                        if announceIncomingAuthors, let authorName {
+                            accessibilityLabel = state.strings.VoiceOver_Chat_VoiceMessageFrom(authorName).string
+                        } else {
+                            accessibilityLabel = state.strings.VoiceOver_Chat_VoiceMessage
+                        }
+                    } else {
+                        accessibilityLabel = state.strings.VoiceOver_Chat_YourVoiceMessage
+                    }
+                    if let duration = file.duration, let durationString = Self.voiceMessageDurationFormatter.string(from: Double(duration)) {
+                        accessibilityLabel.append(". ")
+                        accessibilityLabel.append(state.strings.VoiceOver_Chat_Duration(durationString).string)
+                    }
+                    hint = state.strings.VoiceOver_Chat_PlayHint
+                    return (state.strings.VoiceOver_Chat_VoiceMessage, subtitle, accessibilityLabel, hint, traits)
+                } else {
+                    let sizeString = Self.fileSizeFormatter.string(fromByteCount: Int64(file.size ?? 0))
+                    if isIncoming {
+                        if announceIncomingAuthors, let authorName {
+                            accessibilityLabel = state.strings.VoiceOver_Chat_FileFrom(authorName).string
+                        } else {
+                            accessibilityLabel = state.strings.VoiceOver_Chat_File
+                        }
+                    } else {
+                        accessibilityLabel = state.strings.VoiceOver_Chat_YourFile
+                    }
+                    if let fileName = file.fileName, !fileName.isEmpty {
+                        accessibilityLabel.append(". ")
+                        accessibilityLabel.append(fileName)
+                    }
+                    if let captionText = translatedText ?? self.nonEmptyMessageText(for: message) {
+                        accessibilityLabel.append(". ")
+                        accessibilityLabel.append(state.strings.VoiceOver_Chat_Caption(captionText).string)
+                    }
+                    accessibilityLabel.append(". ")
+                    accessibilityLabel.append(state.strings.VoiceOver_Chat_Size(sizeString).string)
+                    hint = state.strings.VoiceOver_Chat_OpenHint
+                    return (state.strings.VoiceOver_Chat_File, subtitle, accessibilityLabel, hint, traits)
+                }
+            }
+        }
+
+        if isIncoming, announceIncomingAuthors, let authorName {
+            accessibilityLabel = "\(authorName). \(title)"
+        } else if !isIncoming {
+            accessibilityLabel = "\(state.strings.DialogList_You). \(title)"
+        } else {
+            accessibilityLabel = title
+        }
+        if !textActionItems.isEmpty {
+            traits.insert(.button)
+            hint = state.strings.VoiceOver_Chat_OpenHint
+        }
+
+        return (title, subtitle, accessibilityLabel, hint, traits)
+    }
+
+    private func isMessageActivatable(_ message: Message) -> Bool {
+        if case .none = self.messageActivation(for: message) {
+            return false
+        } else {
+            return true
+        }
+    }
+
+    private func activateMessageRow(_ message: Message) -> Bool {
+        switch self.messageActivation(for: message) {
+        case .none:
+            return false
+        case .openPoll:
+            self.actions.openPollMessage?(message)
+            return true
+        case .openTodo:
+            self.actions.openTodoMessage?(message)
+            return true
+        case .toggleVoicePlayback:
+            self.actions.toggleVoiceMessagePlayback?(message)
+            return true
+        case .openDefault:
+            self.actions.activateMessage?(message)
+            return true
+        case let .openTextAction(action):
+            self.actions.activateMessageTextAction?(message, action)
+            return true
+        case let .presentTextActions(items):
+            self.actions.presentMessageTextActions?(message, items)
+            return true
+        }
+    }
+
+    private func messageActivation(for message: Message) -> MessageActivation {
+        if self.pollMedia(in: message) != nil, self.actions.openPollMessage != nil {
+            return .openPoll
+        }
+        if self.todoMedia(in: message) != nil, self.actions.openTodoMessage != nil {
+            return .openTodo
+        }
+        if self.isVoiceMessage(message), self.actions.toggleVoiceMessagePlayback != nil {
+            return .toggleVoicePlayback
+        }
+        if self.usesDefaultMessageActivation(message), self.actions.activateMessage != nil {
+            return .openDefault
+        }
+
+        let textActionItems = self.messageTextActionItems(for: message)
+        if textActionItems.count == 1, self.actions.activateMessageTextAction != nil {
+            return .openTextAction(textActionItems[0].action)
+        }
+        if textActionItems.count > 1, self.actions.presentMessageTextActions != nil {
+            return .presentTextActions(textActionItems)
+        }
+
+        return .none
+    }
+
+    private func usesDefaultMessageActivation(_ message: Message) -> Bool {
+        for media in message.media {
+            if media is TelegramMediaImage {
+                return true
+            }
+            if let file = media as? TelegramMediaFile, !file.isVoice {
+                return true
+            }
+            if media is TelegramMediaContact {
+                return true
+            }
+            if media is TelegramMediaMap {
+                return true
+            }
+        }
+        return false
+    }
+
+    private func messageTextActionItems(for message: Message) -> [MessageTextActionItem] {
+        if let cached = self.messageTextActionItemsCache[message.id] {
+            return cached
+        }
+        let items = self.buildMessageTextActionItems(for: message)
+        self.messageTextActionItemsCache[message.id] = items
+        return items
+    }
+
+    private func buildMessageTextActionItems(for message: Message) -> [MessageTextActionItem] {
+        let translatedContent = self.translatedMessageContent(for: message, state: self.interfaceState)
+        let rawText = translatedContent?.text ?? message.text
+        guard !rawText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return []
+        }
+
+        var entities = translatedContent?.entities ?? message.textEntitiesAttribute?.entities ?? []
+        if entities.isEmpty {
+            entities = generateTextEntities(rawText, enabledTypes: [.all, .timecode])
+        }
+        guard !entities.isEmpty else {
+            return []
+        }
+
+        let baseFont = UIFont.preferredFont(forTextStyle: .body)
+        let italicDescriptor = baseFont.fontDescriptor.withSymbolicTraits(.traitItalic) ?? baseFont.fontDescriptor
+        let boldItalicDescriptor = baseFont.fontDescriptor.withSymbolicTraits([.traitBold, .traitItalic]) ?? baseFont.fontDescriptor
+        let fixedFont = UIFont(name: "Menlo-Regular", size: baseFont.pointSize) ?? baseFont
+        let attributedText = stringWithAppliedEntities(
+            rawText,
+            entities: entities,
+            baseColor: .black,
+            linkColor: .blue,
+            baseFont: baseFont,
+            linkFont: baseFont,
+            boldFont: UIFont.boldSystemFont(ofSize: baseFont.pointSize),
+            italicFont: UIFont(descriptor: italicDescriptor, size: baseFont.pointSize),
+            boldItalicFont: UIFont(descriptor: boldItalicDescriptor, size: baseFont.pointSize),
+            fixedFont: fixedFont,
+            blockQuoteFont: baseFont,
+            underlineLinks: false,
+            message: message
+        )
+
+        let resolvedItems = TelegramTextAttributesVoiceOver.items(in: attributedText)
+        guard !resolvedItems.isEmpty else {
+            return []
+        }
+
+        var uniqueItems: [(item: MessageTextActionItem, range: NSRange)] = []
+        for item in resolvedItems {
+            let title = self.messageTextActionTitle(for: item)
+            guard !title.isEmpty else {
+                continue
+            }
+            if uniqueItems.contains(where: { $0.range == item.range && $0.item.action == item.action }) {
+                continue
+            }
+            uniqueItems.append((MessageTextActionItem(action: item.action, title: title), item.range))
+        }
+
+        var duplicateCounts: [String: Int] = [:]
+        for item in uniqueItems {
+            duplicateCounts[item.item.title, default: 0] += 1
+        }
+        var seenDuplicateIndices: [String: Int] = [:]
+
+        return uniqueItems.map { entry in
+            guard duplicateCounts[entry.item.title, default: 0] > 1 else {
+                return entry.item
+            }
+            let nextIndex = seenDuplicateIndices[entry.item.title, default: 0] + 1
+            seenDuplicateIndices[entry.item.title] = nextIndex
+            return MessageTextActionItem(action: entry.item.action, title: "\(entry.item.title) (\(nextIndex))")
+        }
+    }
+
+    private func messageTextActionTitle(for item: TelegramTextAttributesVoiceOver.Item) -> String {
+        let trimmedText = item.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmedText.isEmpty {
+            return trimmedText
+        }
+        switch item.action {
+        case let .url(url, _):
+            return url
+        case let .peerMention(_, mention):
+            return mention
+        case let .textMention(name):
+            return name
+        case let .botCommand(command):
+            return command
+        case let .hashtag(_, hashtag):
+            return hashtag
+        case let .timecode(_, text):
+            return text
+        }
+    }
+
+    private func textSelectionContent(for message: Message) -> NSAttributedString? {
+        if let translatedText = self.translatedMessageText(for: message, state: self.interfaceState) {
+            return NSAttributedString(string: translatedText)
+        }
+
+        if let transcribedText = transcribedText(message: message) {
+            switch transcribedText {
+            case let .success(text, _):
+                let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !trimmedText.isEmpty {
+                    return NSAttributedString(string: text)
+                }
+            case .error:
+                break
+            }
+        }
+
+        let trimmedMessageText = message.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmedMessageText.isEmpty {
+            return NSAttributedString(string: message.text)
+        }
+
+        return nil
+    }
+
+    private func transcriptText(for message: Message) -> String? {
+        if let translatedText = self.translatedMessageText(for: message, state: self.interfaceState), self.isVoiceMessage(message) {
+            return translatedText
+        }
+        guard let transcribedText = transcribedText(message: message) else {
+            return nil
+        }
+        switch transcribedText {
+        case let .success(text, _):
+            return text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : text
+        case .error:
+            return nil
+        }
+    }
+
+    private func normalizedTranslationLanguage(_ language: String?) -> String? {
+        guard let language, !language.isEmpty else {
+            return nil
+        }
+        let rawSuffix = "-raw"
+        if language.hasSuffix(rawSuffix) {
+            return String(language.dropLast(rawSuffix.count))
+        }
+        return language
+    }
+
+    private func activeTranslationLanguage(for state: ChatPresentationInterfaceState?) -> String? {
+        guard let translationState = state?.translationState, translationState.isEnabled else {
+            return nil
+        }
+        return self.normalizedTranslationLanguage(translationState.toLang)
+    }
+
+    private func translationAttribute(for message: Message, state: ChatPresentationInterfaceState?) -> TranslationMessageAttribute? {
+        guard let targetLanguage = self.activeTranslationLanguage(for: state) else {
+            return nil
+        }
+        return message.attributes.first(where: { attribute in
+            guard let attribute = attribute as? TranslationMessageAttribute else {
+                return false
+            }
+            return self.normalizedTranslationLanguage(attribute.toLang) == targetLanguage
+        }) as? TranslationMessageAttribute
+    }
+
+    private func translatedMessageContent(for message: Message, state: ChatPresentationInterfaceState?) -> (text: String, entities: [MessageTextEntity])? {
+        guard let translation = self.translationAttribute(for: message, state: state) else {
+            return nil
+        }
+        let trimmedText = translation.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedText.isEmpty else {
+            return nil
+        }
+        return (translation.text, translation.entities)
+    }
+
+    private func translatedMessageText(for message: Message, state: ChatPresentationInterfaceState?) -> String? {
+        self.translatedMessageContent(for: message, state: state)?.text
+    }
+
+    private func nonEmptyMessageText(for message: Message) -> String? {
+        let trimmedText = message.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedText.isEmpty else {
+            return nil
+        }
+        return message.text
+    }
+
+    private func supportsAudioTranscription(for message: Message) -> Bool {
+        for media in message.media {
+            if let file = media as? TelegramMediaFile, file.isVoice || file.isInstantVideo {
+                return true
+            }
+        }
+        return false
+    }
+
+    private func makeMessageAccessibilityCustomActions(message: Message, state: ChatPresentationInterfaceState, menuRectProvider: @escaping () -> CGRect?) -> [UIAccessibilityCustomAction] {
+        var customActions: [UIAccessibilityCustomAction] = []
+
+        let textActionItems = self.messageTextActionItems(for: message)
+        for item in textActionItems {
+            customActions.append(UIAccessibilityCustomAction(name: item.title, actionHandler: { [weak self] _ in
+                guard let self else {
+                    return false
+                }
+                self.actions.activateMessageTextAction?(message, item.action)
+                return true
+            }))
+        }
+
+        if let selectionContent = self.textSelectionContent(for: message), let performTextSelectionAction = self.actions.performTextSelectionAction {
+            customActions.append(UIAccessibilityCustomAction(name: state.strings.Conversation_ContextMenuTranslate, actionHandler: { _ in
+                performTextSelectionAction(message, selectionContent, .translate)
+                return true
+            }))
+        }
+
+        if let transcriptText = self.transcriptText(for: message), let viewAudioTranscript = self.actions.viewAudioTranscript {
+            customActions.append(UIAccessibilityCustomAction(name: "View Transcript", actionHandler: { _ in
+                if !transcriptText.isEmpty {
+                    viewAudioTranscript(message)
+                }
+                return true
+            }))
+        } else if self.supportsAudioTranscription(for: message), let requestAudioTranscription = self.actions.requestAudioTranscription {
+            customActions.append(UIAccessibilityCustomAction(name: state.strings.GroupBoost_AudioTranscription, actionHandler: { _ in
+                requestAudioTranscription(message)
+                return true
+            }))
+        }
+
+        customActions.append(UIAccessibilityCustomAction(name: state.strings.Conversation_ContextMenuMore, actionHandler: { [weak self] _ in
+            guard let self, let rect = menuRectProvider() else {
+                return false
+            }
+            self.actions.openMessageContextMenu?(message, rect)
+            return true
+        }))
+
+        let messageText = message.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !messageText.isEmpty {
+            customActions.append(UIAccessibilityCustomAction(name: state.strings.Conversation_ContextMenuCopy, actionHandler: { _ in
+                UIPasteboard.general.string = messageText
+                if UIAccessibility.isVoiceOverRunning {
+                    UIAccessibility.post(notification: .announcement, argument: state.strings.Conversation_TextCopied)
+                }
+                return true
+            }))
+        }
+
+        return customActions
+    }
+
+    private func requestVisibleTranslationsForNativeVisibleIndexPaths(_ visibleIndexPaths: [IndexPath]) {
+        guard UIAccessibility.isVoiceOverRunning else {
+            return
+        }
+        guard self.activeTranslationLanguage(for: self.interfaceState) != nil else {
+            return
+        }
+
+        let rowOffset = self.loadEarlierRowOffset
+        var messageIds: [MessageId] = []
+        messageIds.reserveCapacity(visibleIndexPaths.count)
+
+        for indexPath in visibleIndexPaths.sorted() {
+            guard indexPath.section == 0 else {
+                continue
+            }
+            let rowIndex = indexPath.row - rowOffset
+            guard rowIndex >= 0, rowIndex < self.rows.count else {
+                continue
+            }
+            guard case let .message(message) = self.rows[rowIndex].kind else {
+                continue
+            }
+            messageIds.append(message.id)
+        }
+
+        guard !messageIds.isEmpty else {
+            return
+        }
+        self.actions.requestVisibleTranslations?(messageIds)
+    }
+
+    private func triggerLoadEarlierRequest() {
+        guard self.canLoadEarlierHistory, !self.isLoadEarlierInProgress else {
+            return
+        }
+        self.isWaitingForLoadEarlier = true
+        self.loadEarlierRequestId += 1
+        let requestId = self.loadEarlierRequestId
+        self.loadEarlierTimeoutWorkItem?.cancel()
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self, self.isWaitingForLoadEarlier, self.loadEarlierRequestId == requestId else {
+                return
+            }
+            self.endWaitingForLoadEarlierIfNeeded()
+        }
+        self.loadEarlierTimeoutWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.loadEarlierTimeout, execute: workItem)
+        self.actions.requestLoadEarlier?()
+    }
+
+    private func endWaitingForLoadEarlierIfNeeded() {
+        guard self.isWaitingForLoadEarlier else {
+            return
+        }
+        self.isWaitingForLoadEarlier = false
+        self.loadEarlierTimeoutWorkItem?.cancel()
+        self.loadEarlierTimeoutWorkItem = nil
+        self.actions.didEndLoadEarlier?()
+    }
+
+    private func pollMedia(in message: Message) -> TelegramMediaPoll? {
+        message.media.first(where: { $0 is TelegramMediaPoll }) as? TelegramMediaPoll
+    }
+
+    private func todoMedia(in message: Message) -> TelegramMediaTodo? {
+        message.media.first(where: { $0 is TelegramMediaTodo }) as? TelegramMediaTodo
+    }
+
+    private func isVoiceMessage(_ message: Message) -> Bool {
+        message.media.contains(where: { media in
+            guard let file = media as? TelegramMediaFile else {
+                return false
+            }
+            return file.isVoice
+        })
+    }
+}
+
 final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate, UITableViewDataSource, UITableViewDelegate {
-    let overlayView: ChatVoiceOverOverlayView
+    let model: VoiceOverNativeChatModel
 
     private let headerView = UIView()
     private let backButton = UIButton(type: .system)
@@ -56,7 +1172,7 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate,
     private var primaryActionKind: PrimaryActionKind = .record
     private var interfaceState: ChatPresentationInterfaceState?
     private var didInitialScrollToBottom = false
-    private var nativeComposerState = ChatVoiceOverOverlayView.NativeComposerState(
+    private var nativeComposerState = VoiceOverNativeChatModel.NativeComposerState(
         isEnabled: true,
         isRecording: false,
         canRecord: true,
@@ -72,8 +1188,8 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate,
         case record
     }
 
-    init(overlayView: ChatVoiceOverOverlayView) {
-        self.overlayView = overlayView
+    init(model: VoiceOverNativeChatModel) {
+        self.model = model
         super.init(nibName: nil, bundle: nil)
         self.modalPresentationCapturesStatusBarAppearance = true
         self.definesPresentationContext = true
@@ -268,13 +1384,6 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate,
             return self?.handleVoiceOverKeyboardEscape() ?? false
         }
 
-        self.overlayView.setNativeComposerHostedExternally(true)
-        self.overlayView.setAccessibilityInteractionSuspended(true)
-        self.overlayView.accessibilityViewIsModal = false
-        self.overlayView.accessibilityElementsHidden = true
-        self.overlayView.externalNavigationFocusTargetProvider = nil
-        self.overlayView.externalProfileFocusTargetProvider = nil
-        self.overlayView.externalNativeKeyboardEscapeHandler = nil
         self.view.accessibilityElements = [self.headerView as Any, self.tableView as Any, self.composerView as Any]
         self.headerView.accessibilityElements = [self.backButton, self.titleButton, self.infoButton]
         self.composerView.accessibilityElements = [self.attachButton, self.inputTextView, self.primaryActionButton]
@@ -283,8 +1392,6 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate,
     }
 
     deinit {
-        self.overlayView.setNativeComposerHostedExternally(false)
-        self.overlayView.setAccessibilityInteractionSuspended(false)
         self.resetKeyboardDismissFocusContainment()
         self.cancelPendingKeyboardFocusRestore()
         let notificationCenter = NotificationCenter.default
@@ -306,7 +1413,7 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate,
         self.updateTableInsetsForComposer()
     }
 
-    private func applyNavigationState(_ state: ChatVoiceOverOverlayView.NativeNavigationState) {
+    private func applyNavigationState(_ state: VoiceOverNativeChatModel.NativeNavigationState) {
         self.backButton.setTitle(state.backTitle, for: .normal)
         self.backButton.accessibilityLabel = state.backTitle
 
@@ -322,7 +1429,7 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate,
         self.headerView.accessibilityElements = [self.backButton, self.titleButton, self.infoButton]
     }
 
-    private func applyComposerState(_ state: ChatVoiceOverOverlayView.NativeComposerState) {
+    private func applyComposerState(_ state: VoiceOverNativeChatModel.NativeComposerState) {
         self.nativeComposerState = state
         self.composerView.isUserInteractionEnabled = state.isEnabled
 
@@ -361,15 +1468,15 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate,
     }
 
     @objc private func backPressed() {
-        self.overlayView.actions.back?()
+        self.model.actions.back?()
     }
 
     @objc private func infoPressed() {
-        self.overlayView.actions.openProfile?()
+        self.model.actions.openProfile?()
     }
 
     @objc private func attachPressed() {
-        self.overlayView.actions.openAttachments?()
+        self.model.actions.openAttachments?()
     }
 
     @objc private func primaryActionPressed() {
@@ -386,16 +1493,16 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate,
         guard !text.isEmpty else {
             return
         }
-        self.overlayView.actions.sendText?(text)
+        self.model.actions.sendText?(text)
         self.inputTextView.text = ""
         self.applyComposerState(self.currentComposerState())
     }
 
     @objc private func recordPressed() {
         if self.nativeComposerState.isRecording {
-            self.overlayView.actions.finishVoiceRecordingAndSend?()
+            self.model.actions.finishVoiceRecordingAndSend?()
         } else {
-            self.overlayView.actions.beginVoiceRecording?()
+            self.model.actions.beginVoiceRecording?()
         }
     }
 
@@ -462,8 +1569,8 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate,
         }
     }
 
-    private func currentComposerState() -> ChatVoiceOverOverlayView.NativeComposerState {
-        return self.overlayView.currentNativeComposerState()
+    private func currentComposerState() -> VoiceOverNativeChatModel.NativeComposerState {
+        return self.model.currentNativeComposerState()
     }
 
     func updateInterfaceState(_ state: ChatPresentationInterfaceState) {
@@ -487,17 +1594,18 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate,
         self.inputTextView.textColor = state.theme.list.itemPrimaryTextColor
         self.inputTextView.tintColor = state.theme.list.itemAccentColor
 
-        self.applyNavigationState(self.navigationState(for: state))
+        self.applyNavigationState(self.model.currentNativeNavigationState())
         self.applyComposerState(self.currentComposerState())
         self.tableView.reloadData()
     }
 
     func updateEntries(_ entries: [ChatHistoryEntry]) {
+        _ = entries
         self.tableView.reloadData()
 
-        if !self.didInitialScrollToBottom, self.overlayView.nativeMessageListRowCount() > 0 {
+        if !self.didInitialScrollToBottom, self.model.nativeMessageListRowCount() > 0 {
             self.didInitialScrollToBottom = true
-            let lastRow = max(0, self.overlayView.nativeMessageListRowCount() - 1)
+            let lastRow = max(0, self.model.nativeMessageListRowCount() - 1)
             let lastIndexPath = IndexPath(row: lastRow, section: 0)
             DispatchQueue.main.async { [weak self] in
                 guard let self else {
@@ -515,39 +1623,17 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate,
     }
 
     func updateLoadEarlierState(canLoadEarlier: Bool, isLoadingEarlier: Bool) {
+        _ = canLoadEarlier
+        _ = isLoadingEarlier
         self.tableView.reloadData()
     }
 
-    func updateVoicePlaybackState(_ state: ChatVoiceOverOverlayView.VoicePlaybackState?) {
+    func updateVoicePlaybackState(_ state: VoiceOverNativeChatModel.VoicePlaybackState?) {
         if let visibleRows = self.tableView.indexPathsForVisibleRows, !visibleRows.isEmpty {
             self.tableView.reloadRows(at: visibleRows, with: .none)
         } else {
             self.tableView.reloadData()
         }
-    }
-
-    private func navigationState(for state: ChatPresentationInterfaceState) -> ChatVoiceOverOverlayView.NativeNavigationState {
-        let title: String
-        if let threadData = state.threadData {
-            title = threadData.title
-        } else if let forumTopicData = state.forumTopicData {
-            title = forumTopicData.title
-        } else if let peer = state.renderedPeer?.chatMainPeer {
-            if peer.id == state.accountPeerId {
-                title = state.strings.DialogList_SavedMessages
-            } else {
-                title = EnginePeer(peer).displayTitle(strings: state.strings, displayOrder: state.nameDisplayOrder)
-            }
-        } else {
-            title = ""
-        }
-
-        return ChatVoiceOverOverlayView.NativeNavigationState(
-            title: title,
-            backTitle: state.strings.Common_Back,
-            infoLabel: state.strings.KeyCommand_ChatInfo,
-            infoHint: state.strings.VoiceOver_Chat_OpenHint
-        )
     }
 
     func voiceOverDidReturnToChat(focusInfoButton: Bool = false) {
@@ -928,7 +2014,7 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate,
     }
 
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        return self.overlayView.nativeMessageListRowCount()
+        return self.model.nativeMessageListRowCount()
     }
 
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
@@ -938,7 +2024,7 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate,
         } else {
             cell = VoiceOverNativeChatMessageCell(style: .subtitle, reuseIdentifier: "Message")
         }
-        guard let presentation = self.overlayView.nativeMessageListPresentation(at: indexPath, menuRectProvider: { [weak self, weak cell] in
+        guard let presentation = self.model.nativeMessageListPresentation(at: indexPath, menuRectProvider: { [weak self, weak cell] in
             guard let self, let cell else {
                 return nil
             }
@@ -984,18 +2070,18 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate,
     }
 
     func tableView(_ tableView: UITableView, estimatedHeightForRowAt indexPath: IndexPath) -> CGFloat {
-        return self.overlayView.nativeMessageListEstimatedHeight(at: indexPath)
+        return self.model.nativeMessageListEstimatedHeight(at: indexPath)
     }
 
     func tableView(_ tableView: UITableView, heightForRowAt indexPath: IndexPath) -> CGFloat {
-        if self.overlayView.nativeMessageListEstimatedHeight(at: indexPath) == 96.0 && indexPath.row == 0 {
+        if self.model.nativeMessageListEstimatedHeight(at: indexPath) == 96.0 && indexPath.row == 0 {
             return 96.0
         }
         return UITableView.automaticDimension
     }
 
     func tableView(_ tableView: UITableView, willSelectRowAt indexPath: IndexPath) -> IndexPath? {
-        guard let presentation = self.overlayView.nativeMessageListPresentation(at: indexPath, menuRectProvider: { nil }) else {
+        guard let presentation = self.model.nativeMessageListPresentation(at: indexPath, menuRectProvider: { nil }) else {
             return nil
         }
         return presentation.selectionStyle == .none ? nil : indexPath
@@ -1003,10 +2089,10 @@ final class VoiceOverNativeChatController: UIViewController, UITextViewDelegate,
 
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
-        _ = self.overlayView.activateNativeMessageListRow(at: indexPath)
+        _ = self.model.activateNativeMessageListRow(at: indexPath)
     }
 
     func scrollViewDidScroll(_ scrollView: UIScrollView) {
-        self.overlayView.nativeMessageListDidScroll(visibleIndexPaths: self.tableView.indexPathsForVisibleRows ?? [])
+        self.model.nativeMessageListDidScroll(visibleIndexPaths: self.tableView.indexPathsForVisibleRows ?? [])
     }
 }
