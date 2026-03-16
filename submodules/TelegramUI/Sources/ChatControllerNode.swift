@@ -387,6 +387,22 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                 controllerView.accessibilityElements = nil
             }
         }
+
+        if let navigationControllerView = self.controller?.effectiveNavigationController?.viewIfLoaded,
+           let controllerView = self.controller?.viewIfLoaded
+        {
+            navigationControllerView.isAccessibilityElement = false
+            if isActive,
+               controllerView.isDescendant(of: navigationControllerView),
+               controllerView.window != nil
+            {
+                navigationControllerView.shouldGroupAccessibilityChildren = true
+                navigationControllerView.accessibilityElements = [controllerView as Any]
+            } else {
+                navigationControllerView.shouldGroupAccessibilityChildren = false
+                navigationControllerView.accessibilityElements = nil
+            }
+        }
     }
 
     private func updateVoiceOverOverlayAccessibilityIsolation(viewControllers: [UIViewController]) {
@@ -394,6 +410,13 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
             return
         }
         let usesNativeVoiceOverChat = overlay.usesNativeVoiceOverAccessibility
+        let shouldPreserveModalIsolationDuringFocusRecovery: Bool = {
+            if usesNativeVoiceOverChat, let overlayController = self.voiceOverOverlayController {
+                return overlayController.shouldPreserveModalIsolationDuringFocusRecovery
+            } else {
+                return overlay.shouldPreserveModalIsolationDuringFocusRecovery
+            }
+        }()
         guard let controller = self.controller else {
             overlay.accessibilityViewIsModal = !usesNativeVoiceOverChat
             overlay.accessibilityElementsHidden = false
@@ -409,14 +432,14 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
         
         var resolvedIsChatOnTop = isChatOnTop
 
-        if usesNativeVoiceOverChat, overlay.shouldPreserveModalIsolationDuringFocusRecovery {
+        if usesNativeVoiceOverChat, shouldPreserveModalIsolationDuringFocusRecovery {
             resolvedIsChatOnTop = true
         }
 
         // Pushed controllers update `viewControllers`, but modals do not. If the chat (or its
         // navigation controller) is presenting a modal, VoiceOver must not stay trapped inside
         // the chat overlay view.
-        if resolvedIsChatOnTop && !(usesNativeVoiceOverChat && overlay.shouldPreserveModalIsolationDuringFocusRecovery) {
+        if resolvedIsChatOnTop && !(usesNativeVoiceOverChat && shouldPreserveModalIsolationDuringFocusRecovery) {
             if controller.presentedViewController != nil {
                 resolvedIsChatOnTop = false
             } else if let navigationController = controller.navigationController, navigationController.presentedViewController != nil {
@@ -427,14 +450,14 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
         // When the chat shows overlay controllers using a `PresentationContext` (e.g. media gallery),
         // it doesn't appear in `presentedViewController` or `viewControllers`. Hide the overlay so
         // VoiceOver can interact with the presented UI.
-        if resolvedIsChatOnTop, !(usesNativeVoiceOverChat && overlay.shouldPreserveModalIsolationDuringFocusRecovery), !controller.galleryPresentationContext.controllers.isEmpty {
+        if resolvedIsChatOnTop, !(usesNativeVoiceOverChat && shouldPreserveModalIsolationDuringFocusRecovery), !controller.galleryPresentationContext.controllers.isEmpty {
             resolvedIsChatOnTop = false
         }
 
         // Some controllers (e.g. media gallery presented in the root window) are not reflected in
         // `viewControllers` or `galleryPresentationContext`. Use the active window host's view
         // controller enumeration to determine if the chat is truly the top-most controller.
-        if resolvedIsChatOnTop, !overlay.shouldPreserveModalIsolationDuringFocusRecovery, let window = ChatControllerNode.resolveVoiceOverOverlayWindow(controller: controller, overlay: overlay), let windowHost = window as? WindowHost {
+        if resolvedIsChatOnTop, !shouldPreserveModalIsolationDuringFocusRecovery, let window = ChatControllerNode.resolveVoiceOverOverlayWindow(controller: controller, overlay: overlay), let windowHost = window as? WindowHost {
             var didEncounterChatController = false
             var hasVisibleControllerAboveChat = false
             windowHost.forEachController { candidate in
